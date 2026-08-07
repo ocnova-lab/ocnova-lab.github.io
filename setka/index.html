@@ -275,6 +275,27 @@
   .grid-bar .gb-btns button.rec { color: #ff453a; border-color: rgba(255,69,58,.55); }
   .grid-bar .gb-btns button:disabled { opacity: .4; cursor: default; }
   .grid-bar .gb-btns .gb-close { flex: 0 0 40px; }
+  .grid-bar .gb-role { display: flex; align-items: center; gap: 10px; }
+  .grid-bar .gb-role label { flex: 1; color: #b8b8b8; font-size: 13px; }
+  .grid-bar select {
+    -webkit-appearance: none; appearance: none;
+    background: transparent
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='14' viewBox='0 0 10 14'><path d='M1.5 5.2 5 1.7 8.5 5.2M1.5 8.8 5 12.3 8.5 8.8' fill='none' stroke='rgba(255,255,255,0.6)' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>")
+      no-repeat right 8px center / 10px 14px;
+    border: 1px solid rgba(255,255,255,.2);
+    border-radius: 5px;
+    color: #b8b8b8;
+    font: 12px inherit;
+    padding: 5px 26px 5px 10px;
+    cursor: pointer;
+    transition: color .15s, border-color .15s;
+  }
+  .grid-bar select:hover { color: #fff; border-color: rgba(255,255,255,.4); }
+
+  /* зоны в панели: строка-сущность, активная светится */
+  .zone-hint { font-size: 12px; color: rgba(255,255,255,.3); padding: 0 4px 8px; }
+  .st-panel h4.zone-row { cursor: pointer; }
+  .st-panel h4.zone-row.zone-active { color: #fff; }
 
   /* слоты разделений: глазок и крестик в заголовке, «+» в конце блока */
   .st-panel h4.slot-h { position: relative; padding-right: 60px; }
@@ -741,6 +762,11 @@ var settingsText; // сборщик пакета настроек; нужен и
       }
     });
     if (!S.length) out.push('Сеток нет — чистый формат.');
+    zones.forEach(function (z, i) {
+      out.push('Зона ' + (i + 1) + (z.state === 'hidden' ? ' (скрыта)' : '') +
+        ' [' + (z.role || 'без роли') + '] — ' + zoneName(z) +
+        (z.prompt && z.prompt.trim() ? ' — «' + z.prompt.trim() + '»' : ''));
+    });
     var gnow = computeGrid();
     out.push('Полотно ' + gnow.vw + '×' + gnow.vh + ' px');
     out.push('Датчики: вспышка ' + P.flashMs + ' мс, наведение ' +
@@ -806,22 +832,62 @@ var settingsText; // сборщик пакета настроек; нужен и
   }
 })();
 
-// ── выделение: клик по клетке (колонке или модулю) подсвечивает её,
-// внизу по центру всплывает промпт-окно — операция с выделенным местом ──
-var selection = [];
+// ── зоны: протяжка по клеткам рождает зону, зона получает роль и промпт;
+// клик по зоне открывает её окно; линии сетки тянутся мышью ──
+var zones = [];
 try {
-  var savedSel = JSON.parse(localStorage.getItem('setka-selection'));
-  if (Array.isArray(savedSel)) selection = savedSel;
+  var savedZ = JSON.parse(localStorage.getItem('setka-zones'));
+  if (Array.isArray(savedZ)) zones = savedZ;
 } catch (e) {}
-function saveSel() { try { localStorage.setItem('setka-selection', JSON.stringify(selection)); } catch (e) {} }
+try { localStorage.removeItem('setka-selection'); } catch (e) {}
+function saveZones() { try { localStorage.setItem('setka-zones', JSON.stringify(zones)); } catch (e) {} }
+var activeZone = -1;
+
+var ROLES = [['', 'без роли'], ['заголовок', 'заголовок'], ['текст', 'текст'],
+  ['фото', 'фото'], ['галерея', 'галерея'], ['навигация', 'навигация'],
+  ['кнопка', 'кнопка'], ['пауза', 'пауза (пусто)']];
+
+function zoneName(z) {
+  var s = 'колонки ' + (z.c1 + 1) + (z.c2 > z.c1 ? '–' + (z.c2 + 1) : '');
+  if (z.r1 >= 0) s += ' × строки ' + (z.r1 + 1) + (z.r2 > z.r1 ? '–' + (z.r2 + 1) : '');
+  return s;
+}
+
+// прямоугольник зоны в экранных координатах (клетки первых сеток)
+function zoneRect(z, gr) {
+  var h = gr.cols[0];
+  if (!h || z.c1 >= h.n) return null;
+  var c2 = Math.min(z.c2, h.n - 1);
+  var r1 = z.r1, r2 = z.r2;
+  var v = gr.rows[0];
+  if (!v) { r1 = -2; r2 = -2; }
+  else if (r1 >= 0) {
+    if (r1 >= v.n) return null;
+    r2 = Math.min(r2, v.n - 1);
+  }
+  var a = cellRect(z.c1, r1, gr);
+  var b = cellRect(c2, r2, gr);
+  return [a[0], a[1], b[0] + b[2] - a[0], b[1] + b[3] - a[1]];
+}
 
 var bar = document.createElement('div');
 bar.className = 'grid-bar';
 bar.hidden = true;
 var barSel = document.createElement('div');
 barSel.className = 'gb-sel';
+var barRoleRow = document.createElement('div');
+barRoleRow.className = 'gb-role';
+var barRoleLab = document.createElement('label');
+barRoleLab.textContent = 'Роль зоны';
+var barRoleSel = document.createElement('select');
+ROLES.forEach(function (o) {
+  var oe = document.createElement('option');
+  oe.value = o[0]; oe.textContent = o[1];
+  barRoleSel.appendChild(oe);
+});
+barRoleRow.appendChild(barRoleLab); barRoleRow.appendChild(barRoleSel);
 var barTa = document.createElement('textarea');
-barTa.placeholder = 'Что сделать с этим местом — напиши или надиктуй…';
+barTa.placeholder = 'Детали: что здесь должно быть — напиши, надиктуй или дай ссылку на фигма-узел…';
 var barBtns = document.createElement('div');
 barBtns.className = 'gb-btns';
 var barMic = document.createElement('button');
@@ -831,78 +897,49 @@ barCp.textContent = 'Скопировать с настройками';
 var barX = document.createElement('button');
 barX.className = 'gb-close';
 barX.textContent = '×';
-barX.title = 'снять выделение';
+barX.title = 'закрыть (зона остаётся)';
 barBtns.appendChild(barMic); barBtns.appendChild(barCp); barBtns.appendChild(barX);
-bar.appendChild(barSel); bar.appendChild(barTa); bar.appendChild(barBtns);
+bar.appendChild(barSel); bar.appendChild(barRoleRow); bar.appendChild(barTa); bar.appendChild(barBtns);
 document.body.appendChild(bar);
 
-// эффективный адрес: закон деградации работает и для выделения —
-// без вертикали модульный адрес читается как «колонка целиком»
-function effRow(s, gr) {
-  var v = gr.rows[0];
-  if (v && s.row >= 0) return s.row < v.n ? s.row : null; // null — за пределами сетки
-  return -2; // колонка целиком
-}
-
-function selSummary() {
-  var gr = computeGrid();
-  var cols = [], mods = [], seen = {};
-  selection.forEach(function (s) {
-    var row = effRow(s, gr);
-    if (row === null) return;
-    if (row >= 0) {
-      var mk = (s.col + 1) + '×' + (row + 1);
-      if (!seen['m' + mk]) { seen['m' + mk] = 1; mods.push(mk); }
-    } else if (!seen['c' + s.col]) {
-      seen['c' + s.col] = 1; cols.push(s.col + 1);
-    }
-  });
-  var p = [];
-  if (cols.length) p.push('колонки ' + cols.join(', '));
-  if (mods.length) p.push('модули (колонка×строка) ' + mods.join(', '));
-  return p.join(' · ');
-}
-
 function updateBar() {
-  bar.hidden = !selection.length;
-  barSel.textContent = selection.length ? 'Выделено: ' + selSummary() : '';
+  var z = zones[activeZone];
+  if (!z) { bar.hidden = true; return; }
+  bar.hidden = false;
+  barSel.textContent = 'Зона ' + (activeZone + 1) + ' — ' + zoneName(z);
+  if (barRoleSel.value !== (z.role || '')) barRoleSel.value = z.role || '';
+  if (barTa.value !== (z.prompt || '')) barTa.value = z.prompt || '';
 }
 
-addEventListener('click', function (e) {
-  var t = e.target;
-  if (t && t.closest && t.closest('.st-panel, .st-gear, .grid-bar, header, .st-tip')) return;
-  var gr = computeGrid();
-  var col = colAt(e.clientX + scrollX, gr);
-  var row = rowAt(e.clientY, gr);
-  if (col < 0 || row === -1) return; // мимо клетки — промежуток или поле
-  // клик гасит всё, что в текущей сетке читается тем же местом;
-  // если гасить нечего — заводит новое выделение
-  var clicked = { col: col, row: row };
-  var ck = col + ':' + effRow(clicked, gr);
-  var before = selection.length;
-  selection = selection.filter(function (s) {
-    var er = effRow(s, gr);
-    return er === null || s.col + ':' + er !== ck;
-  });
-  if (selection.length === before) selection.push(clicked);
-  saveSel(); updateBar();
+barRoleSel.addEventListener('input', function () {
+  var z = zones[activeZone];
+  if (!z) return;
+  z.role = barRoleSel.value;
+  saveZones(); rebuildZones();
+});
+barTa.addEventListener('input', function () {
+  var z = zones[activeZone];
+  if (!z) return;
+  z.prompt = barTa.value;
+  saveZones();
 });
 
 addEventListener('keydown', function (e) {
-  if (e.key === 'Escape' && selection.length && document.activeElement !== barTa) {
-    selection = [];
-    saveSel(); updateBar();
+  if (e.key === 'Escape' && activeZone >= 0 && document.activeElement !== barTa) {
+    activeZone = -1;
+    rebuildZones(); updateBar();
   }
 });
 
 barX.addEventListener('click', function () {
-  selection = [];
-  saveSel(); updateBar();
+  activeZone = -1;
+  rebuildZones(); updateBar();
 });
 
 barCp.addEventListener('click', function () {
-  var out = settingsText() + '\n\nВыделение: ' + selSummary();
-  if (barTa.value.trim()) out += '\nОперация с выделением: ' + barTa.value.trim();
+  var out = settingsText();
+  var z = zones[activeZone];
+  if (z) out += '\n\nРаботаем с зоной ' + (activeZone + 1) + ' — ' + zoneName(z);
   function done(ok) {
     barCp.textContent = ok ? 'Скопировано' : 'Не вышло';
     setTimeout(function () { barCp.textContent = 'Скопировать с настройками'; }, 1400);
@@ -911,6 +948,205 @@ barCp.addEventListener('click', function () {
     navigator.clipboard.writeText(out).then(function () { done(true); },
       function () { done(false); });
   } else done(false);
+});
+
+// ── список зон в панели: та же вложенность, что у сеток ──
+var zonesHost = document.createElement('div');
+ui.panel.insertBefore(zonesHost, slotsHost.nextSibling);
+function rebuildZones() {
+  zonesHost.innerHTML = '';
+  var h = document.createElement('h4');
+  h.textContent = 'Зоны';
+  zonesHost.appendChild(h);
+  if (!zones.length) {
+    var hint = document.createElement('div');
+    hint.className = 'zone-hint';
+    hint.textContent = 'протяни мышью по клеткам на полотне — родится зона';
+    zonesHost.appendChild(hint);
+    return;
+  }
+  zones.forEach(function (z, i) {
+    var row = document.createElement('h4');
+    row.className = 'slot-h zone-row' + (i === activeZone ? ' zone-active' : '');
+    var dot = document.createElement('span');
+    dot.className = 'slot-dot';
+    dot.style.background = 'rgba(255,120,110,.9)';
+    row.appendChild(dot);
+    row.appendChild(document.createTextNode('Зона ' + (i + 1) + ' · ' + (z.role || 'без роли')));
+    var btns = document.createElement('span');
+    btns.className = 'slot-btns';
+    var eye = document.createElement('button');
+    eye.className = 'eye' + (z.state === 'hidden' ? ' off' : '');
+    eye.innerHTML = EYE_SVG;
+    eye.title = 'скрыть / показать зону';
+    eye.addEventListener('click', function (e) {
+      e.stopPropagation();
+      z.state = z.state === 'on' ? 'hidden' : 'on';
+      saveZones(); rebuildZones();
+    });
+    var del = document.createElement('button');
+    del.innerHTML = CROSS_SVG;
+    del.title = 'удалить зону';
+    del.addEventListener('click', function (e) {
+      e.stopPropagation();
+      zones.splice(i, 1);
+      if (activeZone === i) activeZone = -1;
+      else if (activeZone > i) activeZone--;
+      saveZones(); rebuildZones(); updateBar();
+    });
+    btns.appendChild(eye); btns.appendChild(del);
+    row.appendChild(btns);
+    row.addEventListener('click', function () {
+      activeZone = i;
+      rebuildZones(); updateBar();
+    });
+    zonesHost.appendChild(row);
+  });
+}
+rebuildZones();
+
+// ── прямое манипулирование: тягучие линии сетки и зоны протяжкой ──
+var EDGE_TOL = 6;
+var drag = null;
+
+function firstOnIdx(type) {
+  for (var i = 0; i < S.length; i++) {
+    if (S[i].type === type && S[i].state === 'on') return i;
+  }
+  return -1;
+}
+
+// край какой колонки/строки первой сетки под курсором?
+function edgeAt(gr, x, y) {
+  function scan(res, pos) {
+    if (!res) return null;
+    for (var k = 0; k < res.n; k++) {
+      var L = res.x0 + k * (res.w + res.g);
+      if (Math.abs(pos - L) <= EDGE_TOL) return { k: k, side: 'left' };
+      if (Math.abs(pos - (L + res.w)) <= EDGE_TOL) return { k: k, side: 'right' };
+    }
+    return null;
+  }
+  var c = scan(gr.cols[0], x);
+  if (c) return { axis: 'x', k: c.k, side: c.side };
+  var r = scan(gr.rows[0], y);
+  if (r) return { axis: 'y', k: r.k, side: r.side };
+  return null;
+}
+
+function clampNum(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+// решаем параметр сетки так, чтобы схваченный край встал под курсор
+function applyEdgeDrag(g, res, k, side, pos, full) {
+  var n = res.n, gut = res.g, w = res.w, x0 = res.x0;
+  var K = side === 'left' ? k : k + 1; // сколько колонок целиком левее края
+  if (g.align === 'stretch') {
+    var m = g.margin;
+    var gMax = n > 1 ? Math.max(0, (full - 2 * m - n * 4) / (n - 1)) : 0;
+    if (K === 0) g.margin = Math.round(clampNum(pos, 0, full / 2 - 20));
+    else if (K === n) g.margin = Math.round(clampNum(full - pos, 0, full / 2 - 20));
+    else if (side === 'left') {
+      g.gutter = Math.round(clampNum((n / K) * (pos - m) - (full - 2 * m), 0, gMax));
+    } else {
+      g.gutter = Math.round(clampNum(n * (pos - m - K * (full - 2 * m) / n) / (K - n), 0, gMax));
+    }
+  } else if (K === 0) {
+    if (g.align === 'start') g.margin = Math.round(Math.max(0, pos));
+    else if (g.align === 'end') g.size = Math.round(clampNum((full - g.margin - pos - (n - 1) * gut) / n, 4, full));
+    else g.size = Math.round(clampNum((full - 2 * pos - (n - 1) * gut) / n, 4, full));
+  } else if (K === n) {
+    if (g.align === 'end') g.margin = Math.round(Math.max(0, full - pos));
+    else if (g.align === 'start') g.size = Math.round(clampNum((pos - x0 - (n - 1) * gut) / n, 4, full));
+    else g.size = Math.round(clampNum((2 * pos - full - (n - 1) * gut) / n, 4, full));
+  } else if (side === 'left') {
+    g.gutter = Math.round(Math.max(0, (pos - x0) / K - w));
+  } else {
+    g.size = Math.round(clampNum((pos - x0 - (K - 1) * gut) / K, 4, full));
+  }
+}
+
+addEventListener('mousedown', function (e) {
+  if (e.button !== 0) return;
+  var t = e.target;
+  if (t && t.closest && t.closest('.st-panel, .st-gear, .grid-bar, header, .st-tip')) return;
+  var gr = computeGrid();
+  var edge = edgeAt(gr, e.clientX, e.clientY);
+  if (edge) {
+    drag = { kind: 'edge', axis: edge.axis, k: edge.k, side: edge.side };
+    e.preventDefault();
+    return;
+  }
+  drag = { kind: 'maybe', x: e.clientX, y: e.clientY,
+    col: colAt(e.clientX + scrollX, gr), row: rowAt(e.clientY, gr) };
+});
+
+addEventListener('mousemove', function (e) {
+  var gr = computeGrid();
+  if (!drag) {
+    var edge = edgeAt(gr, e.clientX, e.clientY);
+    document.body.style.cursor = edge ? (edge.axis === 'x' ? 'col-resize' : 'row-resize') : '';
+    return;
+  }
+  if (drag.kind === 'edge') {
+    var idx = firstOnIdx(drag.axis === 'x' ? 'cols' : 'rows');
+    var res = drag.axis === 'x' ? gr.cols[0] : gr.rows[0];
+    if (idx >= 0 && res) {
+      applyEdgeDrag(S[idx], res, drag.k, drag.side,
+        drag.axis === 'x' ? e.clientX : e.clientY,
+        drag.axis === 'x' ? gr.vw : gr.vh);
+    }
+    return;
+  }
+  if (drag.kind === 'maybe') {
+    if (Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) > 6) {
+      if (drag.col >= 0 && drag.row !== -1) {
+        drag = { kind: 'zone', c1: drag.col, r1: drag.row, c2: drag.col, r2: drag.row };
+      } else drag = null;
+    }
+    return;
+  }
+  if (drag.kind === 'zone') {
+    var c = colAt(e.clientX + scrollX, gr);
+    var r = rowAt(e.clientY, gr);
+    if (c >= 0) drag.c2 = c;
+    if (r !== -1) drag.r2 = r;
+  }
+});
+
+addEventListener('mouseup', function (e) {
+  if (!drag) return;
+  var d = drag;
+  drag = null;
+  if (d.kind === 'edge') { saveS(); rebuildSlots(); return; }
+  if (d.kind === 'zone') {
+    var vertical = d.r1 >= 0 && d.r2 >= 0;
+    zones.push({
+      c1: Math.min(d.c1, d.c2), c2: Math.max(d.c1, d.c2),
+      r1: vertical ? Math.min(d.r1, d.r2) : -2,
+      r2: vertical ? Math.max(d.r1, d.r2) : -2,
+      role: '', prompt: '', state: 'on'
+    });
+    activeZone = zones.length - 1;
+    saveZones(); rebuildZones(); updateBar();
+    return;
+  }
+  // клик без протяжки: по зоне — открыть её, по пустой клетке — зона 1×1
+  var col = d.col, row = d.row;
+  if (col < 0 || row === -1) return;
+  var rr = row >= 0 ? row : -2;
+  var hit = -1;
+  zones.forEach(function (z, i) {
+    if (z.state !== 'on') return;
+    var inRow = z.r1 < 0 || (rr >= z.r1 && rr <= z.r2);
+    if (col >= z.c1 && col <= z.c2 && inRow) hit = i;
+  });
+  if (hit >= 0) activeZone = hit;
+  else {
+    zones.push({ c1: col, c2: col, r1: rr, r2: rr, role: '', prompt: '', state: 'on' });
+    activeZone = zones.length - 1;
+    saveZones();
+  }
+  rebuildZones(); updateBar();
 });
 
 // надиктовка в окно выделения — тот же механизм, что в панели
@@ -1015,24 +1251,39 @@ function drawSensors(now) {
 
   var gr = computeGrid();
 
-  // выделенные клетки: светлее и ярче обычной заливки, с тонкой рамкой;
-  // рисуем по эффективному адресу, совпадения не наслаиваются
-  if (gr.cols[0]) {
-    var drawn = {};
-    selection.forEach(function (s) {
-      if (s.col >= gr.cols[0].n) return;
-      var row = effRow(s, gr);
-      if (row === null) return;
-      var k = s.col + ':' + row;
-      if (drawn[k]) return;
-      drawn[k] = 1;
-      var r = cellRect(s.col, row, gr);
-      c.fillStyle = 'rgba(255,120,110,.35)';
-      c.fillRect(r[0], r[1], r[2], r[3]);
+  // зоны: заливка с рамкой и подписью роли; активная ярче
+  zones.forEach(function (z, i) {
+    if (z.state !== 'on') return;
+    var r = zoneRect(z, gr);
+    if (!r) return;
+    var act = i === activeZone;
+    c.fillStyle = act ? 'rgba(255,120,110,.32)' : 'rgba(255,120,110,.15)';
+    c.fillRect(r[0], r[1], r[2], r[3]);
+    c.strokeStyle = act ? 'rgba(255,140,130,.95)' : 'rgba(255,140,130,.5)';
+    c.lineWidth = act ? 1.5 : 1;
+    c.strokeRect(r[0] + 0.5, r[1] + 0.5, r[2] - 1, r[3] - 1);
+    c.fillStyle = act ? 'rgba(255,255,255,.9)' : 'rgba(255,255,255,.55)';
+    c.font = '11px ui-monospace, Menlo, monospace';
+    c.fillText((i + 1) + (z.role ? ' · ' + z.role : ''), r[0] + 6, r[1] + 16);
+  });
+
+  // протяжка: живой прямоугольник будущей зоны
+  if (drag && drag.kind === 'zone') {
+    var mz = {
+      c1: Math.min(drag.c1, drag.c2), c2: Math.max(drag.c1, drag.c2),
+      r1: drag.r1 >= 0 && drag.r2 >= 0 ? Math.min(drag.r1, drag.r2) : -2,
+      r2: drag.r1 >= 0 && drag.r2 >= 0 ? Math.max(drag.r1, drag.r2) : -2
+    };
+    var mr = zoneRect(mz, gr);
+    if (mr) {
+      c.fillStyle = 'rgba(255,120,110,.22)';
+      c.fillRect(mr[0], mr[1], mr[2], mr[3]);
+      c.setLineDash([4, 4]);
       c.strokeStyle = 'rgba(255,140,130,.9)';
       c.lineWidth = 1;
-      c.strokeRect(r[0] + 0.5, r[1] + 0.5, r[2] - 1, r[3] - 1);
-    });
+      c.strokeRect(mr[0] + 0.5, mr[1] + 0.5, mr[2] - 1, mr[3] - 1);
+      c.setLineDash([]);
+    }
   }
 
   // клетка под курсором: слабое поле + вспышка на входе
