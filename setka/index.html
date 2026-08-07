@@ -870,6 +870,21 @@ function zoneRect(z, gr) {
   return [a[0], a[1], b[0] + b[2] - a[0], b[1] + b[3] - a[1]];
 }
 
+// сборка: клетки/колонки, отмеченные кликами до соединения в зону
+var staged = [];
+function stagedKey(c, r) { return c + ':' + r; }
+function stagedSummary() {
+  var cols = [], cells = [];
+  staged.forEach(function (s) {
+    if (s.row >= 0) cells.push((s.col + 1) + '×' + (s.row + 1));
+    else cols.push(s.col + 1);
+  });
+  var p = [];
+  if (cols.length) p.push('колонки ' + cols.join(', '));
+  if (cells.length) p.push('клетки ' + cells.join(', '));
+  return p.join(' · ');
+}
+
 var bar = document.createElement('div');
 bar.className = 'grid-bar';
 bar.hidden = true;
@@ -894,15 +909,33 @@ var barMic = document.createElement('button');
 barMic.textContent = 'Надиктовать';
 var barCp = document.createElement('button');
 barCp.textContent = 'Скопировать с настройками';
+var barMerge = document.createElement('button');
+barMerge.textContent = 'Соединить в зону';
 var barX = document.createElement('button');
 barX.className = 'gb-close';
 barX.textContent = '×';
-barX.title = 'закрыть (зона остаётся)';
-barBtns.appendChild(barMic); barBtns.appendChild(barCp); barBtns.appendChild(barX);
+barX.title = 'закрыть';
+barBtns.appendChild(barMerge); barBtns.appendChild(barMic); barBtns.appendChild(barCp); barBtns.appendChild(barX);
 bar.appendChild(barSel); bar.appendChild(barRoleRow); bar.appendChild(barTa); bar.appendChild(barBtns);
 document.body.appendChild(bar);
 
 function updateBar() {
+  // приоритет у сборки: пока клетки отмечаются, окно предлагает соединение
+  if (staged.length) {
+    bar.hidden = false;
+    barSel.textContent = 'Выделено: ' + stagedSummary();
+    barRoleRow.style.display = 'none';
+    barTa.style.display = 'none';
+    barMic.style.display = 'none';
+    barCp.style.display = 'none';
+    barMerge.style.display = '';
+    return;
+  }
+  barMerge.style.display = 'none';
+  barRoleRow.style.display = '';
+  barTa.style.display = '';
+  barMic.style.display = '';
+  barCp.style.display = '';
   var z = zones[activeZone];
   if (!z) { bar.hidden = true; return; }
   bar.hidden = false;
@@ -910,6 +943,23 @@ function updateBar() {
   if (barRoleSel.value !== (z.role || '')) barRoleSel.value = z.role || '';
   if (barTa.value !== (z.prompt || '')) barTa.value = z.prompt || '';
 }
+
+barMerge.addEventListener('click', function () {
+  if (!staged.length) return;
+  var c1 = Infinity, c2 = -Infinity, r1 = Infinity, r2 = -Infinity, anyRow = false;
+  staged.forEach(function (s) {
+    c1 = Math.min(c1, s.col); c2 = Math.max(c2, s.col);
+    if (s.row >= 0) { anyRow = true; r1 = Math.min(r1, s.row); r2 = Math.max(r2, s.row); }
+  });
+  zones.push({
+    c1: c1, c2: c2,
+    r1: anyRow ? r1 : -2, r2: anyRow ? r2 : -2,
+    role: '', prompt: '', state: 'on'
+  });
+  staged = [];
+  activeZone = zones.length - 1;
+  saveZones(); rebuildZones(); updateBar();
+});
 
 barRoleSel.addEventListener('input', function () {
   var z = zones[activeZone];
@@ -925,13 +975,16 @@ barTa.addEventListener('input', function () {
 });
 
 addEventListener('keydown', function (e) {
-  if (e.key === 'Escape' && activeZone >= 0 && document.activeElement !== barTa) {
+  if (e.key !== 'Escape' || document.activeElement === barTa) return;
+  if (staged.length) { staged = []; updateBar(); return; }
+  if (activeZone >= 0) {
     activeZone = -1;
     rebuildZones(); updateBar();
   }
 });
 
 barX.addEventListener('click', function () {
+  staged = [];
   activeZone = -1;
   rebuildZones(); updateBar();
 });
@@ -1130,7 +1183,8 @@ addEventListener('mouseup', function (e) {
     saveZones(); rebuildZones(); updateBar();
     return;
   }
-  // клик без протяжки: по зоне — открыть её, по пустой клетке — зона 1×1
+  // клик без протяжки: по зоне — открыть её; по пустой клетке —
+  // отметить/снять в сборке (соединяются кнопкой в окне)
   var col = d.col, row = d.row;
   if (col < 0 || row === -1) return;
   var rr = row >= 0 ? row : -2;
@@ -1140,11 +1194,14 @@ addEventListener('mouseup', function (e) {
     var inRow = z.r1 < 0 || (rr >= z.r1 && rr <= z.r2);
     if (col >= z.c1 && col <= z.c2 && inRow) hit = i;
   });
-  if (hit >= 0) activeZone = hit;
-  else {
-    zones.push({ c1: col, c2: col, r1: rr, r2: rr, role: '', prompt: '', state: 'on' });
-    activeZone = zones.length - 1;
-    saveZones();
+  if (hit >= 0 && !staged.length) {
+    activeZone = hit;
+  } else {
+    var k = stagedKey(col, rr);
+    var was = staged.length;
+    staged = staged.filter(function (s) { return stagedKey(s.col, s.row) !== k; });
+    if (staged.length === was) staged.push({ col: col, row: rr });
+    activeZone = -1;
   }
   rebuildZones(); updateBar();
 });
@@ -1250,6 +1307,21 @@ function drawSensors(now) {
   c.clearRect(0, 0, W, H);
 
   var gr = computeGrid();
+
+  // сборка: отмеченные клетки ждут соединения — пунктирные рамки
+  staged.forEach(function (s) {
+    var h = gr.cols[0];
+    if (!h || s.col >= h.n) return;
+    if (s.row >= 0 && (!gr.rows[0] || s.row >= gr.rows[0].n)) return;
+    var r = cellRect(s.col, s.row >= 0 ? s.row : -2, gr);
+    c.fillStyle = 'rgba(255,120,110,.18)';
+    c.fillRect(r[0], r[1], r[2], r[3]);
+    c.setLineDash([4, 4]);
+    c.strokeStyle = 'rgba(255,140,130,.8)';
+    c.lineWidth = 1;
+    c.strokeRect(r[0] + 0.5, r[1] + 0.5, r[2] - 1, r[3] - 1);
+    c.setLineDash([]);
+  });
 
   // зоны: заливка с рамкой и подписью роли; активная ярче
   zones.forEach(function (z, i) {
