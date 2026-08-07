@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Жидкое кольцо</title>
+<link rel="stylesheet" href="/panel.css" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: #eeede8;
+    color: #111;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 15px;
+    line-height: 1.2;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  canvas#scene {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    display: block;
+  }
+  header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    padding: 1rem;
+    z-index: 6;
+    pointer-events: none;
+  }
+  header a { color: inherit; pointer-events: auto; }
+</style>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+
+  <header>Сергей Гуров — жидкое кольцо · капли слипаются и растекаются, объект крутится вокруг своей оси · <a href="/">стенды</a></header>
+
+<script src="/panel.js"></script>
+<script>
+'use strict';
+/* ============================================================
+   Стенд «Жидкое кольцо».
+   Объект — капли, расставленные по кольцу с неровным шагом.
+   Каждая капля дрейфует вдоль кольца со своей скоростью,
+   дышит размером и чуть гуляет поперёк — соседние сливаются
+   и расходятся, как жидкость (метаболы: сферы + гладкий
+   минимум). Всё тело крутится вокруг своей вертикальной оси,
+   ось можно наклонить.
+   Рисунок формальный: рейммарчинг в один цвет, без бликов
+   и теней — только чёрный силуэт на светлом поле; глубина
+   читается по тому, как силуэт перестраивается на обороте.
+   Чистый WebGL, без three.js.  ?stop=мс — стоп-кадр.
+   ============================================================ */
+
+var MAXB = 12;
+
+var DEFAULTS = {
+  count: 9,      // сколько капель
+  ringR: 55,     // радиус кольца, % полувысоты экрана
+  size: 15,      // размер капли
+  sizeVar: 50,   // разброс размеров между каплями
+  merge: 9,      // слипание: дальность, с которой капли тянутся друг к другу
+  flow: 25,      // течение вдоль кольца
+  pulse: 35,     // дыхание размера
+  pulseSpd: 50,  // скорость дыхания
+  wob: 45,       // блуждание поперёк кольца и из плоскости
+  spin: 14,      // оборот вокруг своей оси, секунд
+  tilt: 18,      // наклон оси вращения
+  mouseAmp: 30,  // отклик на курсор: доворот по двум осям, градусов на край экрана
+  mouseLag: 85,  // инерция доворота: 0 — мгновенно, 95 — тягуче
+  scrollAmp: 60, // сила прокрутки кольца колесом
+  scrollLag: 88, // инерция прокрутки: кольцо доезжает после остановки колеса
+};
+var P = Object.assign({}, DEFAULTS);
+try {
+  var saved = JSON.parse(localStorage.getItem('koltso-params'));
+  if (saved) Object.assign(P, saved);
+} catch (e) {}
+
+StendPanel.build({
+  storageKey: 'koltso-params',
+  params: P,
+  defaults: DEFAULTS,
+  defs: [
+    ['h', 'Форма'],
+    ['count', 'Капли', 3, 12, 1],
+    ['ringR', 'Радиус кольца', 20, 90, 1],
+    ['size', 'Размер капли', 5, 30, 1],
+    ['sizeVar', 'Разброс размеров', 0, 100, 5],
+    ['merge', 'Слипание', 1, 25, 1],
+    ['h', 'Жидкость'],
+    ['flow', 'Течение', 0, 100, 5],
+    ['pulse', 'Дыхание', 0, 100, 5],
+    ['pulseSpd', 'Скорость дыхания', 10, 200, 5],
+    ['wob', 'Блуждание', 0, 100, 5],
+    ['h', 'Вращение'],
+    ['spin', 'Оборот, с', 2, 60, 1],
+    ['tilt', 'Наклон оси, °', 0, 60, 1],
+    ['h', 'Управление'],
+    ['mouseAmp', 'Курсор: отклик, °', 0, 90, 5],
+    ['mouseLag', 'Курсор: инерция', 0, 95, 5],
+    ['scrollAmp', 'Скролл: сила', 0, 200, 5],
+    ['scrollLag', 'Скролл: инерция', 0, 95, 5],
+  ],
+  desc: {
+    count: 'Из скольких капель собран объект.',
+    ringR: 'Радиус кольца, по которому расставлены капли, в долях высоты экрана.',
+    size: 'Базовый размер капли до разброса и дыхания.',
+    sizeVar: 'Насколько капли разные: 0 — все одинаковые, дальше — от мелких бусин до крупных клякс.',
+    merge: 'Дальность, с которой соседние капли перетекают друг в друга. Больше — длиннее перемычки-цепочки, меньше — раздельные точки.',
+    flow: 'Дрейф капель вдоль кольца. У каждой своя скорость, поэтому цепочки собираются и рвутся сами.',
+    pulse: 'Насколько сильно капля дышит размером.',
+    pulseSpd: 'Темп дыхания.',
+    wob: 'Свобода капли: гуляние поперёк кольца и выход из его плоскости. 0 — строгий круг.',
+    spin: 'За сколько секунд объект делает полный оборот вокруг своей вертикальной оси.',
+    tilt: 'Наклон оси вращения к зрителю: 0 — ось строго вертикальна.',
+    mouseAmp: 'Насколько объект доворачивается за курсором: положение по X экрана вертит вокруг вертикали, по Y — вокруг горизонтали. 0 — не реагирует.',
+    mouseLag: 'Насколько лениво объект догоняет курсор.',
+    scrollAmp: 'Насколько сильно колесо прокручивает кольцо вокруг его оси. На тач-экране то же делает вертикальный свайп.',
+    scrollLag: 'Раскрученное кольцо доезжает после остановки колеса. 0 — встаёт сразу.',
+  },
+});
+
+/* ── WebGL ── */
+var canvas = document.getElementById('scene');
+var gl = canvas.getContext('webgl', { antialias: false })
+      || canvas.getContext('experimental-webgl', { antialias: false });
+
+var VSH = [
+  'attribute vec2 aPos;',
+  'void main() { gl_Position = vec4(aPos * 2.0 - 1.0, 0.0, 1.0); }'].join('\n');
+
+/* весь рисунок — во фрагментном: ортокамера, гладкий минимум сфер,
+   заливка одним цветом, край сглажен по ближайшему промаху луча */
+var FSH = [
+  'precision highp float;',
+  'uniform vec2 uRes;',
+  'uniform vec4 uB[' + MAXB + '];',   // xyz — центр капли, w — радиус
+  'uniform int uCount;',
+  'uniform float uK;',
+  'float smin(float a, float b, float k) {',
+  '  float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);',
+  '  return mix(b, a, h) - k * h * (1.0 - h);',
+  '}',
+  'float map(vec3 p) {',
+  '  float d = 1e5;',
+  '  for (int i = 0; i < ' + MAXB + '; i++) {',
+  '    if (i >= uCount) break;',
+  '    d = smin(d, length(p - uB[i].xyz) - uB[i].w, uK);',
+  '  }',
+  '  return d;',
+  '}',
+  'void main() {',
+  '  vec2 uv = (gl_FragCoord.xy * 2.0 - uRes) / uRes.y;',
+  '  vec3 ro = vec3(uv, 2.5);',
+  '  vec3 rd = vec3(0.0, 0.0, -1.0);',
+  '  float t = 0.0, minD = 1e5;',
+  '  bool hit = false;',
+  '  for (int i = 0; i < 80; i++) {',
+  '    float d = map(ro + rd * t);',
+  '    minD = min(minD, d);',
+  '    if (d < 0.0005) { hit = true; break; }',
+  '    if (t > 5.0) break;',
+  '    t += max(d, 0.002);',
+  '  }',
+  '  float px = 3.0 / uRes.y;',
+  // попадание — чистая заливка; мягкий край только у промахов рядом с силуэтом
+  '  float a = hit ? 1.0 : 1.0 - smoothstep(0.0, px, minD);',
+  '  vec3 bg = vec3(0.933, 0.929, 0.910);',
+  '  vec3 ink = vec3(0.055, 0.055, 0.06);',
+  '  gl_FragColor = vec4(mix(bg, ink, a), 1.0);',
+  '}'].join('\n');
+
+function compile(type, src) {
+  var s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+var prog = gl.createProgram();
+gl.attachShader(prog, compile(gl.VERTEX_SHADER, VSH));
+gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FSH));
+gl.linkProgram(prog);
+gl.useProgram(prog);
+var U = {};
+['uRes', 'uB', 'uCount', 'uK'].forEach(function (n) { U[n] = gl.getUniformLocation(prog, n); });
+
+gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]), gl.STATIC_DRAW);
+var aPos = gl.getAttribLocation(prog, 'aPos');
+gl.enableVertexAttribArray(aPos);
+gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+function resize() {
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = window.innerWidth * dpr;
+  canvas.height = window.innerHeight * dpr;
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.uniform2f(U.uRes, canvas.width, canvas.height);
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ── капли ── */
+function hash(i, s) {
+  var x = Math.sin(i * 127.1 + s * 311.7) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+var TAU = Math.PI * 2;
+var blobs = new Float32Array(MAXB * 4);
+
+/* ── управление: курсор и скролл ── */
+var mouseTX = 0, mouseTY = 0;   // цель: −1..1 от центра экрана
+var mrx = 0, mry = 0;           // сглаженный доворот, рад
+var scrollT = 0, scrollA = 0;   // прокрутка кольца: цель и сглаженная, рад
+window.addEventListener('pointermove', function (e) {
+  mouseTX = (e.clientX / window.innerWidth) * 2 - 1;
+  mouseTY = (e.clientY / window.innerHeight) * 2 - 1;
+});
+document.addEventListener('mouseleave', function () { mouseTX = 0; mouseTY = 0; });
+window.addEventListener('wheel', function (e) {
+  scrollT += e.deltaY * P.scrollAmp / 100 * 0.005;
+}, { passive: true });
+var lastTouchY = null;          // на таче кольцо прокручивает вертикальный свайп
+window.addEventListener('touchstart', function (e) { lastTouchY = e.touches[0].clientY; }, { passive: true });
+window.addEventListener('touchmove', function (e) {
+  var y = e.touches[0].clientY;
+  if (lastTouchY !== null) scrollT += (lastTouchY - y) * P.scrollAmp / 100 * 0.01;
+  lastTouchY = y;
+}, { passive: true });
+// ?mouse=x,y — зафиксировать курсор для стоп-кадров (−1..1)
+(function () {
+  var m = location.search.match(/[?&]mouse=(-?[\d.]+),(-?[\d.]+)/);
+  if (m) { mouseTX = +m[1]; mouseTY = +m[2]; }
+})();
+
+/* позиции капель в момент T (секунды): дрейф по кольцу, дыхание,
+   блуждание — затем наклон оси и оборот всего тела */
+function fillBlobs(T) {
+  var n = Math.round(P.count);
+  var ringR = P.ringR / 100;
+  var wob = P.wob / 100;
+  var tiltR = P.tilt * Math.PI / 180;
+  var ct = Math.cos(tiltR), st = Math.sin(tiltR);
+  var ang = TAU * T / P.spin + scrollA;              // своё вращение + прокрутка колесом
+  var ca = Math.cos(ang), sa = Math.sin(ang);
+  var cxm = Math.cos(mrx), sxm = Math.sin(mrx);      // доворот за курсором
+  var cym = Math.cos(mry), sym = Math.sin(mry);
+  for (var i = 0; i < n; i++) {
+    var h1 = hash(i, 1), h2 = hash(i, 2), h3 = hash(i, 3), h4 = hash(i, 4);
+    var th = i / n * TAU + (h1 - 0.5) * 0.9              // неровный шаг по кольцу
+           + T * P.flow / 100 * 0.35 * (0.5 + h2)        // дрейф, у каждой своя скорость
+           + wob * 0.5 * Math.sin(T * 0.5 + h3 * TAU);
+    var rr = ringR * (1 + 0.10 * wob * Math.sin(T * 0.8 + h4 * TAU));
+    var r = P.size / 100
+          * (1 + (h3 - 0.5) * 1.4 * P.sizeVar / 100)
+          * (1 + P.pulse / 100 * 0.35 * Math.sin(T * P.pulseSpd / 100 * 2 + h1 * TAU));
+    var x = rr * Math.cos(th);
+    var y = rr * Math.sin(th);
+    var z = 0.35 * wob * ringR * Math.sin(T * 0.6 + h2 * TAU);
+    var y2 = y * ct - z * st;                            // наклон оси (вокруг X)
+    var z2 = y * st + z * ct;
+    var x3 = x * ca + z2 * sa;                           // оборот вокруг вертикали
+    var z3 = -x * sa + z2 * ca;
+    var y3 = y2 * cxm - z3 * sxm;                        // доворот за курсором: Y экрана
+    var z4 = y2 * sxm + z3 * cxm;
+    var x4 = x3 * cym + z4 * sym;                        // и X экрана
+    var z5 = -x3 * sym + z4 * cym;
+    blobs[i * 4] = x4; blobs[i * 4 + 1] = y3; blobs[i * 4 + 2] = z5; blobs[i * 4 + 3] = r;
+  }
+  return n;
+}
+
+function render(T) {
+  var RAD = Math.PI / 180;
+  var fm = 1 - P.mouseLag / 100;                       // догон курсора
+  mry += (mouseTX * P.mouseAmp * RAD - mry) * fm;
+  mrx += (mouseTY * P.mouseAmp * RAD - mrx) * fm;
+  scrollA += (scrollT - scrollA) * (1 - P.scrollLag / 100);  // докат прокрутки
+  var n = fillBlobs(T);
+  gl.uniform4fv(U.uB, blobs);
+  gl.uniform1i(U.uCount, n);
+  gl.uniform1f(U.uK, Math.max(0.005, P.merge / 100));
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+/* ?stop=мс — стоп-кадр для headless-скриншотов; кадр перерисовывается
+   в цикле — одиночный не переживает композитинг */
+var FREEZE = (function () {
+  var m = location.search.match(/[?&]stop=(\d+)/);
+  return m ? +m[1] / 1000 : null;
+})();
+
+(function loop() {
+  requestAnimationFrame(loop);
+  render(FREEZE !== null ? FREEZE : performance.now() / 1000);
+})();
+</script>
+</body>
+</html>

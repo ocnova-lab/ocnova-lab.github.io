@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Сетка</title>
+<link rel="stylesheet" href="/panel.css" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: #0c0c0e;
+    color: #fff;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 15px;
+    line-height: 1.2;
+    overflow-y: hidden;
+    overflow-x: auto;
+    overscroll-behavior: none;
+  }
+
+  header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    padding: 1rem;
+    z-index: 6;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    pointer-events: none;
+  }
+  header a { color: inherit; pointer-events: auto; }
+  header .back { opacity: .55; text-decoration: none; margin-right: 1em; }
+  header .back:hover { opacity: 1; }
+
+  /* сводка сетки: живые числа, включая вычисленную ширину колонки */
+  #info {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    color: rgba(255,255,255,.55);
+    white-space: nowrap;
+  }
+
+  /* полотно — лист, на котором живёт сетка; в свободном режиме шире экрана */
+  #sheet {
+    position: relative;
+    height: 100vh;
+    min-width: 100vw;
+  }
+  .marg {
+    position: absolute;
+    top: 0; bottom: 0;
+    background: rgba(255,255,255,.03);
+  }
+  .marg.l { border-right: 1px solid rgba(255,69,58,.6); }
+  .marg.r { border-left: 1px solid rgba(255,69,58,.6); }
+  /* вертикальное деление: марджины сверху/снизу, пустые строки, линии слипания */
+  .vmarg {
+    position: absolute;
+    left: 0;
+    background: rgba(255,255,255,.03);
+  }
+  .vmarg.t { border-bottom: 1px solid rgba(255,69,58,.6); }
+  .vmarg.b { border-top: 1px solid rgba(255,69,58,.6); }
+  .rowgap {
+    position: absolute;
+    left: 0;
+    background: #0c0c0e;
+  }
+  .rowband {
+    position: absolute;
+    left: 0;
+  }
+  .hsep {
+    position: absolute;
+    left: 0;
+    height: 1px;
+    background: rgba(255,69,58,.6);
+  }
+  .col {
+    position: absolute;
+    top: 0; bottom: 0;
+  }
+  /* межколонник 0: колонки слипаются — границу держит красная линия */
+  .sep {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 1px;
+    background: rgba(255,69,58,.6);
+  }
+
+  /* слой датчиков: зонд, вспышки линий и клеток — поверх полотна */
+  #sensors {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    pointer-events: none;
+    z-index: 5;
+  }
+  .col span {
+    position: absolute;
+    top: 64px;
+    left: 6px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11px;
+    color: rgba(255,255,255,.5);
+  }
+
+  /* ── тестовый стиль панели по референсу experimental-steel /exp-glr-1:
+     монохром на чёрном стекле, волосяные рамки, моно-цифры в рамочках,
+     серый гаснущий текст с белым на ховере. Дизайн-система panel.css
+     не тронута — переопределения живут только на этом стенде ── */
+  .st-panel {
+    --st-accent: #fff;
+    --st-track: rgba(255,255,255,.16);
+    width: 420px;
+    padding: 10px;
+    background: rgba(10,10,10,.72);
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,.15);
+    border-radius: 10px;
+    box-shadow: none;
+    color: #b8b8b8;
+    font-size: 13px;
+    scrollbar-width: none;
+  }
+  .st-panel::-webkit-scrollbar { display: none; }
+  .st-panel h4 {
+    font-size: 13px; font-weight: 500;
+    letter-spacing: 0; text-transform: none;
+    color: #b8b8b8;
+    margin: 14px 4px 8px;
+  }
+  .st-panel h4.st-sec:hover { color: #fff; }
+  .st-panel h4:first-of-type { margin-top: 4px; }
+  .st-panel .card {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,.18);
+    border-radius: 6px;
+  }
+  .st-panel .card > .row + .row,
+  .st-panel .card > canvas + .row { border-top: none; }
+  .st-panel .row { min-height: 44px; padding: 4px 10px; gap: 10px; }
+  .st-panel label { color: #b8b8b8; transition: color .15s; }
+  .st-panel .row:hover label { color: #fff; }
+  .st-panel .val {
+    min-width: 56px; padding: 4px 7px;
+    border: 1px solid rgba(255,255,255,.2); border-radius: 5px;
+    color: #d0d0d0;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    cursor: text;
+    transition: color .15s, border-color .15s;
+  }
+  .st-panel .row:hover .val { color: #fff; border-color: rgba(255,255,255,.35); }
+  .st-panel .val-edit {
+    border-radius: 5px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12px;
+  }
+  .st-panel input[type=range] { width: 140px; height: 2px; border-radius: 1px; }
+  .st-panel input[type=range]::-webkit-slider-thumb {
+    width: 10px; height: 10px;
+    background: #fff; border: none; box-shadow: none;
+  }
+  .st-panel input[type=range]::-moz-range-thumb {
+    width: 10px; height: 10px; box-shadow: none;
+  }
+  .st-panel select {
+    background-color: transparent;
+    border: 1px solid rgba(255,255,255,.2);
+    border-radius: 5px;
+    color: #b8b8b8;
+    font-size: 12px;
+    transition: color .15s, border-color .15s;
+  }
+  .st-panel select:hover { color: #fff; border-color: rgba(255,255,255,.4); }
+  .st-panel .st-reset {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,.2);
+    border-radius: 6px;
+    color: #b8b8b8;
+    font-size: 13px;
+    transition: color .15s, background .15s;
+  }
+  .st-panel .st-reset:hover { color: #fff; background: rgba(255,255,255,.06); }
+  .st-gear {
+    border-radius: 8px;
+    background: rgba(10,10,10,.6);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,.15);
+    box-shadow: none;
+  }
+  .st-tip {
+    background: rgba(10,10,10,.92);
+    border: 1px solid rgba(255,255,255,.15);
+    border-radius: 6px;
+    box-shadow: none;
+    color: #b8b8b8;
+  }
+
+  /* промпт: соображение + настройки → одним копированием в Клод Код */
+  .st-panel .st-prompt { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .st-panel .st-prompt textarea {
+    width: 100%; min-height: 72px; resize: vertical;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,.2); border-radius: 5px;
+    color: #d0d0d0;
+    font: 12px/1.5 ui-monospace, "SF Mono", Menlo, monospace;
+    padding: 7px 9px; outline: none;
+    transition: border-color .15s;
+  }
+  .st-panel .st-prompt textarea:focus { border-color: rgba(255,255,255,.45); }
+  .st-panel .st-prompt textarea::placeholder { color: rgba(255,255,255,.3); font-family: inherit; }
+  .st-panel .st-prompt-row { display: flex; gap: 8px; }
+  .st-panel .st-prompt-row button {
+    flex: 1; padding: 8px 0;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,.2); border-radius: 5px;
+    color: #b8b8b8; font: inherit; font-size: 12px;
+    cursor: pointer;
+    transition: color .15s, border-color .15s;
+  }
+  .st-panel .st-prompt-row button:hover { color: #fff; border-color: rgba(255,255,255,.4); }
+  .st-panel .st-prompt-row button.rec { color: #ff453a; border-color: rgba(255,69,58,.55); }
+  .st-panel .st-prompt-row button:disabled { opacity: .4; cursor: default; }
+
+  /* промпт-окно выделения: внизу по центру, появляется при выборе клеток */
+  .grid-bar {
+    position: fixed;
+    left: 50%; bottom: 16px;
+    transform: translateX(-50%);
+    z-index: 30;
+    width: min(560px, calc(100vw - 32px));
+    background: rgba(10,10,10,.8);
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,.18);
+    border-radius: 10px;
+    padding: 10px;
+    display: flex; flex-direction: column; gap: 8px;
+    color: #b8b8b8;
+    font-size: 13px;
+  }
+  .grid-bar[hidden] { display: none; }
+  .grid-bar .gb-sel {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11px;
+    color: rgba(255,120,110,.95);
+  }
+  .grid-bar textarea {
+    width: 100%; min-height: 44px; resize: vertical;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,.2); border-radius: 5px;
+    color: #d0d0d0;
+    font: 12px/1.5 ui-monospace, "SF Mono", Menlo, monospace;
+    padding: 7px 9px; outline: none;
+    transition: border-color .15s;
+  }
+  .grid-bar textarea:focus { border-color: rgba(255,255,255,.45); }
+  .grid-bar textarea::placeholder { color: rgba(255,255,255,.3); }
+  .grid-bar .gb-btns { display: flex; gap: 8px; }
+  .grid-bar .gb-btns button {
+    flex: 1; padding: 8px 0;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,.2); border-radius: 5px;
+    color: #b8b8b8; font: inherit; font-size: 12px;
+    cursor: pointer;
+    transition: color .15s, border-color .15s;
+  }
+  .grid-bar .gb-btns button:hover { color: #fff; border-color: rgba(255,255,255,.4); }
+  .grid-bar .gb-btns button.rec { color: #ff453a; border-color: rgba(255,69,58,.55); }
+  .grid-bar .gb-btns button:disabled { opacity: .4; cursor: default; }
+  .grid-bar .gb-btns .gb-close { flex: 0 0 40px; }
+
+  /* слоты разделений: глазок и крестик в заголовке, «+» в конце блока */
+  .st-panel h4.slot-h { position: relative; padding-right: 60px; }
+  .st-panel .slot-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 2px;
+    margin-right: 8px;
+  }
+  .st-panel .slot-btns {
+    position: absolute; right: 20px; top: 50%;
+    transform: translateY(-50%);
+    display: flex; gap: 8px;
+  }
+  .st-panel .slot-btns button {
+    width: 18px; height: 18px; padding: 1px;
+    background: transparent; border: none;
+    color: #b8b8b8; cursor: pointer;
+    transition: color .15s;
+  }
+  .st-panel .slot-btns button:hover { color: #fff; }
+  .st-panel .slot-btns svg { width: 100%; height: 100%; display: block; }
+  .st-panel .slot-btns .eye .slash { display: none; }
+  .st-panel .slot-btns .eye.off .slash { display: block; }
+  .st-panel .card.slot-hidden { opacity: .45; }
+  .st-panel .st-add-row { display: flex; gap: 8px; margin-top: 12px; }
+  .st-panel .st-add-row button {
+    flex: 1; padding: 8px 0;
+    background: transparent;
+    border: 1px dashed rgba(255,255,255,.25); border-radius: 6px;
+    color: #b8b8b8; font: inherit; font-size: 12px;
+    cursor: pointer;
+    transition: color .15s, border-color .15s;
+  }
+  .st-panel .st-add-row button:hover { color: #fff; border-color: rgba(255,255,255,.45); }
+</style>
+</head>
+<body>
+
+<header>
+  <div><a class="back" href="/">←</a> Сетка</div>
+  <div id="info"></div>
+</header>
+
+<div id="sheet"></div>
+
+<script src="/panel.js"></script>
+<script>
+var DEFAULTS = {
+  fill: 12,        // плотность заливки, %
+  nums: 'on',      // номера колонок
+  flashMs: 600,    // затухание вспышки, мс
+  hover: 'on'      // наведение в клетку активирует её
+};
+
+var P = Object.assign({}, DEFAULTS);
+try {
+  var saved = JSON.parse(localStorage.getItem('setka-params'));
+  if (saved) Object.keys(DEFAULTS).forEach(function (k) {
+    if (k in saved) P[k] = saved[k];
+  });
+} catch (e) {}
+
+// разделения — списки слотов, у каждого свои параметры и состояние on/hidden
+var SPLIT_DEFAULTS = {
+  h: { state: 'on', cols: 12, margin: 24, gutter: 20, mode: 'screen', colW: 160 },
+  v: { state: 'on', rows: 6, rowGap: 20, vmargin: 24 }
+};
+var S = { h: [Object.assign({}, SPLIT_DEFAULTS.h)], v: [] };
+if (/[?&]reset/.test(location.search)) {
+  try { localStorage.removeItem('setka-splits'); } catch (e) {}
+}
+try {
+  var savedS = JSON.parse(localStorage.getItem('setka-splits'));
+  if (savedS && savedS.h && savedS.v) S = savedS;
+  else if (saved) {
+    // миграция со старой плоской версии параметров
+    S.h = saved.hsplit === 'off' ? [] : [Object.assign({}, SPLIT_DEFAULTS.h, {
+      state: saved.hsplit === 'hidden' ? 'hidden' : 'on',
+      cols: saved.cols != null ? saved.cols : 12,
+      margin: saved.margin != null ? saved.margin : 24,
+      gutter: saved.gutter != null ? saved.gutter : 20,
+      mode: saved.mode || 'screen',
+      colW: saved.colW != null ? saved.colW : 160
+    })];
+    S.v = (saved.vsplit === 'on' || saved.vsplit === 'hidden')
+      ? [Object.assign({}, SPLIT_DEFAULTS.v, {
+          state: saved.vsplit,
+          rows: saved.rows != null ? saved.rows : 6,
+          rowGap: saved.rowGap != null ? saved.rowGap : 20,
+          vmargin: saved.vmargin != null ? saved.vmargin : 24
+        })]
+      : [];
+  }
+} catch (e) {}
+function saveS() { try { localStorage.setItem('setka-splits', JSON.stringify(S)); } catch (e) {} }
+
+// адресная строка: ?cols=16&mode=free правят первый горизонтальный слот,
+// ?vsplit=on&rows=8 — первый вертикальный; hsplit/vsplit=off убирают слоты
+var q = new URLSearchParams(location.search);
+if (q.has('hsplit')) {
+  if (q.get('hsplit') === 'off') S.h = [];
+  else {
+    if (!S.h[0]) S.h = [Object.assign({}, SPLIT_DEFAULTS.h)];
+    S.h[0].state = q.get('hsplit');
+  }
+}
+if (q.has('vsplit')) {
+  if (q.get('vsplit') === 'off') S.v = [];
+  else {
+    if (!S.v[0]) S.v = [Object.assign({}, SPLIT_DEFAULTS.v)];
+    S.v[0].state = q.get('vsplit');
+  }
+}
+['cols', 'margin', 'gutter', 'colW'].forEach(function (k) {
+  if (q.has(k) && S.h[0]) S.h[0][k] = parseFloat(q.get(k));
+});
+if (q.has('mode') && S.h[0]) S.h[0].mode = q.get('mode');
+['rows', 'rowGap', 'vmargin'].forEach(function (k) {
+  if (q.has(k) && S.v[0]) S.v[0][k] = parseFloat(q.get(k));
+});
+q.forEach(function (v, k) {
+  if (k in DEFAULTS) P[k] = (typeof DEFAULTS[k] === 'number') ? parseFloat(v) : v;
+});
+
+var sheet = document.getElementById('sheet');
+var info = document.getElementById('info');
+
+// один расчёт на кадр: видимые разделения и полотно
+function computeGrid() {
+  var vw = document.documentElement.clientWidth;
+  var vh = innerHeight;
+  var total = vw;
+  var hs = [];
+  S.h.forEach(function (sp) {
+    if (sp.state !== 'on') return;
+    var n = Math.max(1, Math.round(sp.cols));
+    var colW, t;
+    if (sp.mode === 'free') {
+      colW = sp.colW;
+      t = 2 * sp.margin + n * colW + (n - 1) * sp.gutter;
+    } else {
+      t = vw;
+      colW = Math.max(1, (vw - 2 * sp.margin - (n - 1) * sp.gutter) / n);
+    }
+    hs.push({ n: n, m: sp.margin, g: sp.gutter, colW: colW, total: t });
+    total = Math.max(total, t);
+  });
+  var vs = [];
+  S.v.forEach(function (sp) {
+    if (sp.state !== 'on') return;
+    var r = Math.max(1, Math.round(sp.rows));
+    var rowH = Math.max(1, (vh - 2 * sp.vmargin - (r - 1) * sp.rowGap) / r);
+    vs.push({ r: r, vm: sp.vmargin, rg: sp.rowGap, rowH: rowH });
+  });
+  return { vw: vw, vh: vh, total: total, hs: hs, vs: vs };
+}
+
+// цвета слотов: первый — красный «телесный», дальше линии синим/жёлтым/зелёным
+var COLORS = ['255,69,58', '10,132,255', '255,214,10', '48,209,88'];
+
+function render() {
+  var gr = computeGrid();
+  var W = Math.max(gr.total, gr.vw);
+  sheet.style.width = W + 'px';
+  sheet.innerHTML = '';
+
+  gr.hs.forEach(function (h, idx) {
+    var col = COLORS[idx % COLORS.length];
+    if (idx === 0) {
+      // первый слот — телесный: марджины, заливка колонок, номера
+      var ml = document.createElement('div');
+      ml.className = 'marg l';
+      ml.style.left = 0; ml.style.width = h.m + 'px';
+      sheet.appendChild(ml);
+      var mr = document.createElement('div');
+      mr.className = 'marg r';
+      mr.style.left = (h.total - h.m) + 'px'; mr.style.width = h.m + 'px';
+      sheet.appendChild(mr);
+      for (var i = 0; i < h.n; i++) {
+        var c = document.createElement('div');
+        c.className = 'col';
+        c.style.left = (h.m + i * (h.colW + h.g)) + 'px';
+        c.style.width = h.colW + 'px';
+        c.style.background = 'rgba(' + col + ',' + (P.fill / 100) + ')';
+        if (P.nums === 'on') {
+          var s = document.createElement('span');
+          s.textContent = i + 1;
+          c.appendChild(s);
+        }
+        sheet.appendChild(c);
+      }
+      if (h.g === 0) {
+        for (var j = 1; j < h.n; j++) {
+          var sp = document.createElement('div');
+          sp.className = 'sep';
+          sp.style.left = (h.m + j * h.colW - 0.5) + 'px';
+          sheet.appendChild(sp);
+        }
+      }
+    } else {
+      // наложенные слоты — линиями своего цвета: оба края каждой колонки
+      for (var i2 = 0; i2 < h.n; i2++) {
+        var xL = h.m + i2 * (h.colW + h.g);
+        [xL, xL + h.colW].forEach(function (x) {
+          var ln = document.createElement('div');
+          ln.className = 'sep';
+          ln.style.left = (x - 0.5) + 'px';
+          ln.style.background = 'rgba(' + col + ',.7)';
+          sheet.appendChild(ln);
+        });
+      }
+    }
+  });
+
+  gr.vs.forEach(function (v, idx) {
+    var col = COLORS[idx % COLORS.length];
+    if (idx === 0) {
+      // без колонок строки проявляются собственной заливкой
+      if (!gr.hs.length) {
+        for (var b = 0; b < v.r; b++) {
+          var rb = document.createElement('div');
+          rb.className = 'rowband';
+          rb.style.top = (v.vm + b * (v.rowH + v.rg)) + 'px';
+          rb.style.height = v.rowH + 'px';
+          rb.style.width = W + 'px';
+          rb.style.background = 'rgba(' + col + ',' + (P.fill / 100) + ')';
+          sheet.appendChild(rb);
+        }
+      }
+      var vt = document.createElement('div');
+      vt.className = 'vmarg t';
+      vt.style.top = 0; vt.style.height = v.vm + 'px'; vt.style.width = W + 'px';
+      sheet.appendChild(vt);
+      var vb = document.createElement('div');
+      vb.className = 'vmarg b';
+      vb.style.top = (gr.vh - v.vm) + 'px'; vb.style.height = v.vm + 'px'; vb.style.width = W + 'px';
+      sheet.appendChild(vb);
+      for (var q2 = 1; q2 < v.r; q2++) {
+        var y = v.vm + q2 * (v.rowH + v.rg) - v.rg;
+        if (v.rg > 0) {
+          var gp = document.createElement('div');
+          gp.className = 'rowgap';
+          gp.style.top = y + 'px'; gp.style.height = v.rg + 'px'; gp.style.width = W + 'px';
+          sheet.appendChild(gp);
+        } else {
+          var hl = document.createElement('div');
+          hl.className = 'hsep';
+          hl.style.top = (y - 0.5) + 'px'; hl.style.width = W + 'px';
+          sheet.appendChild(hl);
+        }
+      }
+    } else {
+      // наложенные вертикальные слоты — линиями: оба края каждой строки
+      for (var b2 = 0; b2 < v.r; b2++) {
+        var yT = v.vm + b2 * (v.rowH + v.rg);
+        [yT, yT + v.rowH].forEach(function (y2) {
+          var hl2 = document.createElement('div');
+          hl2.className = 'hsep';
+          hl2.style.top = (y2 - 0.5) + 'px'; hl2.style.width = W + 'px';
+          hl2.style.background = 'rgba(' + col + ',.7)';
+          sheet.appendChild(hl2);
+        });
+      }
+    }
+  });
+
+  var parts = [];
+  gr.hs.forEach(function (h, i) {
+    parts.push('Г' + (gr.hs.length > 1 ? i + 1 : '') + ': ' + h.n + ' кол · ' +
+      (Math.round(h.colW * 10) / 10) + ' px');
+  });
+  gr.vs.forEach(function (v, i) {
+    parts.push('В' + (gr.vs.length > 1 ? i + 1 : '') + ': ' + v.r + ' строк · ' +
+      (Math.round(v.rowH * 10) / 10) + ' px');
+  });
+  parts.push('полотно ' + Math.round(gr.total) + ' px');
+  info.textContent = parts.join(' · ');
+}
+
+var ui = StendPanel.build({
+  storageKey: 'setka-params',
+  params: P,
+  defaults: DEFAULTS,
+  defs: [
+    ['h', 'Датчики'],
+    ['flashMs', 'Вспышка, мс', 100, 1500, 50],
+    ['hover', 'Наведение', 'select', [['on', 'активирует клетку'], ['off', 'выкл']]],
+    ['h', 'Показ'],
+    ['fill', 'Заливка, %', 2, 40, 1],
+    ['nums', 'Номера колонок', 'select', [['on', 'показывать'], ['off', 'скрыть']]]
+  ],
+  desc: {
+    fill: 'Насколько плотно залиты колонки.',
+    nums: 'Номер в верхнем углу каждой колонки.',
+    flashMs: 'Время затухания вспышки клетки.',
+    hover: 'Наведение курсора в клетку активирует её — сетка работает клавиатурой.'
+  }
+});
+
+// ── слоты разделений: списки, глазок скрывает, крестик удаляет,
+// «+» в конце каждого блока добавляет ещё одно разделение того же рода ──
+var slotsHost = document.createElement('div');
+ui.panel.insertBefore(slotsHost, ui.panel.firstChild);
+
+var EYE_SVG = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">' +
+  '<path d="M1.5 8s2.6-4.3 6.5-4.3S14.5 8 14.5 8s-2.6 4.3-6.5 4.3S1.5 8 1.5 8z"/>' +
+  '<circle cx="8" cy="8" r="1.9"/>' +
+  '<line class="slash" x1="2.5" y1="13.5" x2="13.5" y2="2.5"/></svg>';
+var CROSS_SVG = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">' +
+  '<path d="M4 4l8 8M12 4l-8 8"/></svg>';
+
+function slotSliderRow(card, lab, obj, key, min, max, step) {
+  var row = document.createElement('div'); row.className = 'row';
+  var l = document.createElement('label');
+  l.textContent = lab; l.style.cursor = 'default';
+  var inp = document.createElement('input');
+  inp.type = 'range'; inp.min = min; inp.max = max; inp.step = step;
+  inp.value = obj[key];
+  var val = document.createElement('span'); val.className = 'val';
+  val.textContent = obj[key];
+  function paint() {
+    var p = (obj[key] - min) / (max - min) * 100;
+    inp.style.background =
+      'linear-gradient(to right, #fff ' + p + '%, rgba(255,255,255,.16) ' + p + '%)';
+  }
+  inp.addEventListener('input', function () {
+    obj[key] = parseFloat(inp.value);
+    val.textContent = obj[key];
+    paint(); saveS();
+  });
+  // клик по числу — точный ввод (Enter — принять, Esc — отмена)
+  val.addEventListener('click', function () {
+    var ed = document.createElement('input');
+    ed.type = 'number'; ed.className = 'val-edit'; ed.step = 'any';
+    ed.value = obj[key];
+    row.replaceChild(ed, val);
+    ed.focus(); ed.select();
+    var done = false;
+    function fin(ok) {
+      if (done) return; done = true;
+      if (ok) {
+        var v = parseFloat(ed.value);
+        if (!isNaN(v)) obj[key] = Math.max(min, Math.min(max, v));
+      }
+      row.replaceChild(val, ed);
+      inp.value = obj[key]; val.textContent = obj[key];
+      paint(); saveS();
+    }
+    ed.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') fin(true);
+      else if (ev.key === 'Escape') fin(false);
+    });
+    ed.addEventListener('blur', function () { fin(true); });
+  });
+  row.appendChild(l); row.appendChild(inp); row.appendChild(val);
+  card.appendChild(row); paint();
+}
+
+function slotSelectRow(card, lab, obj, key, opts) {
+  var row = document.createElement('div'); row.className = 'row';
+  var l = document.createElement('label');
+  l.textContent = lab; l.style.cursor = 'default';
+  var sel = document.createElement('select');
+  opts.forEach(function (o) {
+    var oe = document.createElement('option');
+    oe.value = o[0]; oe.textContent = o[1];
+    sel.appendChild(oe);
+  });
+  sel.value = obj[key];
+  sel.addEventListener('input', function () { obj[key] = sel.value; saveS(); });
+  row.appendChild(l); row.appendChild(sel);
+  card.appendChild(row);
+}
+
+function rebuildSlots() {
+  slotsHost.innerHTML = '';
+  [['h', 'По горизонтали'], ['v', 'По вертикали']].forEach(function (kd) {
+    var kind = kd[0];
+    S[kind].forEach(function (sp, idx) {
+      var h = document.createElement('h4');
+      h.className = 'slot-h';
+      var dot = document.createElement('span');
+      dot.className = 'slot-dot';
+      dot.style.background = 'rgb(' + COLORS[idx % COLORS.length] + ')';
+      h.appendChild(dot);
+      h.appendChild(document.createTextNode(kd[1] + (S[kind].length > 1 ? ' ' + (idx + 1) : '')));
+      var btns = document.createElement('span');
+      btns.className = 'slot-btns';
+      var eye = document.createElement('button');
+      eye.className = 'eye' + (sp.state === 'hidden' ? ' off' : '');
+      eye.innerHTML = EYE_SVG;
+      eye.title = 'скрыть / показать разделение';
+      eye.addEventListener('click', function () {
+        sp.state = sp.state === 'on' ? 'hidden' : 'on';
+        saveS(); rebuildSlots();
+      });
+      var del = document.createElement('button');
+      del.innerHTML = CROSS_SVG;
+      del.title = 'удалить разделение';
+      del.addEventListener('click', function () {
+        S[kind].splice(idx, 1);
+        saveS(); rebuildSlots();
+      });
+      btns.appendChild(eye); btns.appendChild(del);
+      h.appendChild(btns);
+      slotsHost.appendChild(h);
+
+      var card = document.createElement('div');
+      card.className = 'card' + (sp.state === 'hidden' ? ' slot-hidden' : '');
+      if (kind === 'h') {
+        slotSliderRow(card, 'Колонки', sp, 'cols', 1, 24, 1);
+        slotSliderRow(card, 'Марджин, px', sp, 'margin', 0, 320, 4);
+        slotSliderRow(card, 'Межколонник, px', sp, 'gutter', 0, 160, 2);
+        slotSelectRow(card, 'Ширина', sp, 'mode', [['screen', 'в экран'], ['free', 'свободная']]);
+        slotSliderRow(card, 'Колонка, px', sp, 'colW', 40, 640, 4);
+      } else {
+        slotSliderRow(card, 'Строки', sp, 'rows', 1, 24, 1);
+        slotSliderRow(card, 'Межстрочник, px', sp, 'rowGap', 0, 160, 2);
+        slotSliderRow(card, 'Марджин верт., px', sp, 'vmargin', 0, 320, 4);
+      }
+      slotsHost.appendChild(card);
+    });
+    var add = document.createElement('div');
+    add.className = 'st-add-row';
+    var b = document.createElement('button');
+    b.textContent = '+ разделение ' + (kind === 'h' ? 'по горизонтали' : 'по вертикали');
+    b.addEventListener('click', function () {
+      S[kind].push(Object.assign({}, SPLIT_DEFAULTS[kind]));
+      saveS(); rebuildSlots();
+    });
+    add.appendChild(b);
+    slotsHost.appendChild(add);
+  });
+}
+rebuildSlots();
+
+// «Сбросить настройки» возвращает и разделения к исходному состоянию
+ui.panel.querySelector('.st-reset').addEventListener('click', function () {
+  S = { h: [Object.assign({}, SPLIT_DEFAULTS.h)], v: [] };
+  saveS(); rebuildSlots();
+});
+
+// ── промпт: соображение (текстом или голосом) + текущие настройки
+// уезжают одним копированием в Клод Код ──
+var settingsText; // сборщик пакета настроек; нужен и промпт-окну выделения
+(function () {
+  var h = document.createElement('h4');
+  h.textContent = 'Промпт';
+  var card = document.createElement('div');
+  card.className = 'card st-prompt';
+
+  var ta = document.createElement('textarea');
+  ta.placeholder = 'Соображение к сетке — напиши или надиктуй…';
+  try { ta.value = localStorage.getItem('setka-prompt') || ''; } catch (e) {}
+  function keep() { try { localStorage.setItem('setka-prompt', ta.value); } catch (e) {} }
+  ta.addEventListener('input', keep);
+
+  var row = document.createElement('div');
+  row.className = 'st-prompt-row';
+  var mic = document.createElement('button');
+  mic.textContent = 'Надиктовать';
+  var cp = document.createElement('button');
+  cp.textContent = 'Скопировать с настройками';
+  row.appendChild(mic); row.appendChild(cp);
+  card.appendChild(ta); card.appendChild(row);
+
+  // встаём перед подвалом «Панель»
+  var footH = null;
+  ui.panel.querySelectorAll('h4').forEach(function (el) {
+    if (el.textContent === 'Панель') footH = el;
+  });
+  ui.panel.insertBefore(h, footH);
+  ui.panel.insertBefore(card, footH);
+
+  settingsText = function () {
+    var out = ['Стенд «Сетка» — стенды.0снова.рф/setka (~/stendy/setka.html)'];
+    S.h.forEach(function (sp, i) {
+      out.push('По горизонтали ' + (i + 1) + (sp.state === 'hidden' ? ' (скрыто)' : '') + ': ' +
+        sp.cols + ' кол, марджин ' + sp.margin + ', межколонник ' + sp.gutter + ', режим ' +
+        (sp.mode === 'free' ? 'свободная (колонка ' + sp.colW + ' px)' : 'в экран'));
+    });
+    S.v.forEach(function (sp, i) {
+      out.push('По вертикали ' + (i + 1) + (sp.state === 'hidden' ? ' (скрыто)' : '') + ': ' +
+        sp.rows + ' строк, межстрочник ' + sp.rowGap + ', марджин ' + sp.vmargin);
+    });
+    if (!S.h.length && !S.v.length) out.push('Разделений нет — чистый формат.');
+    out.push('Полотно ' + Math.round(computeGrid().total) + ' px');
+    out.push('Датчики: вспышка ' + P.flashMs + ' мс, наведение ' +
+      (P.hover === 'on' ? 'вкл' : 'выкл'));
+    // в буфер уходят только отличия от дефолтов — остальное Клод знает по коду
+    var d = {};
+    Object.keys(DEFAULTS).forEach(function (k) {
+      if (P[k] !== DEFAULTS[k]) d[k] = P[k];
+    });
+    out.push(Object.keys(d).length
+      ? 'Отличия показа от дефолтов: ' + JSON.stringify(d)
+      : 'Показ и датчики — по умолчанию.');
+    if (ta.value.trim()) out.push('', 'Соображение: ' + ta.value.trim());
+    return out.join('\n');
+  }
+  cp.addEventListener('click', function () {
+    var txt = settingsText();
+    function done(ok) {
+      cp.textContent = ok ? 'Скопировано' : 'Не вышло';
+      setTimeout(function () { cp.textContent = 'Скопировать с настройками'; }, 1400);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(function () { done(true); },
+        function () { done(false); });
+    } else {
+      ta.focus(); done(false);
+    }
+  });
+
+  // надиктовка: распознавание речи браузера, русский
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    mic.disabled = true;
+    mic.title = 'в этом браузере нет распознавания речи';
+  } else {
+    var rec = null;
+    mic.addEventListener('click', function () {
+      if (rec) { rec.stop(); return; }
+      rec = new SR();
+      rec.lang = 'ru-RU';
+      rec.continuous = true;
+      rec.interimResults = false;
+      rec.onresult = function (e) {
+        for (var i = e.resultIndex; i < e.results.length; i++) {
+          if (!e.results[i].isFinal) continue;
+          var t = e.results[i][0].transcript.trim();
+          if (!t) continue;
+          ta.value += (ta.value && !/\s$/.test(ta.value) ? ' ' : '') + t;
+        }
+        keep();
+      };
+      function stop() {
+        rec = null;
+        mic.classList.remove('rec');
+        mic.textContent = 'Надиктовать';
+      }
+      rec.onend = stop;
+      rec.onerror = stop;
+      rec.start();
+      mic.classList.add('rec');
+      mic.textContent = 'Идёт запись — стоп';
+    });
+  }
+})();
+
+// ── выделение: клик по клетке (колонке или модулю) подсвечивает её,
+// внизу по центру всплывает промпт-окно — операция с выделенным местом ──
+var selection = [];
+try {
+  var savedSel = JSON.parse(localStorage.getItem('setka-selection'));
+  if (Array.isArray(savedSel)) selection = savedSel;
+} catch (e) {}
+function saveSel() { try { localStorage.setItem('setka-selection', JSON.stringify(selection)); } catch (e) {} }
+
+var bar = document.createElement('div');
+bar.className = 'grid-bar';
+bar.hidden = true;
+var barSel = document.createElement('div');
+barSel.className = 'gb-sel';
+var barTa = document.createElement('textarea');
+barTa.placeholder = 'Что сделать с этим местом — напиши или надиктуй…';
+var barBtns = document.createElement('div');
+barBtns.className = 'gb-btns';
+var barMic = document.createElement('button');
+barMic.textContent = 'Надиктовать';
+var barCp = document.createElement('button');
+barCp.textContent = 'Скопировать с настройками';
+var barX = document.createElement('button');
+barX.className = 'gb-close';
+barX.textContent = '×';
+barX.title = 'снять выделение';
+barBtns.appendChild(barMic); barBtns.appendChild(barCp); barBtns.appendChild(barX);
+bar.appendChild(barSel); bar.appendChild(barTa); bar.appendChild(barBtns);
+document.body.appendChild(bar);
+
+// эффективный адрес: закон деградации работает и для выделения —
+// без вертикали модульный адрес читается как «колонка целиком»
+function effRow(s, gr) {
+  var v = gr.vs[0];
+  if (v && s.row >= 0) return s.row < v.r ? s.row : null; // null — за пределами сетки
+  return -2; // колонка целиком
+}
+
+function selSummary() {
+  var gr = computeGrid();
+  var cols = [], mods = [], seen = {};
+  selection.forEach(function (s) {
+    var row = effRow(s, gr);
+    if (row === null) return;
+    if (row >= 0) {
+      var mk = (s.col + 1) + '×' + (row + 1);
+      if (!seen['m' + mk]) { seen['m' + mk] = 1; mods.push(mk); }
+    } else if (!seen['c' + s.col]) {
+      seen['c' + s.col] = 1; cols.push(s.col + 1);
+    }
+  });
+  var p = [];
+  if (cols.length) p.push('колонки ' + cols.join(', '));
+  if (mods.length) p.push('модули (колонка×строка) ' + mods.join(', '));
+  return p.join(' · ');
+}
+
+function updateBar() {
+  bar.hidden = !selection.length;
+  barSel.textContent = selection.length ? 'Выделено: ' + selSummary() : '';
+}
+
+addEventListener('click', function (e) {
+  var t = e.target;
+  if (t && t.closest && t.closest('.st-panel, .st-gear, .grid-bar, header, .st-tip')) return;
+  var gr = computeGrid();
+  var col = colAt(e.clientX + scrollX, gr);
+  var row = rowAt(e.clientY, gr);
+  if (col < 0 || row === -1) return; // мимо клетки — промежуток или поле
+  // клик гасит всё, что в текущей сетке читается тем же местом;
+  // если гасить нечего — заводит новое выделение
+  var clicked = { col: col, row: row };
+  var ck = col + ':' + effRow(clicked, gr);
+  var before = selection.length;
+  selection = selection.filter(function (s) {
+    var er = effRow(s, gr);
+    return er === null || s.col + ':' + er !== ck;
+  });
+  if (selection.length === before) selection.push(clicked);
+  saveSel(); updateBar();
+});
+
+addEventListener('keydown', function (e) {
+  if (e.key === 'Escape' && selection.length && document.activeElement !== barTa) {
+    selection = [];
+    saveSel(); updateBar();
+  }
+});
+
+barX.addEventListener('click', function () {
+  selection = [];
+  saveSel(); updateBar();
+});
+
+barCp.addEventListener('click', function () {
+  var out = settingsText() + '\n\nВыделение: ' + selSummary();
+  if (barTa.value.trim()) out += '\nОперация с выделением: ' + barTa.value.trim();
+  function done(ok) {
+    barCp.textContent = ok ? 'Скопировано' : 'Не вышло';
+    setTimeout(function () { barCp.textContent = 'Скопировать с настройками'; }, 1400);
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(out).then(function () { done(true); },
+      function () { done(false); });
+  } else done(false);
+});
+
+// надиктовка в окно выделения — тот же механизм, что в панели
+(function () {
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    barMic.disabled = true;
+    barMic.title = 'в этом браузере нет распознавания речи';
+    return;
+  }
+  var rec = null;
+  barMic.addEventListener('click', function () {
+    if (rec) { rec.stop(); return; }
+    rec = new SR();
+    rec.lang = 'ru-RU';
+    rec.continuous = true;
+    rec.interimResults = false;
+    rec.onresult = function (e) {
+      for (var i = e.resultIndex; i < e.results.length; i++) {
+        if (!e.results[i].isFinal) continue;
+        var t = e.results[i][0].transcript.trim();
+        if (!t) continue;
+        barTa.value += (barTa.value && !/\s$/.test(barTa.value) ? ' ' : '') + t;
+      }
+    };
+    function stop() {
+      rec = null;
+      barMic.classList.remove('rec');
+      barMic.textContent = 'Надиктовать';
+    }
+    rec.onend = stop;
+    rec.onerror = stop;
+    rec.start();
+    barMic.classList.add('rec');
+    barMic.textContent = 'Идёт запись — стоп';
+  });
+})();
+
+updateBar();
+
+// ── датчики: наведение курсора в клетку активирует её —
+// сетка работает клавиатурой; тут же светится выделение ──
+var sensors = document.createElement('canvas');
+sensors.id = 'sensors';
+document.body.appendChild(sensors);
+
+var cellFlashes = [];
+var hoverCol = -1;
+
+// клетки считает первое видимое разделение каждого рода
+function colAt(sheetX, gr) {
+  var h = gr.hs[0];
+  if (!h) return -1;
+  var i = Math.floor((sheetX - h.m) / (h.colW + h.g));
+  if (i < 0 || i >= h.n) return -1;
+  return (sheetX - h.m - i * (h.colW + h.g)) <= h.colW ? i : -1;
+}
+
+function rowAt(y, gr) {
+  var v = gr.vs[0];
+  if (!v) return -2; // деления нет — клетка растёт на всю высоту
+  var i = Math.floor((y - v.vm) / (v.rowH + v.rg));
+  if (i < 0 || i >= v.r) return -1;
+  return (y - v.vm - i * (v.rowH + v.rg)) <= v.rowH ? i : -1;
+}
+
+// прямоугольник клетки: колонка целиком или модуль на пересечении со строкой
+function cellRect(col, row, gr) {
+  var h = gr.hs[0];
+  var x = h.m + col * (h.colW + h.g) - scrollX;
+  if (row >= 0) {
+    var v = gr.vs[0];
+    return [x, v.vm + row * (v.rowH + v.rg), h.colW, v.rowH];
+  }
+  return [x, 0, h.colW, innerHeight];
+}
+
+var hoverRow = -2;
+addEventListener('mousemove', function (e) {
+  var gr = computeGrid();
+  var col = colAt(e.clientX + scrollX, gr);
+  var row = rowAt(e.clientY, gr);
+  if (col !== hoverCol || row !== hoverRow) {
+    hoverCol = col; hoverRow = row;
+    var active = col >= 0 && row !== -1;
+    if (active && P.hover === 'on') {
+      cellFlashes.push({ col: col, row: row, t: performance.now() });
+    }
+  }
+});
+
+function drawSensors(now) {
+  var W = innerWidth, H = innerHeight;
+  var dpr = window.devicePixelRatio || 1;
+  if (sensors.width !== Math.round(W * dpr) || sensors.height !== Math.round(H * dpr)) {
+    sensors.width = Math.round(W * dpr);
+    sensors.height = Math.round(H * dpr);
+  }
+  var c = sensors.getContext('2d');
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, W, H);
+
+  var gr = computeGrid();
+
+  // выделенные клетки: светлее и ярче обычной заливки, с тонкой рамкой;
+  // рисуем по эффективному адресу, совпадения не наслаиваются
+  if (gr.hs[0]) {
+    var drawn = {};
+    selection.forEach(function (s) {
+      if (s.col >= gr.hs[0].n) return;
+      var row = effRow(s, gr);
+      if (row === null) return;
+      var k = s.col + ':' + row;
+      if (drawn[k]) return;
+      drawn[k] = 1;
+      var r = cellRect(s.col, row, gr);
+      c.fillStyle = 'rgba(255,120,110,.35)';
+      c.fillRect(r[0], r[1], r[2], r[3]);
+      c.strokeStyle = 'rgba(255,140,130,.9)';
+      c.lineWidth = 1;
+      c.strokeRect(r[0] + 0.5, r[1] + 0.5, r[2] - 1, r[3] - 1);
+    });
+  }
+
+  // клетка под курсором: слабое поле + вспышка на входе
+  if (P.hover === 'on' && hoverCol >= 0 && hoverRow !== -1) {
+    var hr = cellRect(hoverCol, hoverRow, gr);
+    c.fillStyle = 'rgba(255,255,255,.035)';
+    c.fillRect(hr[0], hr[1], hr[2], hr[3]);
+  }
+  cellFlashes = cellFlashes.filter(function (f) {
+    var a = 1 - (now - f.t) / P.flashMs;
+    if (a <= 0) return false;
+    var r = cellRect(f.col, f.row === undefined ? -2 : f.row, gr);
+    c.fillStyle = 'rgba(255,69,58,' + (a * 0.22) + ')';
+    c.fillRect(r[0], r[1], r[2], r[3]);
+    return true;
+  });
+}
+
+// панель пишет прямо в P — DOM перерисовывается по факту смены значений,
+// окна, прокрутки или открытия панели; слой датчиков живёт каждым кадром
+var lastSig = '';
+(function tick(now) {
+  now = now || 0;
+  var sig = JSON.stringify(P) + JSON.stringify(S) + '|' + document.documentElement.clientWidth +
+    'x' + innerHeight + '|' + Math.round(scrollX) + '|' + ui.panel.hidden;
+  if (sig !== lastSig) { lastSig = sig; render(); updateBar(); }
+  drawSensors(now);
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

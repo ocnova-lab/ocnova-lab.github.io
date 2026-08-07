@@ -1,0 +1,2151 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Диагональная полоса — стенд</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wdth,wght@8..144,25..151,100..1000&family=Roboto+Mono:ital,wght@1,100..700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/panel.css">
+<style>
+  /* ────────────────────────────────────────────────────────────────
+     Диагональная полоса текста — по референсу конверта
+     General Purpose Records (дизайн Luke Brown).
+
+     Устройство: строки горизонтальные, левый край каждой лежит
+     на диагонали экрана — от левого верхнего угла к правому нижнему.
+     Скролл везёт текст вдоль этой диагонали, текст зациклен.
+     На второй оси — заголовки смысловых частей; каждый абзац
+     предваряется меткой «(N)» на той же оси.
+     ──────────────────────────────────────────────────────────────── */
+  /* шрифты едут с самим сайтом — у всех зрителей та же гарнитура,
+     что у Сергея локально (оси wght/wdth работают одинаково везде) */
+  @font-face{
+    font-family:'Pragmatica Next VF';
+    src:url('/fonts/PragmaticaNextVF.woff') format('woff');
+    font-weight:100 900;
+    font-stretch:50% 100%;
+    font-display:swap;
+  }
+  @font-face{
+    font-family:'Even Mono';
+    src:url('/fonts/EvenMono-Regular.woff') format('woff');
+    font-weight:400;
+    font-style:normal;
+    font-display:swap;
+  }
+  *, *::before, *::after{ box-sizing:border-box; }
+  html, body{ margin:0; height:100%; }
+  body{
+    background:#fff; color:#000;
+    background-size:cover; background-position:center; background-repeat:no-repeat;
+    overflow:hidden; overscroll-behavior:none; touch-action:none;
+    /* Прагматика — если стоит на машине; иначе вариативный Roboto Flex */
+    font-family:'Pragmatica Next VF','Roboto Flex','Helvetica Neue',Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    user-select:none; -webkit-user-select:none;
+    cursor:grab;
+  }
+  body.dragging{ cursor:grabbing; }
+  /* --trk — живой кернинг: шкала от покоя к разгону и обратно;
+     --trk0 — кернинг покоя (по нему же меряются переносы);
+     строка растёт вправо от левого края */
+  #band{ position:fixed; inset:0; z-index:1; letter-spacing:0.01em; --trk:0.01em; --trk0:0.01em; }
+  .ln{
+    position:absolute; left:0; top:0;
+    width:var(--colw, 340px);
+    text-align:left;
+    white-space:nowrap;
+    will-change:transform;
+    /* высотный масштаб кегля крутится вокруг левого края — строка
+       не сходит с оси и не гуляет по вертикали */
+    transform-origin:0 50%;
+    letter-spacing:var(--trk);
+    color:var(--txc, #000);
+  }
+  /* ось номеров: капс; толщина и кернинг — ручки секции «Ось номеров»
+     (--numw/--numtrk ставит relayout); в разгоне кернинга не участвует;
+     у цифровых меток .ln.dig свой вес — правило ниже перебивает */
+  .ln.num{ font-size:var(--numsz, 1em); letter-spacing:var(--numtrk, 0em); font-weight:var(--numw, 700); text-transform:uppercase; color:var(--numc, #000); }
+  /* цифры — Even Mono (локальный у Сергея; у зрителей Roboto Mono):
+     medium, италик, кегль на 3 меньше основного (--dg считает relayout);
+     толщина гротеска на моно не давит */
+  .ln.dig{
+    font-family:'Even Mono', 'Roboto Mono', Georgia, monospace;
+    font-weight:var(--digw, 500);
+    font-style:italic;
+    font-size:var(--dg, 1em);
+    letter-spacing:var(--digtrk, 0em);
+  }
+  /* плашки: прямоугольники в строчных слотах; цвет ВСЕГДА оси номеров —
+     и у тех, что сидят на текстовой оси (правило Сергея 2026-08-06) */
+  .ln.rect{ width:150px; height:12px; background:currentColor; color:var(--numc, #000); }
+  /* выделенные слова — свой цвет из панели («Цвет выделений») */
+  .ln .hl{ color:var(--hlc, #fff); }
+  /* кликабельная строка (контакт): подчёркивание и курсор */
+  .ln.link{ text-decoration:underline; text-underline-offset:0.15em; cursor:pointer; }
+  .meas{ letter-spacing:var(--trk0); } /* линейка меряет спокойный набор */
+  /* невидимая строка-линейка: в ней меряются слова для переноса */
+  .meas{ position:absolute; left:0; top:0; visibility:hidden; white-space:pre; }
+  /* степпер числа вершин оси */
+  .st-panel .ax-pts{ display:flex; gap:8px; align-items:center; }
+  .st-panel .ax-pts button{
+    width:26px; height:22px; border-radius:6px; border:0; cursor:pointer;
+    background:rgba(255,255,255,.14); color:#fff; font-size:14px; line-height:1;
+  }
+  .st-panel .ax-pts span{ min-width:18px; text-align:center; }
+  /* цвет оси/фона — образец, открывающий системную палитру */
+  .st-panel .ax-colors{ display:flex; justify-content:flex-end; }
+  .st-panel .ax-colors input[type=color]{
+    width:48px; height:26px; padding:0; border:0;
+    border-radius:6px; background:none; cursor:pointer;
+  }
+  .st-panel .ax-colors input[type=color]::-webkit-color-swatch-wrapper{ padding:2px; }
+  .st-panel .ax-colors select{ margin-right:8px; }
+  /* градиент оси: полоса с двумя стопами, как в графических редакторах */
+  .st-panel .ax-grad{ display:flex; gap:8px; align-items:center; margin:2px 0 10px; }
+  .st-panel .ax-grad input[type=color]{
+    width:30px; height:22px; padding:0; border:0; border-radius:6px;
+    background:none; cursor:pointer; flex:none;
+  }
+  .st-panel .ax-grad input[type=color]::-webkit-color-swatch-wrapper{ padding:2px; }
+  .st-panel .ax-grad input[type=color]::-webkit-color-swatch{
+    border:none; border-radius:4px;
+  }
+  .st-panel .ax-grad-strip{
+    position:relative; flex:1; height:14px; border-radius:7px;
+    box-shadow:inset 0 0 0 1px rgba(127,127,127,.35);
+    cursor:pointer; touch-action:none;
+  }
+  .st-panel .ax-grad-strip .stop{
+    position:absolute; top:50%; width:14px; height:14px; border-radius:50%;
+    border:2.5px solid #fff; box-shadow:0 0 0 1.5px rgba(0,0,0,.45);
+    transform:translate(-50%,-50%); cursor:ew-resize;
+  }
+  .st-panel .ax-grad-strip .stop.sel{
+    box-shadow:0 0 0 2px var(--st-accent, #0A84FF);
+  }
+  .st-panel .ax-colors input[type=color]::-webkit-color-swatch{
+    border:1.5px solid rgba(255,255,255,.5); border-radius:5px;
+  }
+  /* редактор оси: холст с пропорциями экрана, живёт в панели */
+  .st-panel canvas.axis-ed{
+    display:block; width:calc(100% - 24px); height:auto;
+    aspect-ratio:600/380;
+    margin:4px auto 12px; border-radius:8px;
+    touch-action:none; cursor:crosshair;
+  }
+  /* кнопки угла — без теней; шестерёнка и язык по умолчанию белые
+     с тёмно-серой графикой (слово Сергея 2026-08-07); у кнопок
+     вариантов фон и буква инлайном — они этот белый перебивают */
+  .st-gear{
+    box-shadow:none;
+    border:none;
+    background:#ffffff;
+  }
+  .st-gear:hover{ background:#f2f2f2; }
+  .st-gear svg{ stroke:#4a4a4a; }
+  .st-gear svg circle{ fill:#ffffff; }
+  /* кнопка языка — рядом с шестерёнкой, тот же круглый вид */
+  .lang-btn{
+    left:56px;
+    color:#4a4a4a;
+    font:600 11px/1 -apple-system,"Helvetica Neue",Arial,sans-serif;
+    letter-spacing:.04em;
+  }
+  /* кнопки вариантов — цепочка правее языка с отбивкой, приподнята
+     на 20px над строкой настроек; фон и буква — в цветах своего
+     варианта (инлайном), у B/D/F свои цвета по слову Сергея */
+  .var-btn{
+    bottom:42px;
+    width:41px; height:41px;
+    font:600 14px/1 -apple-system,"Helvetica Neue",Arial,sans-serif;
+    letter-spacing:.02em;
+    /* ховер-раздвижка: кнопка растёт и выталкивает соседей вправо;
+       активная кнопка — квадрат со скруглением 5px */
+    transition:left .18s ease, width .18s ease, height .18s ease,
+      bottom .18s ease, font-size .18s ease, background .15s ease,
+      border-radius .18s ease;
+  }
+  /* невидимые зоны наведения — прямоугольники встык, без щелей:
+     зоны статичны по разреженной раскладке и принимают ховер и клик,
+     кнопки — чисто визуальный слой (ездят и сжимаются внутри) */
+  .var-zone{ position:fixed; z-index:19; cursor:pointer; }
+  .var-btn{ pointer-events:none; }
+</style>
+</head>
+<body>
+<div id="band"></div>
+
+<script src="/panel.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  // ── текст: редакция Сергея 2026-08-05 (мастер — заметка «Диагональная
+  //    полоса — текст менторской группы» в Хранилище). Смысловая часть =
+  //    заголовок (на ось номеров) + абзацы из коротких фраз; КАЖДЫЙ абзац
+  //    предваряется меткой «(N)» на той же оси. Двуязычие: TEXT_RU мастер,
+  //    TEXT_EN перевод; активная лента — var TEXT ниже ──
+  var TEXT_RU = [
+    { h: 'Менторские группы', paras: [
+      ['Объявляю набор в новые', 'рабочие группы «Основы»,', 'которые стартуют', '1 сентября 2026 года.'],
+      ['Это уже третий набор', 'по счёту с 2023 года —', 'и первый, в котором', 'рабочий процесс строится', 'не через рисование', 'макета в Фигме,', 'а через вайбкодинг.']
+    ] },
+    { h: 'Обо мне', paras: [
+      ['Я Сергей Гуров,', 'методолог, преподаватель,', 'цифровой художник,', 'основатель и совладелец', 'авторских мастерских «Основа».'],
+      ['Мой опыт в дизайне —', 'более 20 лет.', 'Опыт в дизайн-образовании —', 'более 7 лет.']
+    ] },
+    { h: 'Рабочая группа', paras: [
+      ['Работа происходит', 'в групповом формате,', 'от шести до десяти человек.'],
+      ['Работа совмещает', 'теорию (30%) и практику (70%)', 'под моим руководством', 'и контролем.']
+    ] },
+    { h: 'Ритм', paras: [
+      ['Две встречи в неделю.', 'Каждая встреча онлайн', 'с записью.', 'Если пропустили —', 'пересматривайте.'],
+      ['Время выбирается', 'самой группой.', 'Обычно 19:00 или 20:00', 'по Москве.', 'Встречи бывают двух типов.']
+    ] },
+    { h: 'Лекции и воркшопы', paras: [
+      ['На лекциях излагаю тему,', 'отвечаю на уточняющие вопросы', 'и сразу переходим', 'к практическому', 'закреплению темы.'],
+      ['ИИ — это', 'индивидуальный инструмент,', 'а вайбкодинг — новый способ', 'проектировать дизайн напрямую,', 'без необходимости', 'делегировать разработку.'],
+      ['Вайбкодинг проверяет', 'вашу идею за минуту', 'и тем ускоряет', 'процесс обучения.']
+    ] },
+    { h: 'Консультации', paras: [
+      ['Консультация', 'на каждой второй встрече.'],
+      ['Это встреча целиком', 'про ваши работы:', 'домашки, концепты', 'для портфолио,', 'коммерческие проекты,', 'эксперименты, фриланс.'],
+      ['Моя задача — помочь', 'вашему развитию,', 'уберечь от типичных ошибок,', 'подсказать направление работы.']
+    ] },
+    { h: 'Миссия', paras: [
+      ['Миссия рабочих групп —', 'подготовка дизайнера', 'как независимой', 'творческой единицы,', 'которая может работать', 'как индивидуально,', 'так и в команде.'],
+      ['Для этого дизайнеру', 'необходимо иметь', 'мультидисциплинарную', 'компетенцию, то есть уметь', 'видеть дизайн', 'с разных точек зрения:']
+    ] },
+    { h: 'Архитектура', paras: [
+      ['Что такое архитектура?', 'Это форма организации', 'материала на странице.'],
+      ['Что такое сетка?', 'Это способ организации', 'пространства формата.'],
+      ['Три типа сеток:', 'позиционные,', 'метрические,', 'иерархические —', 'и их сочетания в рамках', 'общего дизайн-решения.']
+    ] },
+    { h: 'Взаимодействие', paras: [
+      ['Как строить дизайн', 'от движения композиции', 'и строить макет как то,', 'что должно взаимодействовать', 'с пользователем.'],
+      ['Вы научитесь отличать', 'композицию как то,', 'что выглядит красиво,', 'и конструкцию как то,', 'что движется и меняется', 'в процессе взаимодействия.'],
+      ['Научитесь описывать', 'взаимодействие', 'и проектировать его', '(по Дэну Сафферу).']
+    ] },
+    { h: 'Графика', paras: [
+      ['Графика — это основа', 'вашего авторского', 'визуального почерка.', 'Это вкус и стиль,', 'которые во времена', 'среднего ИИ-дизайна', 'будут иметь востребованность.'],
+      ['Вы изучите', 'основные принципы', 'геометрического', 'и пластического', 'формообразования', 'для цифровой вёрстки.'],
+      ['Научитесь разбирать', 'чужие решения', 'и объяснять свои,', 'а также интерпретировать', 'любые референсы.']
+    ] },
+    { h: 'Кинетика', paras: [
+      ['Кинетика позволяет', 'передать чувственную', 'информацию', 'о взаимодействии,', 'навигации или в целом', 'о том, как макет живёт', 'в процессе взаимодействия.']
+    ] },
+    { h: 'Вайбкодинг', paras: [
+      ['Вам не нужно', 'знать вайбкодинг', 'для обучения', 'в рабочих группах.'],
+      ['Всё необходимое знание', 'вы получите на практике —', 'в процессе выполнения', 'домашних заданий', 'и на онлайн-воркшопах.'],
+      ['Без понимания дизайна', 'в целом — как архитектуры,', 'взаимодействия и графики —', 'вайбкодинг ценности не имеет.']
+    ] },
+    { h: 'Стоимость', paras: [
+      ['Стоимость участия', 'в рабочих группах:', '30\u00A0000\u00A0₽ в месяц.'],
+      ['При оплате нескольких', 'месяцев сразу — скидка.', 'От трёх месяцев — рассрочка.']
+    ] },
+    { h: 'Связь', paras: [
+      ['Хотите присоединиться', 'или остались вопросы —', 'пишите в личные сообщения.'],
+      ['Алла @Alla_V_Nastas']
+    ] }
+  ];
+
+  // ── английская версия: перевод 2026-08-06, те же 14 частей,
+  //    тот же набор фразами-атомами ──
+  var TEXT_EN = [
+    { h: 'Mentoring groups', paras: [
+      ['Announcing enrollment', 'in the new working groups', 'at Osnova,', 'starting September 1, 2026.'],
+      ['This is the third intake', 'since 2023 —', 'and the first where', 'the workflow is built', 'not on drawing', 'mockups in Figma', 'but on vibe coding.']
+    ] },
+    { h: 'About me', paras: [
+      ['I am Sergei Gurov —', 'methodologist, educator,', 'digital artist,', 'founder and co-owner', 'of the Osnova author studios.'],
+      ['My experience in design —', 'over 20 years.', 'In design education —', 'over 7 years.']
+    ] },
+    { h: 'Working group', paras: [
+      ['The work happens', 'in a group format,', 'six to ten people.'],
+      ['It combines theory (30%)', 'and practice (70%)', 'under my guidance', 'and supervision.']
+    ] },
+    { h: 'Rhythm', paras: [
+      ['Two meetings a week.', 'Every meeting is online', 'and recorded.', 'If you missed one —', 'rewatch it.'],
+      ['The time is chosen', 'by the group itself.', 'Usually 19:00 or 20:00', 'Moscow time.', 'Meetings come in two kinds.']
+    ] },
+    { h: 'Lectures and workshops', paras: [
+      ['At lectures I present a topic,', 'answer clarifying questions,', 'and we move straight on', 'to hands-on practice.'],
+      ['AI is an individual', 'instrument, and vibe coding', 'is a new way to design', 'directly — with no need', 'to delegate development.'],
+      ['Vibe coding tests your idea', 'within a minute —', 'and so speeds up learning.']
+    ] },
+    { h: 'Consultations', paras: [
+      ['A consultation', 'at every second meeting.'],
+      ['A meeting entirely', 'about your work:', 'homework, concepts', 'for the portfolio,', 'commercial projects,', 'experiments, freelance.'],
+      ['My task is to help', 'your development,', 'to guard you', 'from typical mistakes,', 'to suggest a direction.']
+    ] },
+    { h: 'Mission', paras: [
+      ['The mission of the groups', 'is to shape the designer', 'as an independent', 'creative unit,', 'able to work solo', 'as well as in a team.'],
+      ['For that, the designer', 'needs a multidisciplinary', 'competence — the ability', 'to see design', 'from different', 'points of view:']
+    ] },
+    { h: 'Architecture', paras: [
+      ['What is architecture?', 'It is a form of organizing', 'material on the page.'],
+      ['What is a grid?', 'It is a way of organizing', 'the space of the format.'],
+      ['Three types of grids:', 'positional,', 'metric,', 'hierarchical —', 'and their combinations', 'within one design solution.']
+    ] },
+    { h: 'Interaction', paras: [
+      ['How to build design', 'from the movement', 'of the composition,', 'and build the layout', 'as something that interacts', 'with the user.'],
+      ['You will learn to tell apart', 'composition as that', 'which looks beautiful,', 'and construction as that', 'which moves and changes', 'in the course of interaction.'],
+      ['You will learn to describe', 'interaction', 'and to design it', '(after Dan Saffer).']
+    ] },
+    { h: 'Graphics', paras: [
+      ['Graphics is the base', 'of your authorial', 'visual handwriting.', 'It is the taste and style', 'that in the era', 'of average AI design', 'will stay in demand.'],
+      ['You will study', 'the core principles', 'of geometric and plastic', 'form-making', 'for digital layout.'],
+      ['You will learn to unpack', "other people's solutions", 'and explain your own,', 'and to interpret', 'any reference.']
+    ] },
+    { h: 'Kinetics', paras: [
+      ['Kinetics conveys', 'the sensory information', 'about interaction,', 'navigation — about how', 'the layout lives', 'in the course of interaction.']
+    ] },
+    { h: 'Vibe coding', paras: [
+      ['You do not need', 'to know vibe coding', 'to study', 'in the working groups.'],
+      ['All the knowledge you need', 'you will get in practice —', 'while doing homework', 'and at online workshops.'],
+      ['Without an understanding', 'of design as a whole —', 'architecture, interaction', 'and graphics —', 'vibe coding has no value.']
+    ] },
+    { h: 'Price', paras: [
+      ['Participation', 'in a working group costs', '30,000\u00A0₽ a month.'],
+      ['Pay several months', 'at once — get a discount.', 'From three months —', 'an installment plan.']
+    ] },
+    { h: 'Contact', paras: [
+      ['Want to join', 'or have questions left —', 'send a direct message.'],
+      ['Alla @Alla_V_Nastas']
+    ] }
+  ];
+
+  // ── выделения в русской ленте (список Сергея 2026-08-07,
+  //    пополняется — «продолжение следует»): подсветка ищет подстроки
+  //    в готовых строках и потому переживает любую склейку фраз;
+  //    включение и цвет — ручки «Выделения» и «Цвет выделений» в
+  //    «Полосе»; заголовков и цифр оси номеров не касается ──
+  var HL_RU = [
+    'Основы', '1 сентября 2026 года', 'Я Сергей Гуров', 'Основа',
+    'теорию (30%) и практику (70%)',
+    'Две встречи в неделю', '19:00 или 20:00', 'по Москве',
+    'На лекциях излагаю тему',
+    'ИИ — это', 'индивидуальный инструмент',
+    'подготовка дизайнера', 'как независимой', 'творческой единицы',
+    'Что такое архитектура?', 'Что такое сетка?',
+    'позиционные', 'метрические', 'иерархические',
+    '(по Дэну Сафферу)',
+    'Графика — это основа', 'вашего авторского', 'визуального почерка',
+    'взаимодействие',
+    '30\u00A0000\u00A0\u20BD в месяц',
+  ];
+  // английский список — те же цели; «interaction» пропущено: слово
+  // живёт в четырёх фразах, одним вхождением подстрокой не взять
+  var HL_EN = [
+    'Osnova', 'September 1, 2026', 'I am Sergei Gurov',
+    'theory (30%)', 'and practice (70%)',
+    'Two meetings a week', '19:00 or 20:00', 'Moscow time',
+    'At lectures I present a topic',
+    'AI is an individual', 'instrument',
+    'to shape the designer', 'as an independent', 'creative unit',
+    'What is architecture?', 'What is a grid?',
+    'positional,', 'metric,', 'hierarchical',
+    '(after Dan Saffer)',
+    'Graphics is the base', 'of your authorial', 'visual handwriting',
+    '30,000\u00A0\u20BD a month',
+  ];
+  function hlRegex(list) {
+    return new RegExp('(' + list.slice().sort(function (a, b) {
+      return b.length - a.length;
+    }).map(function (s) {
+      return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }).join('|') + ')', 'g');
+  }
+  var HL_RE = hlRegex(HL_RU);
+  var HL_RE_EN = hlRegex(HL_EN);
+
+  // ── язык: ru/en, выбор живёт отдельно от панели — переживает ?reset
+  //    и рулетку вариантов; ?lang=en — прямая ссылка на английскую ──
+  var LANGS = { ru: TEXT_RU, en: TEXT_EN };
+  var LANG_KEY = 'diagonal-lang';
+  var lang = 'ru';
+  try { if (localStorage.getItem(LANG_KEY) === 'en') lang = 'en'; } catch (e) {}
+  var lm = location.search.match(/[?&]lang=(ru|en)/);
+  if (lm) lang = lm[1];
+  var TEXT = LANGS[lang];
+
+  // ── параметры ──
+  // умолчания зафиксированы Сергеем 2026-08-05 кнопкой «Скопировать
+  // настройки»: сквозная типографика + серые оси; контуры осей = Вариант A
+  var DEFAULTS = {
+    kegl: 22,      // кегль, px (стандартизация вариантов 2026-08-07)
+    digSize: 14,   // кегль цифровых меток «(N)», px
+    fontRef: 1200, // опорная ширина экрана: при ней кегли точные, уже — меньше
+    wght: 570,     // толщина: ось wght (зафиксирована навсегда)
+    wdth: 87,      // ширина шрифта: ось wdth (зафиксирована навсегда)
+    btm: 100,      // кегль у нижней кромки, % (вверху всегда 100%)
+    width: 470,    // ширина строки: сколько фраз склеивается в строку
+    leading: 1.26, // интерлиньяж, в долях кегля
+    gap: 12,       // пустых строк на стыке повтора
+    parGap: 4,     // пустых строк перед каждым заголовком параграфа
+    rectStretch: 2, // плашки цифр: множитель длины у нижней кромки (вверху обратный)
+    // плашки текстовой оси (финальный кластер) — своё зеркальное правило
+    textRectStretch: 2, // множитель длины у ВЕРХНЕЙ кромки (внизу обратный)
+    textRectH: 0.75,    // растяжка блока: 0 — базовый ритм, 1 — высотой с экран
+    textRectLeft: 2,    // множитель длины у ЛЕВОЙ кромки (справа обратный)
+    textRectInv: '0',   // излом фибоначчи-кривой длины: '0' у низа, '1' у верха
+    speed: 0.5,    // множитель колеса
+    smooth: 0.4,   // мягкость аналоговой погони ленты за рукой
+    trackFrom: 0.01,  // кернинг покоя, em (можно в минус — плотнее)
+    trackTo: -0.1,    // кернинг на полном ходу, em — второй конец шкалы
+    trackRes: 0.3,    // кернинг: атака — скорость разгона межбуквия
+    trackRel: 0.3,    // кернинг: возврат — скорость стягивания на остановке
+    trackDist: 400,   // кернинг: дистанция — недоезд, дающий полный разгон, px
+    // кольцо — трёхмерная фигура со стенда «Жидкое кольцо», позади ленты
+    // оси: у обеих один принцип — свой редактор-экран.
+    // ось = список вершин [t, x] в долях экрана (t — высота, x — ширина),
+    // отсортирован по t; первая вершина на верхней кромке (t=0), последняя
+    // на нижней (t=1), между ними сколько угодно свободных (2–12 всего).
+    // острота: 0 — гладкая кривая, 1 — ломаная.
+    // нейтральные контуры «своей» лепки (наследие варианта A до
+    // 2026-08-07 — с его третьей редакции инвариант «умолчания =
+    // контуры A» закрыт): текст — трёхвершинная ломаная, номера —
+    // двухточечная дуга с размашистыми усиками за правой кромкой
+    textPts: [[0, 0.35], [0.85, 0.755], [1, -0.215]],
+    // усики вершин [сдвиг по высоте, сдвиг по ширине] — направление
+    // касательной вниз по потоку; null — авто (гладкая кривая как раньше)
+    textH: [[0.67, -0.77], [0.05, 0.13], [0.055, -0.9]],
+    textSharp: 1,
+    textFlow: 0,          // ход между точками: 0 ровно, + липнет к вершинам
+    textColor: '#7a7a7a',  // цвет текстовой оси у ВЕРХНЕЙ кромки
+    textColor2: '#7a7a7a', // и у НИЖНЕЙ — разные дают вертикальный градиент
+    numColor: '#7a7a7a',   // цвет оси номеров у верхней кромки
+    numColor2: '#7a7a7a',  // и у нижней
+    // заливка/градиент: флаг на ось + позиции двух стопов (0 верх, 1 низ);
+    // стопы двигают соотношение цветов, как в графических редакторах
+    textGrad: false, textPos1: 0, textPos2: 1,
+    numGrad: false, numPos1: 0, numPos2: 1,
+    bgColor: '#ffffff',   // цвет фона
+    bgImage: '',          // фон-картинка ('' — без картинки)
+    numPts: [[0, 1.15], [1, 1.235]],
+    numH: [[0.595, -1.385], [0.165, 1.475]],
+    numSharp: 0,
+    numFlow: 0,    // ход между точками оси номеров
+    numSize: 18,   // кегль заголовков оси номеров, px; 0 — как основной кегль
+    numWght: 700,  // толщина заголовков: два жирных веса на выбор (700/850)
+    numTrack: 0,   // кернинг заголовков, em
+    digWght: '700', // толщина цифровых меток (синтетика поверх Even Mono)
+    digTrack: 0,   // кернинг цифровых меток, em
+    // своя ось плашек текстового кластера: по умолчанию выключена —
+    // плашки едут по текстовой оси, как раньше
+    rectAxisOwn: 0,                // 0 — по текстовой оси, 1 — по своей
+    rectPts: [[0, 0.5], [1, 0.5]], // своя ось: колонна по центру
+    rectH: [null, null],
+    rectSharp: 1,
+    rectFlow: 0,
+    textStops: null,    // многостопный градиент текста (2–5 стопов) или null
+    numStops: null,     // то же для оси номеров
+    btnSize: 25,        // кнопки вариантов: диаметр в покое, px
+    btnGap: 20,         // кнопки вариантов: зазор в покое (разбегаются), px
+    btnGapHover: 3,     // зазор при наведении на блок (сжимаются), px
+    btnGrow: 60,        // кнопки вариантов: рост при ховере, %
+    btnSpeed: 230,      // кнопки вариантов: скорость анимации, мс
+    btnEase: 'ease',    // кнопки вариантов: темп (изинг)
+    btnAlign: 'right',  // кнопки вариантов: расталкивание (center/right/left)
+    hlOn: '0',          // выделения ключевых слов: '0' нет, '1' цветом
+    hlColor: '#ffffff', // цвет выделенных слов
+    comp: 'a',     // вариант композиции осей
+    v: 18,         // версия пресета (для одноразовых миграций сохранёнок)
+  };
+  // мобильная версия — перефиксирована Сергеем 2026-08-06 и ПРИОРИТЕТНА:
+  // на тач-устройствах и узких экранах всегда только эта композиция,
+  // варианты отключены (строки «Вариант» в панели нет, рулетка не крутится)
+  var IS_MOBILE = (window.matchMedia && matchMedia('(pointer: coarse)').matches) ||
+      Math.min(screen.width, screen.height) < 700;
+  if (IS_MOBILE) {
+    Object.assign(DEFAULTS, {
+      // мобильная фиксация Сергея 2026-08-06: серый текст,
+      // красно-оранжевые метки на белом; текст прижат к левой кромке
+      // с заходом и выходом от середины, метки дугой в три вершины
+      kegl: 16, digSize: 14, btm: 90,
+      fontRef: 320, // мобильные кегли заданы под телефон — правило ширины спит
+      width: 360, leading: 1.1, gap: 12, parGap: 5,
+      speed: 1.6, smooth: 0.4,
+      trackFrom: 0, trackTo: 0.225, trackRes: 0.3, trackRel: 0.02, trackDist: 400,
+      textPts: [[0, 0.535], [0.06, 0.045], [0.965, 0.055], [1, 0.575]],
+      textH: [[0.055, -0.495], [0.035, -1.005], [0.05, 0.395], [0.05, -0.015]],
+      textSharp: 1, textFlow: 0,
+      textColor: '#adadad', textColor2: '#adadad',
+      numColor: '#ff4015', numColor2: '#ff4015',
+      textGrad: false, textPos1: 0, textPos2: 1, numGrad: false, numPos1: 0, numPos2: 1,
+      bgColor: '#ffffff', bgImage: '',
+      numPts: [[0, 0.13], [0.54, 0.405], [1, 1.185]],
+      numH: [[0.405, 0.025], [0.09, 0.335], [0.29, 0.045]],
+      numSharp: 0, numFlow: -0.05,
+      comp: 'c',
+    });
+  }
+  var P = Object.assign({}, DEFAULTS);
+  var hadSaved = false; // была ли сохранёнка — для рулетки вариантов
+  try {
+    var saved = JSON.parse(localStorage.getItem('diagonal-params'));
+    if (saved) { Object.assign(P, saved); hadSaved = true; }
+  } catch (e) {}
+  // 2026-07-31: выключка влево, без пауз между абзацами — стык тоже в ноль
+  if ((P.v || 0) < 2) { P.gap = 0; P.v = 2; }
+  // 2026-07-31: набор фразами-атомами, ширина строки заново от 240
+  if ((P.v || 0) < 3) { P.width = 240; P.v = 3; }
+  // 2026-08-03: оси стали кривыми; старый вынос номеров перетёк в глубину
+  if ((P.v || 0) < 4) {
+    P.numAmp = (typeof P.numOff === 'number') ? P.numOff : 100;
+    delete P.numOff;
+    P.textEase = 'прямая'; P.textBez = [0.25, 0.25, 0.75, 0.75]; P.textAmp = 0;
+    P.v = 4;
+  }
+  // 2026-08-03: ось номеров переехала в редактор-экран; глубина дуги
+  // пересчитана в вершины (в третях высоты дуга даёт 0.866 глубины)
+  if ((P.v || 0) < 5) {
+    var Wm = window.innerWidth || 1440;
+    var ampM = (typeof P.numAmp === 'number') ? P.numAmp : 100;
+    var dxM = 0.866 * ampM / Wm;
+    P.numAx = [0, 1 / 3 - dxM, 1 / 3, 2 / 3 - dxM, 2 / 3, 1];
+    P.numSharp = 0;
+    delete P.numAmp; delete P.numEase; delete P.numBez;
+    P.v = 5;
+  }
+  // 2026-08-03: кернинг стал шкалой «покой → разгон»; старая прибавка
+  // трекинга перетекла во второй конец шкалы
+  if ((P.v || 0) < 6) {
+    P.trackFrom = 0.01;
+    P.trackTo = 0.01 + ((typeof P.track === 'number') ? P.track : 0.15);
+    delete P.track;
+    P.v = 6;
+  }
+  // перевод шестичисловой оси [вход, Bx, By, Cx, Cy, выход] в список вершин
+  function axToPts(a) {
+    return [[0, a[0]], [a[2], a[1]], [a[4], a[3]], [1, a[5]]];
+  }
+  // 2026-08-03: текстовая ось получила такой же редактор-экран, как
+  // номерная; старые «форма + глубина» пересчитаны в вершины
+  if ((P.v || 0) < 7) {
+    var Wt = window.innerWidth || 1440;
+    var oldV = function (t) {
+      if (P.textEase === 'дуга') return t + 0.35 * Math.sin(Math.PI * t);
+      if (P.textEase === 'волна') return t + 0.35 * Math.sin(2 * Math.PI * t);
+      if (P.textEase === 'bezier') return cubicBezierY(P.textBez || [0.25, 0.25, 0.75, 0.75], t);
+      return t;
+    };
+    var oldOff = function (t) { return (P.textAmp || 0) * (oldV(t) - t) / 0.35 / Wt; };
+    P.textAx = [0, 1 / 3 - oldOff(1 / 3), 1 / 3, 2 / 3 - oldOff(2 / 3), 2 / 3, 1];
+    P.textSharp = 0;
+    delete P.textEase; delete P.textBez; delete P.textAmp;
+    P.v = 7;
+  }
+  // 2026-08-05: оси стали списками вершин произвольной длины (2–12);
+  // старые шестичисловые массивы пересчитаны в четыре вершины
+  if ((P.v || 0) < 8) {
+    if (P.textAx) P.textPts = axToPts(P.textAx);
+    if (P.numAx) P.numPts = axToPts(P.numAx);
+    delete P.textAx; delete P.numAx;
+    P.v = 8;
+  }
+  // 2026-08-05: отрезки кривых научились гнуться хватом; изгибы нулевые
+  if ((P.v || 0) < 9) {
+    var zeros = function (n) {
+      var z = [];
+      for (var zi = 0; zi < n; zi++) z.push([0, 0]);
+      return z;
+    };
+    P.textBend = zeros((P.textPts || DEFAULTS.textPts).length - 1);
+    P.numBend = zeros((P.numPts || DEFAULTS.numPts).length - 1);
+    P.v = 9;
+  }
+  // 2026-08-05: у вершин появились усики-касательные (как в векторных
+  // редакторах); квадратичные изгибы отрезков пересчитаны в усики
+  if ((P.v || 0) < 10) {
+    var mkNulls = function (n) {
+      var a = [];
+      for (var ni = 0; ni < n; ni++) a.push(null);
+      return a;
+    };
+    var convH = function (ptsKey, bendKey, hKey) {
+      var pts = P[ptsKey] || DEFAULTS[ptsKey];
+      var H = mkNulls(pts.length);
+      var bends = P[bendKey] || [];
+      for (var bi = 0; bi < bends.length && bi < pts.length - 1; bi++) {
+        var b = bends[bi];
+        if (b && (b[0] || b[1])) {
+          var t0 = pts[bi][0], t1 = pts[bi + 1][0];
+          var v0 = pts[bi][1], v1 = pts[bi + 1][1];
+          var cT = (t0 + t1) / 2 + b[0], cX = (v0 + v1) / 2 + b[1];
+          H[bi] = [(cT - t0) * 2 / 3, (cX - v0) * 2 / 3];
+          H[bi + 1] = [(t1 - cT) * 2 / 3, (v1 - cX) * 2 / 3];
+        }
+      }
+      P[hKey] = H;
+      delete P[bendKey];
+    };
+    convH('textPts', 'textBend', 'textH');
+    convH('numPts', 'numBend', 'numH');
+    P.v = 10;
+  }
+  // 2026-08-05: толщина и ширина шрифта зафиксированы навсегда
+  // (600 / 96, на мобильном свои), ручки убраны из панели
+  if ((P.v || 0) < 11) {
+    P.wght = DEFAULTS.wght;
+    P.wdth = DEFAULTS.wdth;
+    P.v = 11;
+  }
+  // 2026-08-05: мобильная ширина шрифта выровнена с десктопной —
+  // добиваем залипшие в сохранёнках старые мобильные 620/62
+  if ((P.v || 0) < 12) {
+    P.wght = DEFAULTS.wght;
+    P.wdth = DEFAULTS.wdth;
+    P.v = 12;
+  }
+  // 2026-08-05: фигма-фиксация шрифта — 570/87, кегль 30, интерлиньяж 1.43
+  // (на мобильном свои кегль и интерлиньяж из мобильного блока)
+  if ((P.v || 0) < 13) {
+    P.wght = DEFAULTS.wght;
+    P.wdth = DEFAULTS.wdth;
+    P.kegl = DEFAULTS.kegl;
+    P.leading = DEFAULTS.leading;
+    P.v = 13;
+  }
+  // 2026-08-05: сквозные показатели для всех вариантов — кегль 26,
+  // строка 470, интерлиньяж 1.14 (мобильные свои)
+  if ((P.v || 0) < 14) {
+    P.kegl = DEFAULTS.kegl;
+    P.digSize = DEFAULTS.digSize;
+    P.btm = DEFAULTS.btm;
+    P.width = DEFAULTS.width;
+    P.leading = DEFAULTS.leading;
+    P.gap = DEFAULTS.gap;
+    P.parGap = DEFAULTS.parGap;
+    P.v = 14;
+  }
+  // 2026-08-05: кернинг покоя обнулён — естественный набор гарнитуры
+  if ((P.v || 0) < 15) {
+    P.trackFrom = DEFAULTS.trackFrom;
+    P.v = 15;
+  }
+  // 2026-08-06: заливка/градиент стали переключателем со стопами
+  if ((P.v || 0) < 16) {
+    P.textGrad = P.textColor !== P.textColor2;
+    P.numGrad = P.numColor !== P.numColor2;
+    P.textPos1 = 0; P.textPos2 = 1;
+    P.numPos1 = 0; P.numPos2 = 1;
+    P.v = 16;
+  }
+  // 2026-08-06: мобильная фиксация приоритетна — на телефонах вся
+  // сохранёнка перезаписывается на неё (вариантов на мобильных больше
+  // нет, ось номеров стала дугой в три вершины)
+  if ((P.v || 0) < 17) {
+    if (IS_MOBILE) Object.keys(DEFAULTS).forEach(function (k) {
+      var d = DEFAULTS[k];
+      P[k] = (d && typeof d === 'object') ? JSON.parse(JSON.stringify(d)) : d;
+    });
+    P.v = 17;
+  }
+  // 2026-08-06: была миграция кольцевых умолчаний; кольцо удалено
+  // 2026-08-07 — остался только прыжок версии
+  if ((P.v || 0) < 18) { P.v = 18; }
+
+  // ── изинги хода ленты: пресеты, безье-приближения и вычислитель ──
+  var EASES = {
+    'линейный': function (t) { return t; },
+    'разгон': function (t) { return t * t * t; },
+    'торможение': function (t) { return 1 - Math.pow(1 - t, 3); },
+    'плавный': function (t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; },
+    'выброс': function (t) { var c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); },
+    'пружина': function (t) {
+      if (t === 0 || t === 1) return t;
+      var c4 = (2 * Math.PI) / 3;
+      return Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * c4) + 1;
+    },
+  };
+  var BEZ_APPROX = {
+    'линейный': [0.25, 0.25, 0.75, 0.75],
+    'разгон': [0.32, 0, 0.67, 0],
+    'торможение': [0.33, 1, 0.68, 1],
+    'плавный': [0.65, 0, 0.35, 1],
+    'выброс': [0.34, 1.56, 0.64, 1],
+    'пружина': [0.3, 1.35, 0.45, 0.95],
+  };
+  function evalEase(name, bez, t) {
+    if (name === 'bezier') return cubicBezierY(bez, t);
+    return (EASES[name] || EASES['торможение'])(t);
+  }
+
+  // безье: вычислитель своей кривой изинга (и миграции сохранёнок v<7)
+  function cubicBezierY(b, t) {
+    // ищем параметр s, при котором x(s)=t, и возвращаем y(s)
+    var x1 = b[0], y1 = b[1], x2 = b[2], y2 = b[3];
+    var s = t;
+    for (var i = 0; i < 8; i++) {
+      var x = 3 * (1 - s) * (1 - s) * s * x1 + 3 * (1 - s) * s * s * x2 + s * s * s;
+      var dx = 3 * (1 - s) * (1 - s) * x1 + 6 * (1 - s) * s * (x2 - x1) + 3 * s * s * (1 - x2);
+      if (Math.abs(dx) < 1e-6) break;
+      s -= (x - t) / dx;
+      if (s < 0) s = 0; if (s > 1) s = 1;
+    }
+    return 3 * (1 - s) * (1 - s) * s * y1 + 3 * (1 - s) * s * s * y2 + s * s * s;
+  }
+
+  // ── оси: кривая через список вершин [t, x] (2–12, отсортированы по t).
+  // сегмент с нулевым изгибом идёт гладким катмулл-ромом через вершины;
+  // согнутый рукой сегмент — квадратичная безье через свой изгиб:
+  // горизонталь изгиба гнёт траекторию, вертикаль — местный ход
+  // (перекос распределения строк к одной из вершин). острота
+  // подмешивает ломаную до чистых углов ──
+  function handlesOf(axKey) {
+    var hKey = axKey === 'textPts' ? 'textH' : axKey === 'rectPts' ? 'rectH' : 'numH';
+    var n = P[axKey].length;
+    var H = P[hKey];
+    if (!H || H.length !== n) {
+      H = [];
+      for (var i = 0; i < n; i++) H.push(null);
+      P[hKey] = H;
+    }
+    return H;
+  }
+  // опорные точки кубической безье сегмента i: авто-усики (null) дают
+  // гладкую кривую через вершины, выставленные рукой — углы отклонения.
+  // опорные t зажимаются внутрь отрезка — x(t) остаётся однозначной
+  function segCtrl(axKey, i) {
+    var k = P[axKey], n = k.length, H = handlesOf(axKey);
+    var t0 = k[i][0], t1 = k[i + 1][0], v0 = k[i][1], v1 = k[i + 1][1];
+    var h = Math.max(1e-6, t1 - t0);
+    var c1, c2;
+    if (H[i]) {
+      c1 = [t0 + H[i][0], v0 + H[i][1]];
+    } else {
+      var p0 = k[Math.max(0, i - 1)], pn = k[Math.min(n - 1, i + 1)];
+      var m0 = (pn[1] - p0[1]) / Math.max(1e-6, pn[0] - p0[0]);
+      c1 = [t0 + h / 3, v0 + m0 * h / 3];
+    }
+    if (H[i + 1]) {
+      c2 = [t1 - H[i + 1][0], v1 - H[i + 1][1]];
+    } else {
+      var q1 = k[Math.max(0, i)], q2 = k[Math.min(n - 1, i + 2)];
+      var m1 = (q2[1] - q1[1]) / Math.max(1e-6, q2[0] - q1[0]);
+      c2 = [t1 - h / 3, v1 - m1 * h / 3];
+    }
+    c1[0] = Math.max(t0, Math.min(t1, c1[0]));
+    c2[0] = Math.max(t0, Math.min(t1, c2[0]));
+    return [c1, c2];
+  }
+  function axisXf(axKey, sharp, t) {
+    t = Math.max(0, Math.min(1, t));
+    var k = P[axKey];
+    var n = k.length;
+    var i = 0;
+    while (i < n - 2 && t > k[i + 1][0]) i++;
+    var t0 = k[i][0], t1 = k[i + 1][0], v0 = k[i][1], v1 = k[i + 1][1];
+    var cc = segCtrl(axKey, i);
+    var c1t = cc[0][0], c1x = cc[0][1], c2t = cc[1][0], c2x = cc[1][1];
+    // решаем t(u) = t ньютоном; опорные t зажаты — параметризация монотонна
+    var u = t1 > t0 ? (t - t0) / (t1 - t0) : 0;
+    for (var it = 0; it < 6; it++) {
+      var mu = 1 - u;
+      var tu = mu * mu * mu * t0 + 3 * mu * mu * u * c1t + 3 * mu * u * u * c2t + u * u * u * t1;
+      var dtu = 3 * mu * mu * (c1t - t0) + 6 * mu * u * (c2t - c1t) + 3 * u * u * (t1 - c2t);
+      if (Math.abs(dtu) < 1e-6) break;
+      u -= (tu - t) / dtu;
+      if (u < 0) u = 0; if (u > 1) u = 1;
+    }
+    // ход между точками: глобальный перекос прогресса внутри отрезка
+    var flow = P[axKey === 'textPts' ? 'textFlow' : axKey === 'rectPts' ? 'rectFlow' : 'numFlow'] || 0;
+    if (flow) {
+      var g = Math.pow(4, flow);
+      var ua = Math.pow(u, g);
+      u = ua / (ua + Math.pow(1 - u, g));
+    }
+    var lin = v0 + (v1 - v0) * u;
+    var mu2 = 1 - u;
+    var val = mu2 * mu2 * mu2 * v0 + 3 * mu2 * mu2 * u * c1x +
+              3 * mu2 * u * u * c2x + u * u * u * v1;
+    return val * (1 - sharp) + lin * sharp;
+  }
+
+  // ── варианты композиции Сергея: оси + цветовая схема + типографика ──
+  var VARIANTS = [
+        // «Вариант A» переснят Сергеем 2026-08-07 (шестая редакция;
+        // опорная ширина 2600 — мелкий набор): СВЕТЛАЯ СХЕМА —
+        // пыльно-розовый текст тает в розово-серый фон (стопы
+        // 0.76–0.91), метки того же тона; заголовки кеглем 18 жирные
+        // с разрядкой 0.235, цифры жирные; текст — мягкая колонна
+        // слева с изломом у низа (острота 0.25), ход 0.05; номера у
+        // левой кромки; плашки на своей оси — пологая дуга слева
+        ['a', 'Вариант A', {
+          textPts: [[0, 0.395], [0.805, 0.245], [0.835, 0.01], [1, 0.255]],
+          textH: [[0.33, -0.035], [0.02, -0.095], [0.015, -0.2], [0.075, 0.14]],
+          textSharp: 0.25, textFlow: 0.05,
+          numPts: [[0, 0.04], [1, 0.13]],
+          numH: [[0.495, 1.04], [0.135, -1.13]],
+          numSharp: 0, numFlow: 0,
+          textColor: '#bb9e98', textColor2: '#e9e2e7', numColor: '#ba9e97', numColor2: '#ffffff',
+          textGrad: true, textPos1: 0.76, textPos2: 0.91,
+          numGrad: false, numPos1: 0, numPos2: 1,
+          bgColor: '#e9e2e7', bgImage: '',
+          hlOn: '1', hlColor: '#796363',
+          gap: 8, numTrack: 0.235,
+          rectStretch: 1.4,
+          textRectStretch: 0.5, textRectH: 0.75, textRectLeft: 0.5,
+          rectAxisOwn: '1',
+          rectPts: [[0, 0.23], [0.16, 0.135], [1, 0.22]],
+          rectH: [[0.01, -0.11], [0.145, 0.23], [0.17, -1.42]],
+          rectSharp: 0, rectFlow: 0,
+        }],
+        // «Вариант B» переснят Сергеем 2026-08-07 (двенадцатая
+        // редакция; опорная ширина 2600 — мелкий набор): ЧЁРНЫЕ текст и
+        // метки на ОРАНЖЕВОМ; заголовки кеглем 18 с разрядкой 0.5,
+        // цифры жирные; текст диагональю справа налево вниз, номера
+        // встречной пологой дугой; плашки НА СВОЕЙ ОСИ — от левого
+        // верха к трети экрана внизу с выпуклостью вправо; текстовые
+        // плашки короче вверху и длиннее внизу и справа, блок 0.55
+        ['b', 'Вариант B', {
+          textPts: [[0, 0.57], [1, 0.01]],
+          textH: [[0.305, 0.125], [0.295, -0.35]],
+          textSharp: 1, textFlow: 0,
+          numPts: [[0, 0.965], [1, 0.12]],
+          numH: [[0.315, -0.115], [0.315, -0.275]],
+          numSharp: 1, numFlow: 0,
+          textColor: '#000000', textColor2: '#000000', numColor: '#000000', numColor2: '#e1e1e0', bgColor: '#ff4d00', bgImage: '',
+          textGrad: false, textPos1: 0, textPos2: 1, numGrad: false, numPos1: 0, numPos2: 1,
+          width: 440, gap: 4, parGap: 3,
+          numSize: 16, numTrack: 0.11,
+          hlOn: '1', hlColor: '#d7d0d0',
+          rectStretch: 0.8,
+          textRectStretch: 0.5, textRectLeft: 0.5,
+          rectAxisOwn: '1',
+          rectPts: [[0, 0.015], [1, 0.375]],
+          rectH: [[0.15, 0.74], [0.325, -0.9]],
+          rectSharp: 0, rectFlow: 0,
+        }],
+        // «Вариант C» переснят Сергеем 2026-08-07 (шестнадцатая
+        // редакция; опорная 2100): серо-коричневый текст ГРАДИЕНТОМ
+        // тает в чёрно-синий фон (стопы 0.63–0.82); заголовки кеглем 18
+        // с разрядкой 0.07, цифры 19 жирные; текст — колонна левее
+        // трети с уходом за правый низ, номера — линия у двух пятых с
+        // S-изгибом; плашки НА СВОЕЙ ОСИ — диагональ от правого верха
+        // за левую кромку вниз; свои интерлиньяж, строка, пауза,
+        // кернинг и правила плашек
+        ['c', 'Вариант C', {
+          textPts: [[0, 0.22], [0.82, 0.225], [1, 1.25]],
+          textH: [[0.245, 0.005], [0.03, 0.135], [0, 0.62]],
+          textSharp: 1, textFlow: 0,
+          numPts: [[0, 0.39], [1, 0.405]],
+          numH: [[0.24, 0.425], [0.335, -0.45]],
+          numSharp: 0, numFlow: -0.05,
+          textColor: '#9c8686', textColor2: '#070913', numColor: '#7a696c', numColor2: '#ffffff',
+          textGrad: true, textPos1: 0.63, textPos2: 0.82,
+          numGrad: false, numPos1: 0, numPos2: 1,
+          bgColor: '#070913', bgImage: '',
+          hlOn: '1', hlColor: '#ffe5e5',
+          width: 440, gap: 8,
+          numTrack: 0.07,
+          rectStretch: 1.4,
+          textRectStretch: 0.5, textRectH: 0.75, textRectLeft: 0.5,
+          rectAxisOwn: '1',
+          rectPts: [[0, 0.935], [1, -0.185]],
+          rectH: [[0.5, 0.01], [0.105, -0.825]],
+          rectSharp: 0, rectFlow: 0,
+        }],
+        // «Вариант D» переснят Сергеем 2026-08-07 (тринадцатая редакция;
+        // опорная ширина 2600 — мелкий набор): заголовки кеглем 18 с
+        // разрядкой 0.09, цифры жирные;
+        // обе оси приглушённым сине-голубым на почти белом; текст
+        // диагональю слева направо вниз, номера жмутся к левой кромке
+        // выпуклой дугой; вариант СО СВОЕЙ ТИПОГРАФИКОЙ и СВОИМИ
+        // правилами плашек (цифровые мягче, текстовые почти ровные
+        // по вертикали, блок растянут наполовину, горизонталь в силе)
+        ['d', 'Вариант D', {
+          textPts: [[0, -0.005], [1, 0.795]],
+          textH: [[0.325, 0.28], [0.345, 0.265]],
+          textSharp: 1, textFlow: 0,
+          numPts: [[0, 0.07], [1, 0.005]],
+          numH: [[0.135, 0.82], [0.52, -1.03]],
+          numSharp: 0, numFlow: 0,
+          textColor: '#719dad', textColor2: '#000000', numColor: '#719dae', numColor2: '#e1e1e0', bgColor: '#f7f7f7', bgImage: '',
+          hlOn: '1', hlColor: '#4f4f69',
+          textGrad: false, textPos1: 0, textPos2: 1, numGrad: false, numPos1: 0, numPos2: 1,
+          width: 440, gap: 6, parGap: 3,
+          numTrack: 0.09,
+          rectStretch: 1.7,
+          textRectStretch: 1.05, textRectH: 0.75, textRectLeft: 2,
+          rectAxisOwn: '1',
+          rectPts: [[0, 0.25], [1, -0.135]],
+          rectH: [[0.225, 1.065], [0.23, -0.6]],
+          rectSharp: 0, rectFlow: 0,
+        }],
+        // «Вариант E» переснят Сергеем 2026-08-07 (двенадцатая
+        // редакция; опорная ширина 2440): ОРАНЖЕВО-КРАСНОЕ НА ЖЁЛТОМ;
+        // заголовки кеглем 18 с разрядкой 0.14, цифры жирные; цифровые
+        // плашки чуть длиннее вверху, текстовые почти ровные, своя ось
+        // у правой кромки;
+        // ЧИСТЫЙ КРАСНЫЙ на чёрном по обеим осям, градиенты выключены
+        // (стопы и вторые цвета в запасе); текст чистой диагональю с
+        // поднятым выходом, номера пологой дугой у правой кромки; плашки
+        // НА СВОЕЙ ОСИ — вертикаль за левой кромкой с большой
+        // выпуклостью; толщина плашек ровная, блок 0.4, своя пауза
+        ['e', 'Вариант E', {
+          textPts: [[0, 0.035], [1, 0.835]],
+          textH: [null, null], textSharp: 1, textFlow: 0,
+          numPts: [[0, 0.875], [1, 0.99]],
+          numH: [[0.53, -1.035], [0.085, 1.17]],
+          numSharp: 0, numFlow: -0.05,
+          textColor: '#ff5b14', textColor2: '#000000',
+          numColor: '#ff5b14', numColor2: '#d4d4d4',
+          textGrad: false, textPos1: 0.78, textPos2: 1,
+          numGrad: false, numPos1: 0, numPos2: 0.26,
+          bgColor: '#ffd400', bgImage: '',
+          hlOn: '1', hlColor: '#221e1c',
+          width: 440, gap: 8,
+          numTrack: 0.14,
+          rectStretch: 0.85, textRectStretch: 1.05, textRectLeft: 1.05,
+          rectAxisOwn: '1',
+          rectPts: [[0, 0.915], [1, 0.955]],
+          rectH: [[0.305, -0.94], [0.19, 1.02]],
+          rectSharp: 0, rectFlow: 0,
+        }],
+        // «Вариант F» — собран «со своей» лепки (вторая редакция,
+        // 2026-08-07): ДВОЙНОЙ ГРАДИЕНТ на чёрном — розовый текст с
+        // УЗКИМ переломом в тёмно-красный (стопы 0.62–0.69), номера в
+        // противофазе из тёмно-красного в розовый (0.49–0.84); текст —
+        // зигзаг-колонна со скачком на двух третях и выходом к левой
+        // кромке; номера — большая дуга от левой кромки к правой трети
+        // и обратно; плашки на своей оси у левой кромки; заголовки 18
+        // с разрядкой 0.235, цифры жирные; опорная 2600 — мелкий набор
+        ['f', 'Вариант F', {
+          textPts: [[0, 0.595], [0.695, 0.24], [0.73, 0.53], [1, 0.03]],
+          textH: [[0.275, -0.065], [0.23, -0.16], [0.08, -0.075], [0.1, -0.2]],
+          textSharp: 1, textFlow: 0,
+          numPts: [[0, -0.015], [0.67, 0.87], [1, 0.045]],
+          numH: [[0.205, 0.405], [0.175, 0], [0.045, -0.475]],
+          numSharp: 0, numFlow: 0,
+          textColor: '#c37f8c', textColor2: '#8a0000',
+          numColor: '#8b0000', numColor2: '#c37f8c',
+          textGrad: true, textPos1: 0.62, textPos2: 0.69,
+          numGrad: true, numPos1: 0.49, numPos2: 0.84,
+          bgColor: '#000000', bgImage: '',
+          hlOn: '1', hlColor: '#ff0000',
+          gap: 8, numTrack: 0.235,
+          rectStretch: 1.4,
+          textRectStretch: 0.5, textRectH: 0.75, textRectLeft: 0.5,
+          rectAxisOwn: '1',
+          rectPts: [[0, 0.04], [1, 0.28]],
+          rectH: [[0.22, 0.98], [0.17, -0.925]],
+          rectSharp: 0, rectFlow: 0,
+        }],
+  ];
+  // каждый вариант несёт полную типографику: у D своя (в литерале),
+  // остальным ключи добираются из сквозных умолчаний — переключение
+  // вариантов не оставляет хвост настроек предыдущего
+  ['kegl', 'digSize', 'fontRef', 'btm', 'width', 'leading', 'gap', 'parGap',
+   'rectStretch', 'textRectStretch', 'textRectH', 'textRectLeft',
+   'textRectInv', 'rectAxisOwn', 'numSize', 'numWght', 'numTrack',
+   'digWght', 'digTrack', 'hlOn', 'hlColor', 'textStops', 'numStops',
+   'trackFrom', 'trackTo', 'trackRes',
+   'trackRel', 'trackDist'].forEach(function (tk) {
+    VARIANTS.forEach(function (v) { if (!(tk in v[2])) v[2][tk] = DEFAULTS[tk]; });
+  });
+
+  // рулетка вариантов: гость без сохранёнки при каждом заходе
+  // получает случайную композицию; лепку с сохранёнкой не трогаем,
+  // на мобильных всегда фиксированная мобильная версия
+  if (!hadSaved && !IS_MOBILE) {
+    var rv = VARIANTS[Math.floor(Math.random() * VARIANTS.length)];
+    Object.assign(P, rv[2]);
+    P.comp = rv[0];
+  }
+
+  var pan = StendPanel.build({
+    storageKey: 'diagonal-params',
+    params: P,
+    defaults: DEFAULTS,
+    eases: EASES,
+    evalEase: evalEase,
+    bezApprox: BEZ_APPROX,
+    // варианты Сергея (A, B, C…): контуры осей + цветовая схема;
+    // на мобильных вариантов нет — только фиксированная композиция,
+    // строка «Вариант» не строится
+    defs: (IS_MOBILE ? [] : [
+      ['h', 'Композиция'],
+      ['comp', 'Вариант', 'preset', [['own', '— своя —', {}]].concat(VARIANTS)],
+    ]).concat([
+      ['h', 'Шрифт'],
+      ['kegl', 'Кегль', 8, 40, 1],
+      ['fontRef', 'Опорная ширина', 600, 2600, 20],
+      ['btm', 'Кегль внизу, %', 50, 150, 1],
+      ['h', 'Полоса'],
+      ['width', 'Ширина строки', 120, 800, 10],
+      ['leading', 'Интерлиньяж', 0.5, 3, 0.02],
+      ['gap', 'Пауза на стыке', 0, 12, 1],
+      ['parGap', 'Отступ параграфов', 0, 8, 1],
+      ['hlOn', 'Выделения', 'select', [['0', 'нет'], ['1', 'цветом']]],
+      ['rectStretch', 'Плашки цифр: длина', 0.5, 2, 0.05],
+      ['textRectStretch', 'Плашки текста: длина', 0.5, 2, 0.05],
+      ['textRectH', 'Плашки текста: высота', 0, 1, 0.05],
+      ['textRectLeft', 'Плашки текста: слева', 0.5, 2, 0.05],
+      ['textRectInv', 'Плашки текста: излом', 'select', [['0', 'у низа'], ['1', 'у верха']]],
+      ['h', 'Текстовая ось'],
+      ['textSharp', 'Острота', 0, 1, 0.05],
+      ['textFlow', 'Ход', -1, 1, 0.05],
+      ['h', 'Ось номеров'],
+      ['numSharp', 'Острота', 0, 1, 0.05],
+      ['numFlow', 'Ход', -1, 1, 0.05],
+      ['h', 'Шрифт оси номеров'],
+      ['numSize', 'Заголовки: кегль', 0, 40, 1],
+      ['numWght', 'Заголовки: толщина', 'select', [['700', 'жирная'], ['850', 'жирнее']]],
+      ['numTrack', 'Заголовки: кернинг', -0.1, 0.5, 0.005],
+      ['digSize', 'Цифры: кегль', 6, 48, 1],
+      ['digWght', 'Цифры: толщина', 'select', [['400', 'обычная'], ['500', 'средняя'], ['700', 'жирная']]],
+      ['digTrack', 'Цифры: кернинг', -0.1, 0.5, 0.005],
+      ['h', 'Ось плашек'],
+      ['rectAxisOwn', 'Ось', 'select', [['0', 'по текстовой'], ['1', 'своя']]],
+      ['rectSharp', 'Острота', 0, 1, 0.05],
+      ['rectFlow', 'Ход', -1, 1, 0.05],
+      ['h', 'Кнопки вариантов'],
+      ['btnSize', 'Размер', 20, 64, 1],
+      ['btnGap', 'Зазор', 0, 24, 1],
+      ['btnGapHover', 'Зазор при наведении', 0, 24, 1],
+      ['btnGrow', 'Рост, %', 0, 60, 5],
+      ['btnSpeed', 'Скорость, мс', 50, 800, 10],
+      ['btnEase', 'Темп', 'select', [['ease', 'плавный'], ['ease-out', 'торможение'], ['ease-in', 'разгон'], ['ease-in-out', 'разгон-торможение'], ['cubic-bezier(0.34,1.56,0.64,1)', 'пружина'], ['linear', 'ровный']]],
+      ['btnAlign', 'Расталкивание', 'select', [['center', 'от центра'], ['right', 'вправо'], ['left', 'влево']]],
+      ['h', 'Скролл'],
+      ['speed', 'Скорость', 0.2, 3, 0.1],
+      ['smooth', 'Мягкость', 0.03, 0.4, 0.01],
+      ['trackFrom', 'Кернинг: покой', -0.1, 0.5, 0.005],
+      ['trackTo', 'Кернинг: разгон', -0.1, 10, 0.01],
+      ['trackDist', 'Кернинг: дистанция', 50, 2000, 10],
+      ['trackRes', 'Кернинг: атака', 0.01, 0.5, 0.01],
+      ['trackRel', 'Кернинг: возврат', 0.01, 0.5, 0.01],
+    ]),
+    desc: {
+      comp: 'Варианты композиции: контуры осей + цветовая схема (цвета осей, фон, фон-картинка). Выбрал — лепи дальше руками; «своя» ничего не меняет.',
+      kegl: 'Размер шрифта в пикселах.',
+      digSize: 'Кегль цифровых меток «(N)» — они набраны Even Mono и живут своим размером, независимо от основного кегля.',
+      fontRef: 'Ширина экрана, на которую набран макет. При ней и шире кегли ровно такие, как заданы; на более узком окне оба шрифта уменьшаются пропорционально ширине.',
+      btm: 'Размер шрифта у нижней кромки экрана, в процентах от кегля. У верхней кромки всегда 100%, между ними размер меняется плавно по высоте — строка растёт по ходу движения вверх.',
+      width: 'Сколько фраз помещается в строку: узко — по одной, шире — фразы склеиваются целиком. Строка рвётся по авторским границам фраз; слишком длинная фраза переносится по словам.',
+      leading: 'Расстояние между строками, в долях кегля.',
+      gap: 'Сколько пустых строк вставить там, где текст начинается заново.',
+      parGap: 'Сколько пустых строк перед каждым заголовком параграфа — воздух разбивки между смысловыми частями.',
+      hlOn: 'Ключевые слова русской ленты (список зашит в код) красятся отдельным цветом — ручка «Цвет выделений» ниже. «Нет» — лента одноцветная.',
+      rectStretch: 'Плашки кластеров ОСИ НОМЕРОВ: чем ниже на экране, тем длиннее. Значение — множитель длины у нижней кромки, у верхней — обратный (2 внизу даёт 0.5 вверху); ход между ними шагами Фибоначчи. Единица выключает правило, меньше единицы — переворачивает.',
+      textRectStretch: 'Плашки финального кластера ТЕКСТОВОЙ оси (стык ленты): чем ниже, тем короче. Значение — множитель длины у верхней кромки, у нижней — обратный; ход шагами Фибоначчи. Единица выключает правило.',
+      textRectH: 'Высота текстового кластера: пробелы между шестью плашками растут пропорционально ряду 1, 1, 2, 3, 5 — кратность Фибоначчи сохраняется. Ноль — базовый ритм, единица — блок высотой с экран.',
+      textRectLeft: 'Плашки текстового кластера по горизонтали: чем левее на экране, тем длиннее. Значение — множитель длины у левой кромки, у правой — обратный (2 слева даёт 0.5 справа), в середине единица. Перемножается с вертикальным правилом; единица выключает.',
+      textRectInv: 'Где сгущаются фибоначчиевы шаги вертикального правила длины текстовых плашек: «у низа» — длина почти не меняется сверху и резко доходит у нижней кромки; «у верха» — перелом сразу от верхней кромки, рост виден в блоке, прижатом к верху. Концы правила те же — меняется только характер хода.',
+      textSharp: 'Ноль — гладкая кривая, единица — ломаная с острыми углами. Холст ниже: рамка — экран, вход сверху, выход снизу, вершины 2–12 (ряд «Точки»). Клик по вершине выбирает её и показывает усики-рукоятки с ромбиками — тяни ромбик, чтобы задать угол отклонения. Хват за сам отрезок гнёт его (вбок — изгиб, по вертикали — местный ход) и выставляет усики его вершин. Двойной клик по линии — новая вершина, по вершине — удалить. Серым — ось номеров.',
+      textFlow: 'Как строка движется между вершинами траектории. Ноль — равномерно; вправо — замедляется у вершин, липнет к точкам и быстро пролетает середину; влево — наоборот, спешит от вершин и медлит в середине.',
+      numFlow: 'То же для оси номеров: характер хода заголовков и цифр между вершинами их траектории.',
+      numSharp: 'Ноль — гладкая кривая, единица — ломаная с острыми углами. Устройство холста то же, что у текстовой оси: клик по вершине показывает усики-рукоятки, ромбики задают углы отклонения; хват за отрезок гнёт его; двойной клик по линии добавляет вершину, по вершине — убирает. Серым — текстовая ось.',
+      numSize: 'Кегль заголовков на оси номеров. Ноль — как основной кегль ленты, меньше — заголовки мельче набора.',
+      numWght: 'Толщина заголовков оси номеров — два жирных веса вариативного шрифта на выбор.',
+      digWght: 'Толщина цифровых меток «(N)». Even Mono несёт один начертательный вес — жирнее рисует браузер синтетикой.',
+      digTrack: 'Межбуквие цифровых меток, в долях их кегля.',
+      numTrack: 'Межбуквие заголовков оси номеров, в долях кегля. Ноль — естественный набор; в живом разгоне кернинга ось номеров не участвует.',
+      rectAxisOwn: 'По какой траектории едут плашки текстового кластера: по текстовой оси (как весь набор) или по своей собственной — редактор ниже. Кривая на холсте красится цветом оси номеров, как сами плашки.',
+      rectSharp: 'Острота своей оси плашек: ноль — гладкая кривая, единица — ломаная. Холст устроен как у других осей: вершины таскаются, усики-ромбики задают углы, двойной клик добавляет и убирает вершины. Серым — текстовая ось.',
+      rectFlow: 'Ход плашек между вершинами своей оси: ноль — равномерно, вправо — липнут к вершинам, влево — спешат от них и медлят в середине.',
+      btnSize: 'Диаметр кнопок вариантов в спокойном состоянии. Активная квадратная всегда на 2px меньше — оптическая компенсация.',
+      btnGap: 'Расстояние между кнопками цепочки в покое — разреженная раскладка.',
+      btnGapHover: 'Расстояние между кнопками, когда курсор в блоке цепочки: кнопки сжимаются плотнее, при выходе разбегаются обратно.',
+      btnGrow: 'Насколько кнопка варианта раздувается под курсором, в процентах от спокойного размера. Ноль — не растёт.',
+      btnSpeed: 'Длительность анимации кнопок: рост, расталкивание соседей, смена формы активной.',
+      btnEase: 'Характер движения кнопок: плавный, с торможением, с разгоном, пружина с перелётом или ровный.',
+      btnAlign: 'Куда раздувается наведённая кнопка и как расталкивает соседей: от центра — в обе стороны, вправо — левый край стоит, влево — правый. Зазоры между кнопками держатся всегда.',
+      speed: 'Насколько быстро колесо везёт текст по диагонали.',
+      smooth: 'Характер аналоговой погони: меньше — лента вязкая, догоняет руку плавно и долго; больше — резкая, почти без запаздывания.',
+      trackFrom: 'Кернинг спокойной ленты, в долях кегля. Минус — плотнее обычного. По нему же считаются переносы строк.',
+      trackTo: 'Кернинг на полном ходу — второй конец шкалы. По мере разгона межбуквие едет от «покоя» сюда, на остановке возвращается. Строка растёт вправо от своей точки на оси. Номеров не касается.',
+      trackDist: 'Насыщение датчика: какой недоезд ленты до цели даёт полный разгон кернинга. Меньше — разлёт вспыхивает от лёгкого движения, больше — раскрывается только на длинном ходу.',
+      trackRes: 'Скорость атаки: как быстро межбуквие летит от покоя к разгону. Меньше — вязко, больше — резко.',
+      trackRel: 'Скорость возврата: как быстро межбуквие стягивается обратно, когда лента останавливается.',
+    },
+  });
+
+  // ── кнопка «Скопировать настройки»: снимает текущие параметры в буфер,
+  // чтобы фиксировать их как умолчания и собирать пресеты ──
+  (function buildCopyBtn() {
+    var btn = document.createElement('button');
+    btn.className = 'st-reset';
+    btn.textContent = 'Скопировать настройки';
+    btn.addEventListener('click', function () {
+      var txt = JSON.stringify(P, null, 1);
+      var done = function () {
+        btn.textContent = 'Скопировано';
+        setTimeout(function () { btn.textContent = 'Скопировать настройки'; }, 1500);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(done, function () { window.prompt('Настройки:', txt); });
+      } else {
+        window.prompt('Настройки:', txt);
+      }
+    });
+    var rst = pan.panel.querySelector('.st-reset');
+    if (rst) pan.panel.insertBefore(btn, rst);
+    else pan.panel.appendChild(btn);
+  })();
+
+  // ── кнопка языка: рядом с шестерёнкой, круглая, показывает целевой
+  // язык (на русской ленте видно «EN» и наоборот); тема — с шестерёнки ──
+  (function buildLangBtn() {
+    var gear = document.querySelector('.st-gear');
+    var b = document.createElement('button');
+    b.className = 'st-gear lang-btn';
+    function label() {
+      b.textContent = lang === 'ru' ? 'EN' : 'RU';
+      b.title = lang === 'ru' ? 'English version' : 'Русская версия';
+    }
+    label();
+    b.addEventListener('click', function () {
+      lang = lang === 'ru' ? 'en' : 'ru';
+      TEXT = LANGS[lang];
+      try { localStorage.setItem(LANG_KEY, lang); } catch (e) {}
+      label();
+    });
+    document.body.appendChild(b);
+    if (gear && window.MutationObserver) {
+      var mirror = function () {
+        b.classList.toggle('st-theme-nothing', gear.classList.contains('st-theme-nothing'));
+      };
+      new MutationObserver(mirror).observe(gear, { attributes: true, attributeFilter: ['class'] });
+      mirror();
+    }
+  })();
+
+  var varBtnsRadius = null; // синк квадратности активной кнопки (в кадре)
+
+  // ── кнопки вариантов: цепочка в левом нижнем углу правее языка,
+  // каждая в цветах своего варианта (фон кнопки = фон варианта, буква =
+  // цвет текста); клик дёргает селект «Вариант» в панели — применение,
+  // сохранение и обновление ручек те же; на мобильных вариантов нет ──
+  if (!IS_MOBILE) (function buildVarBtns() {
+    // точечные цвета кнопок (слово Сергея 2026-08-07): null — из варианта
+    var BTN_COLORS = {
+      b: [null, '#ffffff'],      // оранжевая, буква белая
+      d: ['#719dad', '#f7f7f7'], // цвет текста варианта, буква цветом фона
+      e: ['#ffd400', '#ff0000'], // жёлтая, буква красная
+      f: ['#ff0000', '#eec9c9'], // ярко-красная, буква бледно-розовая
+    };
+    var btns = [];
+    var zones = [];
+    var curHover = -1;
+    // раскладка цепочки: наведённая кнопка растёт до 53px (+30%) ОТ
+    // ЦЕНТРА — соседи слева уезжают левее, справа правее (по 6px),
+    // зазоры держатся 3px; активная кнопка (текущий вариант) — квадрат
+    // со скруглением 5px, для оптики на 2px уже и ниже (39×39, центр
+    // слота держится); буква живёт ТОЛЬКО на активной, остальные —
+    // чистый цвет
+    function layoutBtns() {
+      var hov = curHover, act = -1;
+      btns.forEach(function (bb, j) { if (VARIANTS[j][0] === P.comp) act = j; });
+      var S = +P.btnSize;                    // диаметр в покое
+      var gapIdle = +P.btnGap;               // разреженный зазор
+      var inBlock = hov >= 0;                // курсор в блоке цепочки
+      var gap = inBlock ? +P.btnGapHover : gapIdle; // плотнеют при входе
+      var pitch = S + gap;
+      var pitchIdle = S + gapIdle;
+      var grown = Math.round(S * (1 + P.btnGrow / 100)); // ховер-размер
+      var g = grown - S;
+      var fBase = Math.max(8, Math.round(14 * S / 41)); // кегль буквы
+      var mode = P.btnAlign;
+      var e = P.btnSpeed + 'ms ' + P.btnEase;
+      var tr = ['left', 'width', 'height', 'bottom', 'font-size', 'border-radius']
+        .map(function (pr) { return pr + ' ' + e; }).join(', ') + ', background .15s ease';
+      btns.forEach(function (bb, j) {
+        var isAct = j === act;
+        var size = j === hov ? grown : isAct ? S - 2 : S;
+        var x = 137 + j * pitch; // левый край базового слота
+        if (hov >= 0) {
+          // расталкивание: зазоры держатся в любом режиме
+          if (j < hov) x -= mode === 'center' ? g / 2 : mode === 'left' ? g : 0;
+          else if (j > hov) x += mode === 'center' ? g / 2 : mode === 'right' ? g : 0;
+          else x += mode === 'right' ? g / 2 : mode === 'left' ? -g / 2 : 0;
+        }
+        x += (S - size) / 2; // центровка размера в слоте
+        if (bb.style.transition !== tr) bb.style.transition = tr;
+        bb.style.left = x + 'px';
+        bb.style.width = bb.style.height = size + 'px';
+        bb.style.bottom = (52 + (S - size) / 2) + 'px';
+        bb.style.fontSize = (j === hov ? Math.round(fBase * grown / S) : fBase) + 'px';
+        bb.style.borderRadius = isAct ? '5px' : '50%';
+        var letter = isAct ? bb.dataset.letter : '';
+        if (bb.textContent !== letter) bb.textContent = letter;
+        // зоны СТАТИЧНЫ по разреженной раскладке — сжатие кнопок не
+        // дёргает ховер, курсор остаётся в своей зоне
+        var z = zones[j];
+        z.style.left = (137 + j * pitchIdle - gapIdle / 2 - 1) + 'px';
+        z.style.width = (pitchIdle + 2) + 'px';
+        z.style.height = (grown + 22) + 'px';
+      });
+    }
+    varBtnsRadius = layoutBtns; // синк активной формы — в кадре и по клику
+    VARIANTS.forEach(function (v, i) {
+      // зона наведения — прямоугольник шириной в шаг цепочки; зоны
+      // стоят встык и не двигаются, кнопка едет внутри своей зоны
+      var z = document.createElement('div');
+      z.className = 'var-zone';
+      z.style.bottom = '40px'; // остальную геометрию ведёт layoutBtns
+      z.title = v[1];
+      zones.push(z);
+      var b = document.createElement('button');
+      b.className = 'st-gear var-btn';
+      b.dataset.letter = v[0].toUpperCase();
+      var oc = BTN_COLORS[v[0]] || [];
+      b.style.background = oc[0] || v[2].bgColor || '#ffffff';
+      b.style.color = oc[1] || v[2].textColor || '#000000';
+      z.addEventListener('mouseenter', function () { curHover = i; layoutBtns(); });
+      z.addEventListener('mouseleave', function () { curHover = -1; layoutBtns(); });
+      z.addEventListener('click', function () { // кликается зона — кнопки
+        var sel = pan.panel.querySelector('select'); // визуальный слой
+        if (!sel) return;
+        sel.value = v[0];
+        sel.dispatchEvent(new Event('input', { bubbles: true }));
+        if (varBtnsRadius) varBtnsRadius(); // квадрат активной — сразу
+      });
+      btns.push(b);
+      z.appendChild(b);
+      document.body.appendChild(z);
+    });
+    layoutBtns();
+  })();
+
+  // ── интерполяция многостопного градиента ──
+  function gradRgbAt(stops, t) { // stops: [[позиция, [r,g,b]], ...]
+    if (t <= stops[0][0]) return stops[0][1];
+    var last = stops[stops.length - 1];
+    if (t >= last[0]) return last[1];
+    for (var gi = 1; gi < stops.length; gi++) {
+      if (t <= stops[gi][0]) {
+        var a = stops[gi - 1], b = stops[gi];
+        var u = (t - a[0]) / Math.max(0.0001, b[0] - a[0]);
+        return [
+          Math.round(a[1][0] + (b[1][0] - a[1][0]) * u),
+          Math.round(a[1][1] + (b[1][1] - a[1][1]) * u),
+          Math.round(a[1][2] + (b[1][2] - a[1][2]) * u),
+        ];
+      }
+    }
+    return last[1];
+  }
+  function gradHexAt(stops, t) { // стопы с hex-цветами → hex в точке t
+    var c = gradRgbAt(stops.map(function (s) { return [s[0], hexRgb(s[1])]; }), t);
+    return '#' + c.map(function (v) {
+      return ('0' + v.toString(16)).slice(-2);
+    }).join('');
+  }
+  function stopsOf(base) { // стопы оси с разобранными цветами (для кадра)
+    var st = P[base + 'Stops'];
+    if (!Array.isArray(st) || st.length < 2) {
+      st = [
+        [P[base + 'Pos1'] || 0, P[base + 'Color']],
+        [P[base + 'Pos2'] == null ? 1 : P[base + 'Pos2'], P[base + 'Color2'] || P[base + 'Color']],
+      ];
+    }
+    return st.map(function (s) { return [s[0], hexRgb(s[1])]; });
+  }
+
+  // ── цвет каждой оси и фона — системная палитра (спектр, пипетка) ──
+  function buildColorRow(title, labelText, key) {
+    var row = document.createElement('div'); row.className = 'row';
+    var lab = document.createElement('label'); lab.textContent = labelText;
+    var box = document.createElement('div'); box.className = 'ax-colors';
+    var inp = document.createElement('input');
+    inp.type = 'color';
+    inp.value = P[key];
+    inp.addEventListener('input', function () {
+      P[key] = inp.value;
+      pan.save();
+    });
+    box.appendChild(inp);
+    function refresh() {
+      // не дёргаем значение, пока палитра открыта и цвет крутится рукой
+      if (document.activeElement !== inp && inp.value !== P[key]) inp.value = P[key];
+    }
+    row.appendChild(lab); row.appendChild(box);
+    var hs = pan.panel.querySelectorAll('h4');
+    for (var i2 = 0; i2 < hs.length; i2++) {
+      if (hs[i2].textContent === title) { hs[i2].nextElementSibling.appendChild(row); break; }
+    }
+    return refresh;
+  }
+  // ── заливка оси по-фигмовски: селект «Заливка/Градиент»; в градиенте
+  // полоса с 2–5 СТОПАМИ: клик по стопу выбирает его (цвет — инпутом
+  // справа), тяга двигает, двойной клик по пустому месту полосы рождает
+  // стоп, двойной клик по стопу убирает; крайние стопы зеркалятся в
+  // старую пару ключей Color/Color2+Pos1/Pos2 — на ней живут варианты,
+  // сплошная заливка и кольцо ──
+  function buildFillControl(title, base) {
+    var cKey = base + 'Color', c2Key = base + 'Color2';
+    var gKey = base + 'Grad', p1Key = base + 'Pos1', p2Key = base + 'Pos2';
+    var sKey = base + 'Stops';
+    var card = null;
+    var hs = pan.panel.querySelectorAll('h4');
+    for (var i3 = 0; i3 < hs.length; i3++) {
+      if (hs[i3].textContent === title) { card = hs[i3].nextElementSibling; break; }
+    }
+    var row = document.createElement('div'); row.className = 'row';
+    var lab = document.createElement('label'); lab.textContent = 'Цвет';
+    lab.title = 'Заливка — один цвет. Градиент — полоса со стопами (2–5): клик по стопу выбирает, инпут справа красит выбранный, двойной клик по полосе добавляет стоп, двойной клик по стопу убирает.';
+    var box = document.createElement('div'); box.className = 'ax-colors';
+    var sel = document.createElement('select');
+    [['solid', 'Заливка'], ['grad', 'Градиент']].forEach(function (o) {
+      var op = document.createElement('option');
+      op.value = o[0]; op.textContent = o[1];
+      sel.appendChild(op);
+    });
+    var inpSolid = document.createElement('input'); inpSolid.type = 'color';
+    box.appendChild(sel); box.appendChild(inpSolid);
+    row.appendChild(lab); row.appendChild(box);
+    if (card) card.appendChild(row);
+
+    var gw = document.createElement('div'); gw.className = 'ax-grad';
+    var strip = document.createElement('div'); strip.className = 'ax-grad-strip';
+    var inpStop = document.createElement('input'); inpStop.type = 'color';
+    gw.appendChild(strip); gw.appendChild(inpStop);
+    if (card) card.appendChild(gw);
+
+    var selStop = 0;
+    function stops() { // канон — массив [позиция, цвет]; собирается из пары
+      if (!Array.isArray(P[sKey]) || P[sKey].length < 2) {
+        P[sKey] = [
+          [P[p1Key] || 0, P[cKey]],
+          [P[p2Key] == null ? 1 : P[p2Key], P[c2Key] || P[cKey]],
+        ];
+      }
+      return P[sKey];
+    }
+    function cloneStops() { // правки — только по копии: литералы вариантов
+      P[sKey] = stops().map(function (s) { return [s[0], s[1]]; }); // не мутируем
+      return P[sKey];
+    }
+    function syncPair() {
+      var st = stops();
+      P[cKey] = st[0][1]; P[p1Key] = st[0][0];
+      P[c2Key] = st[st.length - 1][1]; P[p2Key] = st[st.length - 1][0];
+    }
+    var handles = [];
+    function rebuildHandles() {
+      handles.forEach(function (h) { strip.removeChild(h); });
+      handles = [];
+      stops().forEach(function (s, si) {
+        var h = document.createElement('div');
+        h.className = 'stop' + (si === selStop ? ' sel' : '');
+        strip.appendChild(h);
+        handles.push(h);
+      });
+    }
+    function idxAt(fx) {
+      var st = stops(), best = 0, bd = 2;
+      st.forEach(function (s, si) {
+        var d = Math.abs(fx - s[0]);
+        if (d < bd) { bd = d; best = si; }
+      });
+      return best;
+    }
+    function fxOf(e) {
+      var r = strip.getBoundingClientRect();
+      return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+    }
+    var dragIdx = -1;
+    strip.addEventListener('pointerdown', function (e) {
+      dragIdx = idxAt(fxOf(e));
+      selStop = dragIdx;
+      strip.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+    strip.addEventListener('pointermove', function (e) {
+      if (dragIdx < 0) return;
+      var st = cloneStops();
+      var fx = Math.round(fxOf(e) * 100) / 100;
+      var lo = dragIdx > 0 ? st[dragIdx - 1][0] + 0.02 : 0;
+      var hi = dragIdx < st.length - 1 ? st[dragIdx + 1][0] - 0.02 : 1;
+      st[dragIdx][0] = Math.max(lo, Math.min(hi, fx));
+      syncPair(); pan.save();
+    });
+    function endStopDrag() { dragIdx = -1; }
+    strip.addEventListener('pointerup', endStopDrag);
+    strip.addEventListener('pointercancel', endStopDrag);
+    strip.addEventListener('dblclick', function (e) {
+      var fx = Math.round(fxOf(e) * 100) / 100;
+      var st = cloneStops();
+      var near = idxAt(fx);
+      if (Math.abs(st[near][0] - fx) < 0.05) {
+        if (st.length > 2) { st.splice(near, 1); selStop = 0; } // минимум два
+      } else if (st.length < 5) {
+        var at = 0;
+        while (at < st.length && st[at][0] < fx) at++;
+        st.splice(at, 0, [fx, gradHexAt(st, fx)]); // цвет — из точки полосы
+        selStop = at;
+      }
+      syncPair(); pan.save();
+      rebuildHandles();
+    });
+    inpStop.addEventListener('input', function () {
+      var st = cloneStops();
+      if (st[selStop]) st[selStop][1] = inpStop.value;
+      syncPair(); pan.save();
+    });
+
+    sel.addEventListener('input', function () {
+      P[gKey] = sel.value === 'grad';
+      pan.save();
+    });
+    inpSolid.addEventListener('input', function () {
+      var st = cloneStops();
+      st[0][1] = inpSolid.value;
+      syncPair(); pan.save();
+    });
+
+    function refresh() {
+      var grad = !!P[gKey];
+      var want = grad ? 'grad' : 'solid';
+      if (document.activeElement !== sel && sel.value !== want) sel.value = want;
+      inpSolid.style.display = grad ? 'none' : '';
+      gw.style.display = grad ? '' : 'none';
+      if (document.activeElement !== inpSolid && inpSolid.value !== P[cKey]) inpSolid.value = P[cKey];
+      if (!grad) return;
+      var st = stops();
+      if (selStop >= st.length) selStop = 0;
+      if (handles.length !== st.length) rebuildHandles();
+      var parts = st.map(function (s) { return s[1] + ' ' + (s[0] * 100) + '%'; });
+      strip.style.background = 'linear-gradient(to right, ' + parts.join(', ') + ')';
+      st.forEach(function (s, si) {
+        var h = handles[si];
+        h.style.left = (s[0] * 100) + '%';
+        h.style.background = s[1];
+        h.classList.toggle('sel', si === selStop);
+      });
+      var selCol = st[selStop] ? st[selStop][1] : '#000000';
+      if (document.activeElement !== inpStop && inpStop.value !== selCol) inpStop.value = selCol;
+    }
+    refresh();
+    return refresh;
+  }
+
+  var colorRefresh = [
+    buildColorRow('Полоса', 'Фон', 'bgColor'),
+    buildColorRow('Полоса', 'Цвет выделений', 'hlColor'),
+    buildFillControl('Текстовая ось', 'text'),
+    buildFillControl('Ось номеров', 'num'),
+  ];
+
+  // ── редакторы-экраны осей: вершин от 2 до 12; вершины таскаются,
+  // хват за саму линию рождает новую вершину, двойной клик убирает,
+  // степпер «Точки» меняет число с сохранением формы ──
+  var ED_X0 = -0.25, ED_X1 = 1.25; // холст шире экрана — точки ходят за кромку
+  var ED_MAX = 12;
+  function buildAxisEd(title, axKey, sharpKey, otherAxKey, otherSharpKey, colorKey) {
+    var card = null;
+    var hs = pan.panel.querySelectorAll('h4');
+    for (var i = 0; i < hs.length; i++) {
+      if (hs[i].textContent === title) { card = hs[i].nextElementSibling; break; }
+    }
+
+    // степпер числа вершин: минус/плюс, форма кривой сохраняется
+    var row = document.createElement('div'); row.className = 'row';
+    var lab = document.createElement('label'); lab.textContent = 'Точки';
+    lab.title = 'Число вершин кривой (2–12). Плюс добавляет вершину на самом длинном отрезке, минус убирает самую «лишнюю» — форма почти не меняется. Вершину можно родить и двойным кликом по линии, а убрать — двойным кликом по вершине. Хват за линию гнёт сам отрезок.';
+    var box = document.createElement('div'); box.className = 'ax-pts';
+    var bMinus = document.createElement('button'); bMinus.type = 'button'; bMinus.textContent = '−';
+    var cnt = document.createElement('span'); cnt.textContent = '0';
+    var bPlus = document.createElement('button'); bPlus.type = 'button'; bPlus.textContent = '+';
+    box.appendChild(bMinus); box.appendChild(cnt); box.appendChild(bPlus);
+    row.appendChild(lab); row.appendChild(box);
+    if (card) card.appendChild(row);
+
+    var cv = document.createElement('canvas');
+    cv.className = 'axis-ed';
+    cv.width = 600; cv.height = 380;
+    if (card) card.appendChild(cv);
+
+    function ex(v) { return (v - ED_X0) / (ED_X1 - ED_X0) * cv.width; }
+    function ey(t) { return t * cv.height; }
+    function clonePts() { return P[axKey].map(function (p) { return p.slice(); }); }
+    var sel = -1; // выбранная вершина — у неё видны усики
+
+    var hKey = axKey === 'textPts' ? 'textH' : axKey === 'rectPts' ? 'rectH' : 'numH';
+    function cloneH() {
+      return handlesOf(axKey).map(function (v) { return v ? v.slice() : null; });
+    }
+    function insertPointAt(t, x) {
+      if (P[axKey].length >= ED_MAX) return;
+      var pts = clonePts();
+      var at = pts.length - 1;
+      for (var j = 1; j < pts.length; j++) {
+        if (pts[j][0] > t) { at = j; break; }
+      }
+      var H = cloneH();
+      H.splice(at, 0, null); // новая вершина рождается с авто-усиками
+      pts.splice(at, 0, [t, x]);
+      P[axKey] = pts;
+      P[hKey] = H;
+      pan.save();
+    }
+    function removePoint(i) {
+      if (i <= 0 || i >= P[axKey].length - 1) return;
+      var pts = clonePts();
+      var H = cloneH();
+      H.splice(i, 1);
+      pts.splice(i, 1);
+      P[axKey] = pts;
+      P[hKey] = H;
+      sel = -1;
+      pan.save();
+    }
+    bPlus.addEventListener('click', function () {
+      var k = P[axKey];
+      if (k.length >= ED_MAX) return;
+      // вершина встаёт на середину самого длинного отрезка, x берём
+      // с текущей кривой — форма не прыгает
+      var bi = 0, bl = -1;
+      for (var j = 0; j < k.length - 1; j++) {
+        var l = k[j + 1][0] - k[j][0];
+        if (l > bl) { bl = l; bi = j; }
+      }
+      var tm = (k[bi][0] + k[bi + 1][0]) / 2;
+      insertPointAt(Math.round(tm * 200) / 200,
+                    Math.round(axisXf(axKey, P[sharpKey], tm) * 200) / 200);
+    });
+    bMinus.addEventListener('click', function () {
+      var k = P[axKey];
+      if (k.length <= 2) return;
+      // убираем вершину, чьё выпадение меньше всего меняет форму
+      var bi = 1, bd = Infinity;
+      for (var j = 1; j < k.length - 1; j++) {
+        var t0 = k[j - 1][0], t1 = k[j + 1][0];
+        var u = t1 > t0 ? (k[j][0] - t0) / (t1 - t0) : 0.5;
+        var lin = k[j - 1][1] + (k[j + 1][1] - k[j - 1][1]) * u;
+        var d = Math.abs(k[j][1] - lin);
+        if (d < bd) { bd = d; bi = j; }
+      }
+      removePoint(bi);
+    });
+
+    function axPath(g, key, sharp) {
+      g.beginPath();
+      for (var s = 0; s <= 100; s++) {
+        var t = s / 100;
+        var px = ex(axisXf(key, sharp, t));
+        if (s === 0) g.moveTo(px, ey(t)); else g.lineTo(px, ey(t));
+      }
+      g.stroke();
+    }
+    function draw() {
+      var g = cv.getContext('2d');
+      var w = cv.width, h = cv.height;
+      var ac = (getComputedStyle(pan.panel).getPropertyValue('--st-accent') || '#0A84FF').trim();
+      g.clearRect(0, 0, w, h);
+      g.fillStyle = '#101012'; g.fillRect(0, 0, w, h);
+      // рамка-экран и его диагональ
+      g.strokeStyle = 'rgba(255,255,255,.16)'; g.lineWidth = 2;
+      g.strokeRect(ex(0), 1, ex(1) - ex(0), h - 2);
+      g.beginPath(); g.moveTo(ex(0), ey(0)); g.lineTo(ex(1), ey(1)); g.stroke();
+      // соседняя ось — серым, для контекста
+      g.strokeStyle = 'rgba(255,255,255,.35)'; g.lineWidth = 2;
+      axPath(g, otherAxKey, P[otherSharpKey]);
+      // своя ось — в собственном цвете
+      g.strokeStyle = P[colorKey] || '#fff'; g.lineWidth = 3;
+      axPath(g, axKey, P[sharpKey]);
+      // вершины с белым кольцом — как в редакторе кривых панели
+      P[axKey].forEach(function (pt, pi) {
+        g.beginPath(); g.arc(ex(pt[1]), ey(pt[0]), pi === sel ? 9 : 8, 0, Math.PI * 2);
+        g.fillStyle = ac; g.fill();
+        g.lineWidth = 2.5; g.strokeStyle = '#fff'; g.stroke();
+      });
+      drawHandles(g);
+    }
+    // усики выбранной вершины: линия через вершину и два ромбика,
+    // как в векторных редакторах
+    function autoHandle(j) {
+      var k = P[axKey], n = k.length;
+      var p0 = k[Math.max(0, j - 1)], p2 = k[Math.min(n - 1, j + 1)];
+      var m = (p2[1] - p0[1]) / Math.max(1e-6, p2[0] - p0[0]);
+      var hh = (j < n - 1 ? k[j + 1][0] - k[j][0] : k[j][0] - k[j - 1][0]) / 3;
+      return [hh, m * hh];
+    }
+    function handleOf(j) {
+      var H = handlesOf(axKey);
+      return H[j] ? H[j] : autoHandle(j);
+    }
+    function drawHandles(g) {
+      var k = P[axKey];
+      if (sel < 0 || sel >= k.length) return;
+      var j = sel, h = handleOf(j);
+      var vx = ex(k[j][1]), vy = ey(k[j][0]);
+      var ox = ex(k[j][1] + h[1]), oy = ey(k[j][0] + h[0]);
+      var ix = ex(k[j][1] - h[1]), iy = ey(k[j][0] - h[0]);
+      g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 1.5;
+      g.beginPath();
+      g.moveTo(j > 0 ? ix : vx, j > 0 ? iy : vy);
+      g.lineTo(j < k.length - 1 ? ox : vx, j < k.length - 1 ? oy : vy);
+      g.stroke();
+      function dia(x, y) {
+        g.beginPath();
+        g.moveTo(x, y - 6); g.lineTo(x + 6, y); g.lineTo(x, y + 6); g.lineTo(x - 6, y);
+        g.closePath();
+        g.fillStyle = '#101012'; g.fill();
+        g.lineWidth = 2; g.strokeStyle = '#fff'; g.stroke();
+      }
+      if (j < k.length - 1) dia(ox, oy);
+      if (j > 0) dia(ix, iy);
+    }
+    function refresh() {
+      var n = String(P[axKey].length);
+      if (cnt.textContent !== n) cnt.textContent = n;
+    }
+
+    // указатель в долях холста и попадания
+    function toF(e) {
+      var r = cv.getBoundingClientRect();
+      return {
+        fx: ED_X0 + (e.clientX - r.left) / r.width * (ED_X1 - ED_X0),
+        fy: (e.clientY - r.top) / r.height,
+        r: r,
+      };
+    }
+    function nearKnot(e) {
+      var f = toF(e);
+      var k = P[axKey];
+      var best = -1, bd = Infinity;
+      for (var j = 0; j < k.length; j++) {
+        var hx = f.r.left + ex(k[j][1]) / cv.width * f.r.width;
+        var hy = f.r.top + ey(k[j][0]) / cv.height * f.r.height;
+        var d = Math.hypot(e.clientX - hx, e.clientY - hy);
+        if (d < bd) { bd = d; best = j; }
+      }
+      return { i: best, d: bd };
+    }
+    function nearCurve(e) {
+      var f = toF(e);
+      var best = 0.5, bd = Infinity;
+      for (var s = 0; s <= 120; s++) {
+        var t = s / 120;
+        var hx = f.r.left + ex(axisXf(axKey, P[sharpKey], t)) / cv.width * f.r.width;
+        var hy = f.r.top + ey(t) / cv.height * f.r.height;
+        var d = Math.hypot(e.clientX - hx, e.clientY - hy);
+        if (d < bd) { bd = d; best = t; }
+      }
+      return { t: best, d: bd };
+    }
+
+    var drag = -1;     // вершина в перетаскивании
+    var dragSeg = -1;  // отрезок в изгибе
+    var dragH = 0;     // усик в перетаскивании: 1 — нижний ромбик, −1 — верхний
+    function applyDrag(e) {
+      var f = toF(e);
+      var fx = Math.max(ED_X0, Math.min(ED_X1, Math.round(f.fx * 200) / 200));
+      var fy = Math.max(0, Math.min(1, Math.round(f.fy * 200) / 200));
+      var pts = clonePts();
+      var last = pts.length - 1;
+      if (drag === 0 || drag === last) {
+        pts[drag][1] = fx; // кромочные вершины ходят только по горизонтали
+      } else {
+        pts[drag][1] = fx;
+        pts[drag][0] = Math.max(pts[drag - 1][0] + 0.02,
+                       Math.min(pts[drag + 1][0] - 0.02, fy));
+      }
+      P[axKey] = pts;
+      pan.save();
+    }
+    function applyHandle(e) {
+      // тянем ромбик: усик вершины — вектор до курсора (симметричный,
+      // второй ромбик зеркалится сам)
+      var f = toF(e);
+      var k = P[axKey], j = sel;
+      var H = cloneH();
+      H[j] = [Math.round((f.fy - k[j][0]) * dragH * 200) / 200,
+              Math.round((f.fx - k[j][1]) * dragH * 200) / 200];
+      P[hKey] = H;
+      pan.save();
+    }
+    function applyBend(e) {
+      // хват за отрезок: кривая проводится через курсор, поправка
+      // раскладывается на усики обеих вершин отрезка
+      var f = toF(e);
+      var k = P[axKey];
+      var t0 = k[dragSeg][0], t1 = k[dragSeg + 1][0];
+      var v0 = k[dragSeg][1], v1 = k[dragSeg + 1][1];
+      var tp = Math.max(t0 + 0.01, Math.min(t1 - 0.01, f.fy));
+      var xp = Math.max(ED_X0, Math.min(ED_X1, f.fx));
+      var u = (tp - t0) / Math.max(1e-6, t1 - t0);
+      var mu = 1 - u;
+      var w1 = 3 * mu * mu * u, w2 = 3 * mu * u * u;
+      var den = w1 * w1 + w2 * w2;
+      if (den < 1e-4) return; // хват у самой вершины — гнуть нечем
+      var cc = segCtrl(axKey, dragSeg);
+      var bt = mu * mu * mu * t0 + 3 * mu * mu * u * cc[0][0] + 3 * mu * u * u * cc[1][0] + u * u * u * t1;
+      var bx = mu * mu * mu * v0 + 3 * mu * mu * u * cc[0][1] + 3 * mu * u * u * cc[1][1] + u * u * u * v1;
+      var dT = tp - bt, dX = xp - bx;
+      var c1 = [cc[0][0] + dT * w1 / den, cc[0][1] + dX * w1 / den];
+      var c2 = [cc[1][0] + dT * w2 / den, cc[1][1] + dX * w2 / den];
+      var H = cloneH();
+      H[dragSeg] = [Math.round((c1[0] - t0) * 200) / 200,
+                    Math.round((c1[1] - v0) * 200) / 200];
+      H[dragSeg + 1] = [Math.round((t1 - c2[0]) * 200) / 200,
+                        Math.round((v1 - c2[1]) * 200) / 200];
+      P[hKey] = H;
+      pan.save();
+    }
+    function nearHandle(e) {
+      // ромбики усиков ловятся только у выбранной вершины
+      var k = P[axKey];
+      if (sel < 0 || sel >= k.length) return 0;
+      var f = toF(e), h = handleOf(sel);
+      function dTo(tt, xx) {
+        var hx = f.r.left + ex(xx) / cv.width * f.r.width;
+        var hy = f.r.top + ey(tt) / cv.height * f.r.height;
+        return Math.hypot(e.clientX - hx, e.clientY - hy);
+      }
+      if (sel < k.length - 1 && dTo(k[sel][0] + h[0], k[sel][1] + h[1]) < 13) return 1;
+      if (sel > 0 && dTo(k[sel][0] - h[0], k[sel][1] - h[1]) < 13) return -1;
+      return 0;
+    }
+    cv.addEventListener('pointerdown', function (e) {
+      dragH = nearHandle(e);
+      if (!dragH) {
+        var kk = nearKnot(e);
+        if (kk.d < 16) {
+          drag = kk.i;
+          sel = kk.i; // выбор вершины показывает её усики
+        } else {
+          var c = nearCurve(e);
+          if (c.d < 14) {
+            // хват за сам отрезок — гнём его
+            var k2 = P[axKey];
+            dragSeg = 0;
+            while (dragSeg < k2.length - 2 && c.t > k2[dragSeg + 1][0]) dragSeg++;
+          } else {
+            sel = -1; // клик в пустоту снимает выбор
+            return;
+          }
+        }
+      }
+      cv.setPointerCapture(e.pointerId);
+      if (dragH) applyHandle(e);
+      else if (drag >= 0) applyDrag(e);
+      else applyBend(e);
+      e.preventDefault();
+    });
+    cv.addEventListener('pointermove', function (e) {
+      if (dragH) applyHandle(e);
+      else if (drag >= 0) applyDrag(e);
+      else if (dragSeg >= 0) applyBend(e);
+    });
+    cv.addEventListener('pointerup', function () { drag = -1; dragSeg = -1; dragH = 0; });
+    cv.addEventListener('pointercancel', function () { drag = -1; dragSeg = -1; dragH = 0; });
+    cv.addEventListener('dblclick', function (e) {
+      // двойной клик: по свободной вершине — удаление, по линии — новая вершина
+      var kk = nearKnot(e);
+      if (kk.d < 16) {
+        removePoint(kk.i);
+        return;
+      }
+      var c = nearCurve(e);
+      if (c.d < 14) {
+        var f = toF(e);
+        insertPointAt(Math.max(0.02, Math.min(0.98, Math.round(c.t * 200) / 200)),
+                      Math.max(ED_X0, Math.min(ED_X1, Math.round(f.fx * 200) / 200)));
+      }
+    });
+
+    return { draw: draw, refresh: refresh };
+  }
+  var drawEds = [
+    buildAxisEd('Текстовая ось', 'textPts', 'textSharp', 'numPts', 'numSharp', 'textColor'),
+    buildAxisEd('Ось номеров', 'numPts', 'numSharp', 'textPts', 'textSharp', 'numColor'),
+    buildAxisEd('Ось плашек', 'rectPts', 'rectSharp', 'textPts', 'textSharp', 'numColor'),
+  ];
+
+  // ── полоса: пул строк-элементов, позиции считаются каждый кадр ──
+  var band = document.getElementById('band');
+
+  // набор под текущие кегль, толщину, ширину шрифта и ширину строки.
+  // фразы TEXT — атомы набора: узкая строка несёт одну фразу, широкая
+  // склеивает несколько целиком, перенос всегда по авторской границе;
+  // фраза шире строки переносится по словам. канвас не видит осей
+  // вариативного шрифта, поэтому всё меряется невидимой строкой прямо
+  // в полосе — одним проходом вёрстки
+  var measEl = document.createElement('div');
+  measEl.className = 'meas';
+  band.appendChild(measEl);
+  function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+  function wrapText() {
+    var wWidth = Object.create(null);
+    TEXT.forEach(function (sec) {
+      sec.paras.forEach(function (para) {
+        para.forEach(function (ph) {
+          wWidth[ph] = 0;
+          ph.split(' ').forEach(function (w) { wWidth[w] = 0; });
+        });
+      });
+    });
+    var keys = Object.keys(wWidth);
+    measEl.innerHTML = keys.map(function (k) {
+      return '<span>' + esc(k) + '</span>';
+    }).join('') + '<span> </span>';
+    var spans = measEl.children;
+    for (var i = 0; i < keys.length; i++) {
+      wWidth[keys[i]] = spans[i].getBoundingClientRect().width;
+    }
+    var space = spans[keys.length].getBoundingClientRect().width;
+
+    var lines = [];
+    var cur = '', curW = 0;
+    function put(piece) {
+      var w = wWidth[piece];
+      if (cur && curW + space + w > P.width) { lines.push({ t: cur, num: false }); cur = ''; curW = 0; }
+      if (cur) { cur += ' ' + piece; curW += space + w; }
+      else { cur = piece; curW = w; }
+    }
+    function flush() { if (cur) { lines.push({ t: cur, num: false }); cur = ''; curW = 0; } }
+    // вертикальный ритм кластеров плашек — числа Фибоначчи
+    var FIB = [1, 1, 2, 3, 5];
+    TEXT.forEach(function (sec, si) {
+      flush();
+      // кластеры оси номеров: перед «Ритмом», перед «Миссией»
+      // и перед «Стоимостью» — две пустые, шесть плашек
+      // по Фибоначчи, две пустые
+      if (si === 3 || si === 6 || si === 12) {
+        for (var nb = 0; nb < 2; nb++) lines.push({ t: '', num: false });
+        for (var nc = 0; nc < 6; nc++) {
+          lines.push({ t: '', num: true, rect: true });
+          if (nc < 5) for (var np = 0; np < FIB[nc]; np++) lines.push({ t: '', num: false });
+        }
+        for (var na = 0; na < 2; na++) lines.push({ t: '', num: false });
+      }
+      // воздух перед параграфом: регулируемая пачка пустых строк
+      // (у первой секции его нет, после кластеров — кластер уже отделил)
+      if (si > 0 && si !== 3 && si !== 6 && si !== 12) for (var pg = 0; pg < P.parGap; pg++) lines.push({ t: '', num: false });
+      // заголовок смысловой части встаёт на ось номеров
+      lines.push({ t: sec.h, num: true });
+      sec.paras.forEach(function (para, pi) {
+        flush();
+        // каждый абзац предваряется меткой «(N)» на оси номеров
+        lines.push({ t: '(' + (pi + 1) + ')', num: true, dig: true });
+        para.forEach(function (ph) {
+          if (wWidth[ph] <= P.width) { put(ph); return; }
+          flush(); // фраза шире строки: живёт отдельно, набирается по словам
+          ph.split(' ').forEach(put);
+          flush();
+        });
+        flush();
+      });
+    });
+    // финал: кластер текстовой оси после текста — ритм Фибоначчи
+    // (1, 1, 2, 3, 5 пустых строк), растяжимый ручкой «Плашки текста:
+    // высота»: пробелы растут пропорционально, кратность сохраняется;
+    // на максимуме блок высотой с экран; плашки сидят в строчных
+    // слотах — сопряжение осей не ломается
+    var tScale = 1;
+    if (P.textRectH > 0 && L > 0) {
+      var maxLines = Math.max(29, Math.floor(H / L)); // экран в строках
+      var targetLines = 29 + (maxLines - 29) * P.textRectH; // база — 29 строк
+      tScale = Math.max(1, (targetLines - 17) / 12);  // 17 строк вне пробелов
+    }
+    // 2 базовых пустых + 7 строк отступа от блока «Связь»
+    // (слово Сергея 2026-08-07, добирали дважды: +4, потом +3)
+    for (var rb = 0; rb < 9; rb++) lines.push({ t: '', num: false });
+    for (var rc = 0; rc < 6; rc++) {
+      lines.push({ t: '', num: false, rect: true });
+      if (rc < 5) {
+        var gN = Math.max(1, Math.round(FIB[rc] * tScale));
+        for (var gp = 0; gp < gN; gp++) lines.push({ t: '', num: false });
+      }
+    }
+    for (var rg = 0; rg < 2; rg++) lines.push({ t: '', num: false });
+    for (var g = 0; g < P.gap; g++) lines.push({ t: '', num: false });
+    // строка с телеграм-контактом кликабельна
+    lines.forEach(function (l) {
+      if (l.t.indexOf('@Alla_V_Nastas') !== -1) l.href = 'https://t.me/Alla_V_Nastas';
+    });
+    return lines;
+  }
+  var pool = [];
+  var lines = [];
+  var sig = '';
+  var W = 0, H = 0, L = 20;
+  // аналоговая погоня: все входы двигают цель, лента непрерывно догоняет
+  var scroll = 0, target = 0, touched = false; // touched — зритель начал листать
+
+  function relayout() {
+    W = window.innerWidth; H = window.innerHeight;
+    // шрифты пропорциональны ширине экрана: на опорной ширине кегли
+    // точные, на более узких окнах равномерно меньше; крупнее не растут
+    var fs = Math.min(1, W / P.fontRef);
+    L = P.kegl * fs * P.leading;
+    band.style.fontSize = (P.kegl * fs) + 'px';
+    band.style.setProperty('--dg', (P.digSize * fs) + 'px'); // кегль цифровых меток
+    band.style.setProperty('--numw', P.numWght);        // толщина оси номеров
+    band.style.setProperty('--numtrk', P.numTrack + 'em'); // и её кернинг
+    // кегль заголовков оси номеров: 0 — наследует основной кегль ленты
+    band.style.setProperty('--numsz', ((+P.numSize > 0 ? +P.numSize : P.kegl) * fs) + 'px');
+    band.style.setProperty('--digw', P.digWght);           // толщина цифр
+    band.style.setProperty('--digtrk', P.digTrack + 'em'); // и их кернинг
+    band.style.lineHeight = L + 'px';
+    // оси вариативного шрифта через высокоуровневые свойства:
+    // работают с любым шрифтом и тихо гаснут на невариативном фолбэке
+    band.style.fontWeight = P.wght;
+    band.style.fontStretch = P.wdth + '%';
+    band.style.setProperty('--colw', P.width + 'px');
+    band.style.setProperty('--trk0', P.trackFrom + 'em'); // кернинг покоя
+    lines = wrapText(); // мерить — после установки шрифта
+    // старт ленты (слово Сергея 2026-08-06): лонгрид открывается модулем
+    // плашек текстовой оси — первая плашка кластера упирается в верхнюю
+    // кромку экрана, ниже стык и первый заголовок
+    // якорь живой: держит кластер у кромки при каждой перевёрстке
+    // (доезд вебшрифта, резайз), пока зритель не начал листать
+    if (!touched) {
+      var k0 = -1;
+      for (var li = 0; li < lines.length; li++) {
+        if (lines[li].rect && !lines[li].num) { k0 = li; break; }
+      }
+      scroll = target = k0 >= 0 ? k0 * L - 7.5 : -H / 2;
+    }
+  }
+
+  var trackNow = P.trackFrom, trackSet = -1, colSet = '';
+  var gradCols = null; // разобранные цвета осей для градиента
+  function hexRgb(h) {
+    h = (h || '#000000').replace('#', '');
+    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    return [parseInt(h.substr(0, 2), 16), parseInt(h.substr(2, 2), 16), parseInt(h.substr(4, 2), 16)];
+  }
+  var flingV = 0, lastFrameT = 0; // выкат броска: скорость цели, px/мс
+
+  // доля толщины плашки по высоте экрана: единица у нижней кромки,
+  // к верхней сходит на нет шагами Фибоначчи (1, 1, 2, 3, 5 — тот же
+  // ритм, что в кластерах): внизу худеет еле-еле, у верха обрывается
+  var THIN_FIB = [1, 1, 2, 3, 5], THIN_CUM = [0, 1, 2, 4, 7];
+  function rectThinF(tA) {
+    var u = (1 - tA) * 5;
+    var i = Math.min(4, Math.floor(u));
+    return 1 - (THIN_CUM[i] + THIN_FIB[i] * (u - i)) / 12;
+  }
+
+  function frame() {
+    var s = [P.kegl, P.digSize, P.fontRef, P.wght, P.wdth, P.width, P.leading, P.gap,
+             P.parGap, P.textRectH, P.trackFrom, P.numSize, P.numWght, P.numTrack,
+             P.digWght, P.digTrack, lang,
+             window.innerWidth, window.innerHeight].join('|');
+    if (s !== sig) { sig = s; relayout(); }
+
+    // выкат броска: после свайпа цель едет со скоростью пальца
+    // и затухает как в нативном скролле (~325 мс) — аналогово, без рывка
+    var nowF = performance.now();
+    var dtF = lastFrameT ? Math.min(50, nowF - lastFrameT) : 16;
+    lastFrameT = nowF;
+    if (flingV) {
+      target += flingV * dtF;
+      flingV *= Math.exp(-dtF / 325);
+      if (Math.abs(flingV) < 0.002) flingV = 0;
+    }
+
+    scroll += (target - scroll) * P.smooth;
+
+    // шкала кернинга: датчик — недоезд ленты до цели; разгон везёт
+    // межбуквие от «покоя» к «разгону», остановка возвращает обратно
+    var gapDist = Math.abs(target - scroll);
+    var sat = Math.min(1, gapDist / Math.max(1, P.trackDist));
+    var goal = P.trackFrom + (P.trackTo - P.trackFrom) * sat;
+    // атака — движение от покоя к разгону, возврат — обратно к покою
+    var trkRes = Math.abs(goal - P.trackFrom) >= Math.abs(trackNow - P.trackFrom)
+      ? P.trackRes : (P.trackRel || P.trackRes);
+    trackNow += (goal - trackNow) * trkRes;
+    if (Math.abs(trackNow - trackSet) > 0.0002) {
+      trackSet = trackNow;
+      band.style.setProperty('--trk', trackNow + 'em');
+    }
+
+    var N = lines.length;
+    var kMin = Math.floor((scroll - 1.5 * L) / L);
+    var kMax = Math.ceil((scroll + H + 1.5 * L) / L);
+    var need = kMax - kMin + 1;
+    while (pool.length < need) {
+      var el = document.createElement('div');
+      el.className = 'ln';
+      band.appendChild(el);
+      pool.push(el);
+    }
+    for (var i = 0; i < pool.length; i++) {
+      var elI = pool[i];
+      if (i >= need) { if (elI.style.display !== 'none') elI.style.display = 'none'; continue; }
+      if (elI.style.display) elI.style.display = '';
+      var k = kMin + i;
+      var y = k * L - scroll;          // центр строки по вертикали
+      var x;                           // левый край строки — на своей оси
+      var m = ((k % N) + N) % N;       // зацикливание текста
+      var it = lines[m];
+      // каждая ось рисуется своим редактором-экраном; по вертикали обе
+      // в общем потоке строк, поэтому движение всегда согласовано
+      var tA = Math.max(0, Math.min(1, y / H));
+      // плашки текстового кластера могут ехать по своей оси (rectPts) —
+      // включается селектом «Ось плашек» в панели
+      var ownRect = !!it.rect && !it.num && +P.rectAxisOwn;
+      x = axisXf(ownRect ? 'rectPts' : it.num ? 'numPts' : 'textPts',
+                 ownRect ? P.rectSharp : it.num ? P.numSharp : P.textSharp, tA) * W;
+      if (elI.classList.contains('num') !== it.num) elI.classList.toggle('num', it.num);
+      var dig = !!it.dig;
+      if (elI.classList.contains('dig') !== dig) elI.classList.toggle('dig', dig);
+      var isRect = !!it.rect;
+      if (elI.classList.contains('rect') !== isRect) elI.classList.toggle('rect', isRect);
+      // градиент оси: строка красится по своей экранной высоте —
+      // цвет верха у верхней кромки, цвет низа у нижней
+      if (gradCols) {
+        // плашки всегда в цвете оси номеров — и в заливке (CSS),
+        // и в градиенте, на какой бы оси плашка ни сидела
+        var asNum = it.num || isRect;
+        var gOn = asNum ? gradCols.nGrad : gradCols.tGrad;
+        if (gOn) {
+          var gc = gradRgbAt(asNum ? gradCols.nS : gradCols.tS, tA);
+          elI.style.color = 'rgb(' + gc[0] + ',' + gc[1] + ',' + gc[2] + ')';
+        } else if (elI.style.color) {
+          elI.style.color = '';
+        }
+      }
+      var href = it.href || '';
+      if ((elI.dataset.href || '') !== href) {
+        if (href) elI.dataset.href = href; else delete elI.dataset.href;
+        elI.classList.toggle('link', !!href);
+      }
+      // выделения: ключевые слова красятся своим цветом; строка
+      // перерисовывается только при смене содержимого или режима
+      var hlActive = +P.hlOn && !it.num && it.t;
+      var ck = (hlActive ? 'h:' : 't:') + it.t;
+      if (elI.dataset.ck !== ck) {
+        elI.dataset.ck = ck;
+        if (hlActive) {
+          elI.innerHTML = esc(it.t).replace(lang === 'en' ? HL_RE_EN : HL_RE,
+            '<span class="hl">$1</span>');
+        } else {
+          elI.textContent = it.t;
+        }
+      }
+      // высотный масштаб кегля: 100% у верхней кромки → btm% у нижней
+      var sc = (100 + (P.btm - 100) * tA) / 100;
+      // толщина ВСЕХ плашек одинакова: 12px (0.8 от прежних 15),
+      // правил толщины больше нет (слово Сергея 2026-08-07). Правила
+      // длины живут: у оси номеров внизу длиннее (rectStretch), у
+      // текстового кластера — зеркально вверху (textRectStretch) плюс
+      // горизонталь (textRectLeft); кривые — шаги Фибоначчи
+      var sx = sc, sy = isRect ? 1 : sc;
+      if (isRect) {
+        if (it.num) {
+          sx = sc * Math.pow(P.rectStretch, 2 * rectThinF(tA) - 1);
+        } else {
+          // излом кривой: '0' — фибоначчи сгущается у низа (как было),
+          // '1' — у верха (концы правила те же, ход зеркальный)
+          var fT = +P.textRectInv ? 1 - rectThinF(tA) : rectThinF(1 - tA);
+          sx = sc * Math.pow(P.textRectStretch, 2 * fT - 1);
+          var xF = Math.max(0, Math.min(1, x / W));
+          sx *= Math.pow(P.textRectLeft, 1 - 2 * xF);
+        }
+      }
+      elI.style.transform =
+        'translate(' + x + 'px,' + (y - (isRect ? 6 : L / 2)) + 'px) scale(' + sx + ',' + sy + ')';
+    }
+    // цвета осей и фона — через переменные, пишем только при смене
+    var cols = [P.textColor, P.textColor2, P.numColor, P.numColor2,
+                P.textGrad ? 1 : 0, P.numGrad ? 1 : 0,
+                P.textPos1, P.textPos2, P.numPos1, P.numPos2,
+                JSON.stringify(P.textStops || 0), JSON.stringify(P.numStops || 0),
+                P.bgColor, P.bgImage || '', P.hlColor].join('|');
+    if (cols !== colSet) {
+      colSet = cols;
+      band.style.setProperty('--txc', P.textColor);
+      band.style.setProperty('--numc', P.numColor);
+      band.style.setProperty('--hlc', P.hlColor);
+      document.body.style.backgroundColor = P.bgColor;
+      document.body.style.backgroundImage = P.bgImage ? 'url(' + P.bgImage + ')' : 'none';
+      // градиент оси: включается флагом; стопов 2–5 (textStops/numStops;
+      // если их нет — пара Color/Color2 с позициями Pos1/Pos2)
+      gradCols = {
+        tS: stopsOf('text'), nS: stopsOf('num'),
+        tGrad: !!P.textGrad, nGrad: !!P.numGrad,
+      };
+    }
+
+    if (varBtnsRadius) varBtnsRadius(); // активная кнопка — квадрат
+
+    // редакторы-экраны и палитры живут в кадре:
+    // подхватывают лепку, сброс и тему
+    if (!pan.panel.hidden) {
+      drawEds.forEach(function (d) { d.draw(); d.refresh(); });
+      colorRefresh.forEach(function (f) { f(); });
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // когда доехал вебшрифт — перемерить и переложить строки
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(function () { sig = ''; });
+  }
+
+  // ── управление: колесо, перетаскивание, клавиши ──
+  window.addEventListener('wheel', function (e) {
+    if (e.target.closest && e.target.closest('.st-panel, .st-gear')) return;
+    e.preventDefault();
+    touched = true;
+    var d = e.deltaY + e.deltaX;
+    if (e.deltaMode === 1) d *= 16;
+    target += d * P.speed;
+  }, { passive: false });
+
+  var dragging = false, lastX = 0, lastY = 0, lastT = 0, velP = 0;
+  var dragDist = 0, downEl = null;
+  window.addEventListener('pointerdown', function (e) {
+    if (e.target.closest && e.target.closest('.st-panel, .st-gear')) return;
+    dragging = true; touched = true; lastX = e.clientX; lastY = e.clientY;
+    lastT = performance.now(); velP = 0;
+    flingV = 0; // палец перехватывает выкат
+    dragDist = 0; downEl = e.target;
+    document.body.classList.add('dragging');
+  });
+  window.addEventListener('pointermove', function (e) {
+    if (!dragging) return;
+    var dx = e.clientX - lastX, dy = e.clientY - lastY;
+    lastX = e.clientX; lastY = e.clientY;
+    dragDist += Math.abs(dx) + Math.abs(dy);
+    // тянем полосу за собой: сдвиг пальца проецируется на диагональ,
+    // ручка «Скорость» усиливает и палец, не только колесо
+    var adv = -(dx * W + dy * H) * H / (W * W + H * H) * P.speed;
+    target += adv;
+    var now = performance.now(), dt = Math.max(1, now - lastT);
+    lastT = now;
+    velP = velP * 0.7 + (adv / dt) * 0.3; // скорость пальца, px/мс
+  });
+  function endDrag() {
+    if (!dragging) return;
+    dragging = false;
+    document.body.classList.remove('dragging');
+    // инерция броска: скорость пальца продолжает жить в выкате
+    // (затухание в кадре); если палец замер перед отпусканием — броска нет
+    if (performance.now() - lastT < 80) flingV = velP;
+    velP = 0;
+    // клик без движения по кликабельной строке — переход
+    if (dragDist < 6 && downEl && downEl.dataset && downEl.dataset.href) {
+      window.open(downEl.dataset.href, '_blank');
+    }
+    downEl = null;
+  }
+  window.addEventListener('pointerup', endDrag);
+  window.addEventListener('pointercancel', endDrag);
+
+  window.addEventListener('keydown', function (e) {
+    var step = L * 3;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') target += step;
+    else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') target -= step;
+    else if (e.key === 'PageDown' || e.key === ' ') target += H * 0.8;
+    else if (e.key === 'PageUp') target -= H * 0.8;
+    else return;
+    touched = true;
+    e.preventDefault();
+  });
+})();
+</script>
+</body>
+</html>

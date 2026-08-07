@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slow but Working — horizontal longread stand</title>
+<style>
+  :root{
+    --colw: min(345px, calc(100vw - 30px));
+    --gap: 10px;
+    --pad: 20px;
+    --paper:#f7f6f3; --ink:#1a1b1d; --muted:#6f7278; --line:#d9d8d3;
+    --accent:#2946c8; --tint:#ecebe4; --ph:#efeeea; --ph-num:#b9b8b2;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --paper:#141518; --ink:#e9e8e2; --muted:#8d9098; --line:#2d2f35;
+           --accent:#96a9ff; --tint:#1d1f25; --ph:#1a1c21; --ph-num:#4a4d55; }
+  }
+
+  *, *::before, *::after{ box-sizing:border-box; }
+  html, body{ height:100%; margin:0; }
+  body{
+    background:var(--paper); color:var(--ink);
+    font:15px/1.5 Charter, 'Iowan Old Style', Georgia, 'Times New Roman', serif;
+    overflow:hidden; -webkit-font-smoothing:antialiased;
+  }
+
+  .ribbon{
+    position:relative;
+    height:100vh; height:100dvh;
+    display:flex; gap:var(--gap); padding:var(--pad);
+    overflow-x:auto; overflow-y:hidden;
+    scrollbar-width:thin; scrollbar-color:var(--line) transparent;
+  }
+  .ribbon::-webkit-scrollbar{ height:8px; }
+  .ribbon::-webkit-scrollbar-thumb{ background:var(--line); border-radius:4px; }
+  .ribbon > *{ flex:0 0 auto; height:100%; }
+
+  /* --- title --- */
+  .title{
+    width:min(calc(2*var(--colw) + var(--gap)), calc(100vw - 2*var(--pad)));
+    display:flex; flex-direction:column; justify-content:space-between;
+  }
+  .eyebrow{
+    margin:0; font:11px/1 ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    text-transform:uppercase; letter-spacing:.14em; color:var(--accent);
+  }
+  h1{
+    margin:16px 0 0;
+    font:700 clamp(30px, 5.5vh, 46px)/1.06 -apple-system,'Helvetica Neue','Segoe UI',Arial,sans-serif;
+    letter-spacing:-.02em; text-wrap:balance;
+  }
+  .standfirst{ margin:18px 0 0; font-style:italic; font-size:19px; line-height:1.4; text-wrap:balance; }
+  .meta{
+    margin:24px 0 0; font:11px/1.7 ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    color:var(--muted); max-width:52ch;
+  }
+
+  /* --- section headings: own column --- */
+  .h2col{
+    width:var(--colw); margin:0;
+    padding-top:14px; border-top:3px solid currentColor;
+    font:700 28px/1.12 -apple-system,'Helvetica Neue','Segoe UI',Arial,sans-serif;
+    letter-spacing:-.015em; text-wrap:balance;
+  }
+
+  /* --- text columns: one paragraph = one column; overflow flows on --- */
+  .tcol{
+    width:var(--colw);
+    column-width:var(--colw); column-gap:var(--gap); column-fill:auto;
+    overflow:hidden; margin:0;
+    hyphens:auto; -webkit-hyphens:auto;
+  }
+
+  /* --- methodological aside: continuous tinted band, smaller sans voice --- */
+  .aside{ background:var(--tint); outline:5px solid var(--tint); }
+  p.aside{ font:13px/1.55 -apple-system,'Helvetica Neue','Segoe UI',Arial,sans-serif; }
+  .asidehead{ width:var(--colw); margin:0; display:flex; flex-direction:column; gap:12px; }
+  .asidehead .eyebrow{ color:var(--accent); }
+  .asidehead h3{
+    margin:0; font:700 21px/1.2 -apple-system,'Helvetica Neue','Segoe UI',Arial,sans-serif;
+    letter-spacing:-.01em; text-wrap:balance;
+  }
+  .asidehead .note{
+    margin:0; font:italic 13px/1.5 Charter,'Iowan Old Style',Georgia,serif; color:var(--muted);
+  }
+
+  /* --- table block --- */
+  .tablecol{
+    width:min(calc(3*var(--colw) + 2*var(--gap)), calc(100vw - 2*var(--pad)));
+    overflow:auto;
+  }
+  .tablecol table{
+    width:100%; border-collapse:collapse;
+    font:12.5px/1.5 -apple-system,'Helvetica Neue','Segoe UI',Arial,sans-serif;
+    min-width:640px;
+  }
+  .tablecol th{
+    text-align:left; padding:0 14px 8px 0;
+    font:10.5px/1 ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    text-transform:uppercase; letter-spacing:.1em; color:var(--muted);
+    border-bottom:2px solid var(--ink);
+  }
+  .tablecol td{ padding:10px 14px 10px 0; vertical-align:top; border-bottom:1px solid var(--line); }
+  .tablecol td:first-child{ font-weight:700; white-space:nowrap; }
+
+  /* --- media: 2 cols → 3 cols → full width --- */
+  .media{
+    position:relative; margin:0;
+    width:min(calc(2*var(--colw) + var(--gap)), calc(100vw - 2*var(--pad)));
+    cursor:zoom-in;
+    transition:width .45s cubic-bezier(.4,0,.2,1);
+  }
+  .media[data-state="1"]{ width:min(calc(3*var(--colw) + 2*var(--gap)), calc(100vw - 2*var(--pad))); }
+  .media[data-state="2"]{ width:calc(100vw - 2*var(--pad)); width:calc(100dvw - 2*var(--pad)); cursor:zoom-out; }
+  .media:focus-visible{ outline:2px solid var(--accent); outline-offset:3px; }
+
+  .strip{
+    height:100%; overflow:hidden;
+    display:flex; flex-direction:column; gap:var(--gap);
+    scrollbar-width:thin; scrollbar-color:var(--line) transparent;
+  }
+  .media[data-state="1"] .strip, .media[data-state="2"] .strip{
+    overflow-y:auto; overscroll-behavior:contain;
+  }
+  .ph{
+    flex:0 0 100%;
+    display:grid; place-items:center;
+    background:
+      linear-gradient(to top right,    transparent calc(50% - .5px), var(--line) calc(50% - .5px), var(--line) calc(50% + .5px), transparent calc(50% + .5px)),
+      linear-gradient(to bottom right, transparent calc(50% - .5px), var(--line) calc(50% - .5px), var(--line) calc(50% + .5px), transparent calc(50% + .5px)),
+      var(--ph);
+    box-shadow:inset 0 0 0 1px var(--line);
+  }
+  .ph span{
+    font:44px/1 ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    color:var(--ph-num); letter-spacing:.06em;
+    background:var(--ph); padding:4px 14px;
+  }
+  .chip{
+    position:absolute; top:10px; left:10px; margin:0;
+    font:10.5px/1 ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    letter-spacing:.04em; color:var(--accent);
+    background:var(--paper); border:1px solid var(--line);
+    padding:5px 9px; pointer-events:none; white-space:nowrap;
+  }
+
+  .fin{
+    width:var(--colw); display:grid; place-items:center;
+    font:11px/1 ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    letter-spacing:.14em; color:var(--muted);
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .media{ transition:none; }
+  }
+</style>
+</head>
+<body>
+
+<main class="ribbon" id="ribbon" lang="en">
+
+  <header class="title">
+    <div>
+      <p class="eyebrow">Horizontal longread · stand</p>
+      <h1>Why did projects used to move slowly, yet more often deliver?</h1>
+      <p class="standfirst">And now, with AI, they move fast — and bring no results?</p>
+    </div>
+    <p class="meta">draft v3 · translated from the Russian<br>
+      wheel scrolls sideways · ← → keys work<br>
+      one paragraph = one column; long ones flow on<br>
+      click an image: ×2 → ×3 → full width → closed</p>
+  </header>
+
+  <p class="tcol">Everyone says AI will let businesses do more on their own: launch marketing campaigns, gather analytics, prototype products and write code faster, build interfaces, do without part of their contractors.</p>
+
+  <p class="tcol">Seen this way, AI looks like a technology of direct access to execution. Between a company's intent and its realization there should remain fewer people, fewer approvals, fewer outside vendors. Business gets to test ideas without losing time, in-house teams ship results faster, and contractors stop being a mandatory link in the production chain.</p>
+
+  <h2 class="h2col">The paradox</h2>
+
+  <p class="tcol">This expectation looks perfectly rational. AI is already taking over a noticeable share of the work that used to be bought from agencies, developers and consultants: draft copy and campaign plans, first design variants, research, prototypes, boilerplate code, testing, data processing. What used to take a small team weeks of work can now sometimes be had in a few hours.</p>
+
+  <p class="tcol">Hence the new business logic. Why keep a long chain of contractors if part of the work can be done in-house? Why wait in line for the IT team if a product manager can put together a first prototype on their own? Why buy production hours in bulk if AI lets a small group of people produce far more? For agencies and IT companies the conclusion is mirrored: the same services will have to be delivered faster, by smaller teams, under a much tougher conversation about price.</p>
+
+  <p class="tcol">Only yesterday this picture seemed utterly realistic, but as the wave of enthusiasm subsides, a question arises: why don't we see the radical changes in business that the AI evangelists promised us? And why did projects used to run slower yet more often end in working results, while now, with AI, they are done fast and bring none?</p>
+
+  <figure class="media" data-figs="01" data-state="0" role="button" tabindex="0" aria-label="Figure 01, placeholder image. Click to expand.">
+    <div class="strip">
+      <div class="ph"><span>01</span></div>
+    </div>
+    <figcaption class="chip"></figcaption>
+  </figure>
+
+  <h2 class="h2col">What research and the experts say</h2>
+
+  <p class="tcol">The overwhelming majority of current publications — consulting, technology, academic — converge on one frame: AI is fine, the organization is not ready. The standard list of causes is the same everywhere: the data isn't ready, the goals weren't defined up front, there is no owner on the business side, governance is weak, skills are lacking, people resist.</p>
+
+  <p class="tcol">RAND Corporation, in the largest-coverage study of AI failures to date (65 interviews with practitioners), names five root causes: stakeholders misunderstanding the problem, poor data quality, infrastructure gaps, excessive focus on the technology instead of the task, and applying AI to problems it cannot handle. Alice Labs added two more from its own practice: the absence of a business owner and insufficient governance.</p>
+
+  <p class="tcol">And all these sources propose an identically structured answer: first run a data audit, appoint an owner, do the economics, formulate metrics, build governance, assemble a cross-functional team — and only then move to implementation. It is the standard seven-step framework, reproduced with minimal variation all the way from McKinsey down to narrowly specialized IT blogs. IBM calls it the "journey from pilot to production"; 7N Consulting, the "AI Execution Gap"; Pythian, "from pilot to production failure".</p>
+
+  <p class="tcol">From this picture follows the familiar recipe: pick more mature use cases, set KPIs more precisely, prepare processes more carefully, look for strong technology partners. In some cases it genuinely works. Klarna, for example, automated a significant share of routine support requests, but then restored a more visible role for humans in complex cases and kept the option of handing the conversation over to a person. The trouble begins where this recipe is applied to every project alike — as if each of them already contained a well-understood piece of work that merely remained to be organized properly.</p>
+
+  <h2 class="h2col">What's wrong with this picture</h2>
+
+  <p class="tcol">That is how things look if you accept as an axiom that at the start of any project a clear problem statement exists. This assumption underlies all tender procedures and standard project methodologies. How else could one suppose that project success depends on how competently specialists approach its execution? Yet that is exactly how the question is posed when it comes to replacing them with AI.</p>
+
+  <p class="tcol">In reality, in a significant share of digital and organizational change the task does not exist in advance. It emerges in a process where business knowledge, system constraints, technological possibilities, the interests of different departments and the consequences of choices collide. Data, KPIs and a business owner are necessary elements, but they do not assemble this process automatically. They help control execution only once it is already clear what exactly needs to be built.</p>
+
+  <p class="tcol">There used to be an expensive, slow, human production chain standing between a business's vague intention and a finished result. The agency, the analyst, the architect, the designer, the project manager and the developers reassembled the original idea many times over: asked uncomfortable questions, showed mockups, argued about priorities, discovered constraints, made mistakes in early versions and refined the solution as the work went on.</p>
+
+  <p class="tcol">This work was almost never singled out or sold separately. It was dissolved in free presales, analysis, documentation, calls, revisions and development iterations. A strong contractor compensated for a poorly formulated task with its own expertise and a great deal of communication; a weak one got endless change requests and a conflict over "the wrong result". But the slow cost of production created enough time and friction between the parties for people to notice they did not understand each other.</p>
+
+  <p class="tcol">AI severs this hidden link. It sharply cheapens and speeds up precisely the production layer: a prototype, code, analysis, a design variant, a text, a piece of research can be obtained before people have had time to agree on the meaning and boundaries of the task. What used to be slowly clarified over the course of a project now instantly materializes in dozens of quite convincing candidate solutions.</p>
+
+  <figure class="media" data-figs="02–04" data-state="0" role="button" tabindex="0" aria-label="Figures 02 to 04, a vertical strip of three placeholder images. Click to expand, click again for full width.">
+    <div class="strip">
+      <div class="ph"><span>02</span></div>
+      <div class="ph"><span>03</span></div>
+      <div class="ph"><span>04</span></div>
+    </div>
+    <figcaption class="chip"></figcaption>
+  </figure>
+
+  <p class="tcol">So the old vagueness stops being tolerable. Not because AI is "worse than a human", but because it does not automatically create the chain of questions, agreements and responsibility that the expensive human process of work used to create. It can generate an interface or an automation plan, but it cannot itself legitimately decide which business goal the company will sacrifice for speed, where risk is acceptable, and whose interest takes priority in a conflict. The cheapening of routine execution sharply raises the value of the work that precedes it — choosing the direction, the frame, and the next testable hypothesis.</p>
+
+  <div class="asidehead aside">
+    <p class="eyebrow">Aside · skippable</p>
+    <h3>For the methodologically inclined reader</h3>
+    <p class="note">You can skip this aside without losing the thread — it is for those who want a formal frame under what has been said.</p>
+  </div>
+
+  <p class="tcol aside">What is described above in plain words rests on a long-known division of work. Back in the early 1990s David Maister, dissecting how professional firms operate, divided their projects into three kinds. The first — "Brains": the task is new, at the cutting edge, and the value lies in inventing a solution that does not yet exist. The second — "Grey Hair": the task is known in principle, but it takes a practiced hand to pick the right path among many. The third — "Procedure": both the what and the how are clear, and the value lies in efficient, high-quality execution.</p>
+
+  <p class="tcol aside">Maister looked at this from the firm's side — what it sells. Look instead from the side of the task itself, and the same three kinds line up into what I call the funnel of uncertainty — along a single dimension: how much in the task is unclear. At the bottom, where there are almost no unknowns, it is "clear what and clear how"; that is execution. In the middle, "clear what, unclear how"; that is the work of experience. At the top, "unclear even what"; that is the assembly of the task itself — work before which execution makes no sense to begin.</p>
+
+  <p class="tcol aside">Here the funnel stops being a mere classification. It immediately shows where the boundary of responsibility must run. The execution of the bottom layer can be entrusted to a machine or a team. The middle layer is held by an experienced practitioner. And the top layer cannot be "handed off" to anyone for execution — it is answered for by whoever assembles the subject of the work, and the answering has to happen before anything is put into production.</p>
+
+  <p class="tcol aside">From here the mechanism of the paradox that opens this article becomes visible. The old expensive process, without ever naming it, served all three layers at once: slow production left time inside which the work of experience and the assembly of the task got done unnoticed. AI collapsed the cost of the bottom layer — and thereby exposed that no one had ever explicitly held the top one. The market keeps treating top-layer tasks as if they were bottom-layer ones: it sends into fast execution what has not yet even been assembled into a task. AI did not create this — it merely removed the slowness behind which it used to hide.</p>
+
+  <h2 class="h2col">The production cycle stops being the project's skeleton</h2>
+
+  <p class="tcol">All of which brings us to the question: how should projects be organized now — inside the company and with outside participants — if fast, AI-powered production no longer compensates for the vagueness of the intent. What should the new model of working on business problems look like — and, more broadly, on any project that involves AI.</p>
+
+  <p class="tcol">Start with this: in such a model the solution is not passed down the classical chain from client to contractor. It emerges at the intersection of different domains: the business knows its constraints, its customers and the price of decisions best; subject-matter specialists know the possible courses of action and their consequences; AI is fastest at producing, comparing and testing variants.</p>
+
+  <p class="tcol">So the technology vendor no longer receives a ready-made task as input and no longer hands over a pre-promised result as output. In essence, the classical contractor or agency here shifts to an expert model of participation. Its work begins with taking part in the very process of determining what, for the company, is the subject of work right now. Not as a separate "phase zero" before the project and not as free presales, but as a permanent function inside it. Under this approach the project is built around the search for solutions rather than around a production cycle.</p>
+
+  <p class="tcol">Tellingly, the market arrives at the same conclusion: a16z investors, in early 2026, describe this shift in almost the same words — the hard problem has moved from how to build to what exactly to build. In effect the function already exists — just in different forms and under different names.</p>
+
+  <p class="tcol">In product teams it lives as continuous discovery: the team does not pass a finished solution further down the conveyor, but keeps returning to the question of which problem is worth solving. In large structures it takes the shape of a competence center — not "the department that picks models", but the function that decides what to automate and where, and which experiments it is time to stop (this is how the joint AI centers of Russian Post and Sber are organized, for example).</p>
+
+  <figure class="media" data-figs="05–06" data-state="0" role="button" tabindex="0" aria-label="Figures 05 and 06, a vertical strip of two placeholder images. Click to expand, click again for full width.">
+    <div class="strip">
+      <div class="ph"><span>05</span></div>
+      <div class="ph"><span>06</span></div>
+    </div>
+    <figcaption class="chip"></figcaption>
+  </figure>
+
+  <p class="tcol">Companies that don't need such a function in-house bring it in from outside — for example, as an independent producer, a project runner who takes part in choosing the direction and the architecture, assembles the right people around the task and holds responsibility for the course of the work, rather than arriving with a ready-made verdict. On the vendors' side the same function gets packaged as a separately paid service: ThoughtWorks, for one, deliberately separates understanding the problem from planning the solution, warning that mixing the two pushes a team toward a premature choice.</p>
+
+  <p class="tcol">The cast of participants stays the same — what changes is what each of them holds:</p>
+
+  <div class="tablecol">
+    <table>
+      <thead>
+        <tr><th>Participant</th><th>Before</th><th>Now</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Business</td>
+          <td>formulates the task and passes it down the chain</td>
+          <td>holds the intent and keeps the choice: which goal can be sacrificed for speed, where risk is acceptable, whose interest takes priority</td>
+        </tr>
+        <tr>
+          <td>Vendor <span style="font-weight:400">(expert firm)</span></td>
+          <td>executes a ready spec and answers for the promised result</td>
+          <td>assembles the task together with the business: separates intent from solution, uncovers constraints, picks the next testable step</td>
+        </tr>
+        <tr>
+          <td>Production <span style="font-weight:400">(people and AI)</span></td>
+          <td>the main form and volume of the project — paid hours of hands</td>
+          <td>a resource plugged in once the direction has cleared; AI makes it faster and cheaper</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="tcol">From here it is also clear that production does not disappear — it merely stops being the form of the whole project and becomes one of the resources plugged in at the right moment. The subject of the deal changes too: the business buys neither hours of hands nor a deck of ready answers, but the ability to travel the path from vague intent to governed action — assemble the task, choose the direction, organize the test, and only then roll out fast, AI-amplified delivery.</p>
+
+  <div class="fin">— END —</div>
+
+</main>
+
+<script>
+(function(){
+  var ribbon = document.getElementById('ribbon');
+  var GAP = 10, PAD = 20;
+  var smooth = function(){
+    return matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+  };
+
+  /* ---- text columns: measure each paragraph, widen to whole columns ---- */
+  var tries = 0;
+  function fit(){
+    var els = document.querySelectorAll('.tcol');
+    var zero = false;
+    els.forEach(function(el){
+      el.style.width = '';
+      var w = el.getBoundingClientRect().width;
+      if (!w){ zero = true; return; }
+      var n = Math.max(1, Math.round((el.scrollWidth + GAP) / (w + GAP)));
+      if (n > 1) el.style.width = (n * w + (n - 1) * GAP) + 'px';
+    });
+    if (zero && tries++ < 40) setTimeout(fit, 250);
+  }
+  fit();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+  var rT; addEventListener('resize', function(){ clearTimeout(rT); rT = setTimeout(fit, 120); });
+
+  /* ---- media: 0 = two columns, 1 = three columns, 2 = full width ---- */
+  function chip(m){
+    var n = m.querySelectorAll('.ph').length;
+    var st = +(m.dataset.state || 0);
+    var t = st === 0 ? (n > 1 ? n + ' images · click to widen' : 'click to widen')
+          : st === 1 ? (n > 1 ? 'scroll ↓ · click for full width' : 'click for full width')
+          : (n > 1 ? 'scroll ↓ · click to close' : 'click to close');
+    m.querySelector('.chip').textContent = 'fig ' + m.dataset.figs + ' · ' + t;
+  }
+  function setState(m, st){
+    m.dataset.state = st;
+    if (st === 0){
+      m.querySelector('.strip').scrollTop = 0;
+    } else {
+      ribbon.scrollTo({ left: m.offsetLeft - PAD, behavior: smooth() });
+    }
+    chip(m);
+  }
+  document.querySelectorAll('.media').forEach(function(m){
+    chip(m);
+    m.addEventListener('click', function(){
+      setState(m, (+(m.dataset.state || 0) + 1) % 3);
+    });
+    m.addEventListener('keydown', function(e){
+      if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); m.click(); }
+    });
+  });
+
+  /* ---- one screen, two scrolls that never fight:
+         wheel = horizontal ribbon, except over an opened image strip ---- */
+  addEventListener('wheel', function(e){
+    var open = e.target.closest && e.target.closest('.media[data-state="1"], .media[data-state="2"]');
+    if (open){
+      var s = open.querySelector('.strip');
+      if (s.scrollHeight > s.clientHeight + 1) return; /* native vertical scroll */
+    }
+    e.preventDefault();
+    var k = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? innerHeight : 1;
+    ribbon.scrollLeft += (e.deltaY + e.deltaX) * k;
+  }, { passive:false });
+
+  addEventListener('keydown', function(e){
+    if (e.key === 'Escape'){
+      document.querySelectorAll('.media[data-state="1"], .media[data-state="2"]').forEach(function(m){ setState(m, 0); });
+    } else if (e.key === 'ArrowRight'){
+      ribbon.scrollBy({ left: 710, behavior: smooth() });
+    } else if (e.key === 'ArrowLeft'){
+      ribbon.scrollBy({ left: -710, behavior: smooth() });
+    }
+  });
+})();
+</script>
+
+</body>
+</html>

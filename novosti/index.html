@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Новости — тестовый стенд</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/panel.css">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; background: #000; }
+  canvas#scena {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="scena"></canvas>
+
+<script src="/panel.js"></script>
+<script>
+'use strict';
+
+// ── новости ──
+const NOVOSTI = [
+  ['Городская библиотека перешла на круглосуточный режим',
+   ['Читатели попросили оставлять свет в третьем зале — теперь он не гаснет вовсе. Ночью в библиотеке дежурит один сотрудник и один кот, оба справляются.']],
+  ['Трамвай №7 признан самым тихим транспортом года',
+   ['Комиссия измеряла шум на двенадцати маршрутах в течение месяца. Седьмой трамвай выиграл с большим отрывом: на некоторых участках приборы фиксировали только разговоры пассажиров и шелест газет.',
+    'Водитель маршрута объясняет результат просто: «Я не тороплюсь. Рельсы это чувствуют».']],
+  ['В парке у набережной высадили аллею из сорока лип',
+   ['Деревья привезли из питомника под городом. Через десять лет аллея сомкнётся кронами.']],
+  ['Метеостанция на крыше школы №14 отработала пятьдесят лет без единого пропуска наблюдений',
+   ['Станцию основал учитель географии в семьдесят шестом году, и с тех пор записи ведутся каждый день: температура, давление, осадки, направление ветра. Сменилось четыре поколения школьников-наблюдателей.',
+    'Архив станции занимает восемнадцать общих тетрадей и один шкаф. Городской музей предложил забрать тетради себе, но школа отказалась: наблюдения продолжаются, архив должен быть под рукой.']],
+  ['Пекарня на Садовой начала печь хлеб по довоенному рецепту',
+   ['Рецепт нашли в записной книжке, которую принесла жительница соседнего дома. Хлеб получается тяжёлый, кислый и, по отзывам, «правильный».']],
+  ['Мост через Каменку закроют на покраску до конца августа',
+   ['Пешеходам оставят одну сторону, велосипедистам придётся спешиваться. Цвет моста при этом не изменится: комиссия рассмотрела шесть вариантов и выбрала тот же самый зелёный.']],
+  ['Шахматный клуб при доме культуры набрал рекордное число новичков',
+   ['За сентябрь записалось шестьдесят человек — вдвое больше, чем за весь прошлый год. Столов на всех не хватает, поэтому партии играют в две смены. Ветераны клуба ворчат, но довольны.']],
+  ['На чердаке краеведческого музея нашли карту города тысяча девятьсот двенадцатого года с пометками неизвестного картографа',
+   ['Карту обнаружили при разборе старых фондов. Пометки сделаны карандашом: неизвестный отмечал колодцы, тополя и «места, где хорошо слышно реку».',
+    'Музей планирует оцифровать находку и выставить её в главном зале уже этой зимой.']],
+  ['Дворовый каток на Озёрной откроется раньше срока',
+   ['Морозы пришли на две недели раньше обычного, и заливку начали в ночь на вторник. Лёд обещают к субботе.']],
+  ['Городской оркестр сыграет концерт на вокзале между поездами',
+   ['Идея принадлежит дежурной по станции: вечером между шестичасовым и девятичасовым поездами перрон пустует. Оркестр согласился сразу — акустика под навесом оказалась неожиданно хорошей.',
+    'Программа короткая, сорок минут: Дунаевский, Свиридов и одна вещь, которую дирижёр держит в секрете. Вход по перронному билету.']],
+  ['Почтовое отделение №3 вернуло в зал старые деревянные стойки',
+   ['Пластиковые убрали после ремонта — посетители писали жалобы три года подряд. Деревянные стойки нашлись в подсобке, их отшлифовали и покрыли маслом.']],
+  ['В городе пересчитали все фонари',
+   ['Их оказалось четыре тысячи двести семь. Последний раз пересчёт проводили сорок лет назад, тогда фонарей было чуть больше тысячи. Итоги пересчёта войдут в новый справочник городского хозяйства.']],
+  ['Речной трамвайчик продлит навигацию до середины октября',
+   ['Причина — тёплая осень и полные рейсы по выходным. Капитан предупреждает: в октябре по утрам на воде туман, рейсы будут сдвигаться на час.']],
+  ['Художественная школа выставила работы учеников прямо в окнах первого этажа',
+   ['Сорок акварелей развесили лицом на улицу, и теперь у окон постоянно кто-то стоит. Директор школы говорит, что это лучшая выставка за годы: у неё нет часов работы и билетов.',
+    'Работы будут менять раз в месяц. Следующая серия — зимние натюрморты.']],
+  ['На рынке открылся прилавок с яблоками старых сортов',
+   ['Антоновка, анис, коричное полосатое. Продавец — агроном на пенсии, сад у него в сорока километрах от города. Очередь занимают с утра.']],
+  ['Городская типография напечатала последний тираж на линотипе и передала машину музею печати',
+   ['Линотип проработал шестьдесят один год. Последним тиражом стала книга стихов местного поэта — двести экземпляров на бумаге верже, с широкими полями и высокой печатью, которую ни с чем не спутать.',
+    'Машину перевезут в музей целиком, вместе с кассой матриц и табуретом наборщика. Наборщик, впрочем, уходить на пенсию отказался и переходит в музей вместе с табуретом — будет показывать посетителям, как это работало.']],
+  ['Автобусную остановку у стадиона перенесли на тридцать метров ближе к переходу',
+   ['Просьбу подавали жители соседних домов ещё весной. Теперь от остановки до перехода двенадцать шагов.']],
+  ['Обсерватория объявила открытые ночи наблюдений каждую третью пятницу месяца',
+   ['В программе — Луна, Сатурн и двойные звёзды. Телескоп один, поэтому записываться просят заранее, группы по пятнадцать человек. Детей пускают без очереди: астрономы считают, что первый взгляд в окуляр важнее расписания.']],
+  ['В сквере у филармонии установили шесть новых скамеек из лиственницы',
+   ['Старые прослужили тридцать лет и отправлены в мастерскую — их не спишут, а починят и поставят в дальней части сквера, где скамеек не было никогда.']],
+  ['Кинотеатр «Заря» восстановил вывеску по фотографии шестьдесят восьмого года',
+   ['Неоновые трубки гнули вручную в единственной оставшейся в области мастерской. Вывеску зажгли в пятницу вечером, без объявления — и у входа сама собой собралась небольшая толпа.',
+    'Первым сеансом под новой вывеской показали ту же картину, что шла здесь в шестьдесят восьмом.']],
+];
+
+// ── вёрстка модуля ──
+const W = 500, PADX = 56, PADY = 48, RAD = 60, GAP = 28, KRAJ = 80;
+const TEXT_W = W - 2 * PADX;
+const LH = 27; // строка и заголовка, и текста
+const F_HEAD = '700 21.6px Inter, sans-serif';
+const F_BODY = '18px Georgia, serif';
+
+// ── изинги: пресеты + своя кривая безье ──
+const EASES = {
+  'линейный':    t => t,
+  'плавный':     t => t * t * (3 - 2 * t),
+  'разгон':      t => t * t * t,
+  'торможение':  t => 1 - Math.pow(1 - t, 3),
+  'перелёт':     t => { const c = 1.70158, u = t - 1; return 1 + (c + 1) * u * u * u + c * u * u; },
+};
+const BEZ_APPROX = {
+  'линейный':   [0.25, 0.25, 0.75, 0.75],
+  'плавный':    [0.42, 0, 0.58, 1],
+  'разгон':     [0.32, 0, 0.67, 0.2],
+  'торможение': [0.33, 1, 0.68, 1],
+  'перелёт':    [0.34, 1.56, 0.64, 1],
+};
+function bezY(b, t) {
+  if (t <= 0) return 0;
+  if (t >= 1) return 1;
+  let s = t;
+  for (let i = 0; i < 8; i++) {
+    const q = 1 - s;
+    const x = 3 * q * q * s * b[0] + 3 * q * s * s * b[2] + s * s * s;
+    const dx = 3 * q * q * b[0] + 6 * q * s * (b[2] - b[0]) + 3 * s * s * (1 - b[2]);
+    if (Math.abs(dx) < 1e-6) break;
+    s = Math.min(1, Math.max(0, s - (x - t) / dx));
+  }
+  const q = 1 - s;
+  return 3 * q * q * s * b[1] + 3 * q * s * s * b[3] + s * s * s;
+}
+function evalEase(name, bez, t) {
+  if (name === 'bezier') return bezY(bez, t);
+  return (EASES[name] || EASES['плавный'])(t);
+}
+
+// ── параметры ──
+const DEFAULTS = {
+  oborot: 2,      // модулей за полный оборот курсора
+  plavn: 120,     // плавность скролла кручения, мс (0 — жёстко)
+  dovod: 500,     // довод ближайшего модуля к центру, мс
+  dovodEase: 'торможение',
+  dovodBez: BEZ_APPROX['торможение'].slice(),
+  period: 240,    // период пружины складывания, мс
+  zatuh: 0.45,    // высота следующего отскока к предыдущему
+  volna: 14,      // задержка волны, мс на модуль от точки клика
+  fejd: 0.35,     // доля пути складывания, за которую гаснет текст
+};
+const P = Object.assign({}, DEFAULTS);
+try { Object.assign(P, JSON.parse(localStorage.getItem('novosti-params') || '{}')); } catch (e) {}
+
+StendPanel.build({
+  storageKey: 'novosti-params',
+  params: P,
+  defaults: DEFAULTS,
+  defs: [
+    ['h', 'Кручение'],
+    ['oborot', 'Модулей за оборот', 0.5, 6, 0.5],
+    ['plavn', 'Плавность скролла, мс', 0, 600, 20],
+    ['h', 'Довод'],
+    ['dovod', 'Время, мс', 150, 1500, 50],
+    ['dovodEase', 'Изинг', 'ease'],
+    ['h', 'Пружина складывания'],
+    ['period', 'Период, мс', 80, 700, 10],
+    ['zatuh', 'Затухание отскока', 0.05, 0.9, 0.05],
+    ['volna', 'Волна, мс/модуль', 0, 60, 2],
+    ['fejd', 'Фейд текста', 0.1, 1, 0.05],
+  ],
+  desc: {
+    oborot: 'Сколько модулей проматывает один полный круг курсора вокруг точки клика. Радиус круга не важен — считается только угол.',
+    plavn: 'Инерция ленты при кручении: скролл догоняет руку с этим запаздыванием. 0 — лента прибита к руке.',
+    dovod: 'После отпускания лента довозит ближайший модуль к центру экрана за это время.',
+    dovodEase: 'Кривая довода: как лента подъезжает к модулю-цели.',
+    period: 'Период колебания пружины: меньше — резче схлопывание и отскоки.',
+    zatuh: 'Во сколько раз каждый следующий отскок ниже предыдущего: 0.5 — вдвое, ближе к 0.9 — долго дрожит.',
+    volna: 'Складывание разбегается волной от точки клика: задержка на каждый модуль расстояния.',
+    fejd: 'За какую долю начала пути складывания текст гаснет полностью: меньше — резче. В сложенном виде текста нет, только заголовок.',
+  },
+  eases: EASES,
+  evalEase: evalEase,
+  bezApprox: BEZ_APPROX,
+});
+
+// ── раскладка текста и текстуры ──
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
+const mer = document.createElement('canvas').getContext('2d');
+
+function perenos(ctx, text, maxW) {
+  const words = text.split(' ');
+  const lines = [];
+  let cur = '';
+  words.forEach(w => {
+    const probe = cur ? cur + ' ' + w : w;
+    if (!cur || ctx.measureText(probe).width <= maxW) cur = probe;
+    else { lines.push(cur); cur = w; }
+  });
+  if (cur) lines.push(cur);
+  return lines;
+}
+
+const moduli = []; // {tex, fullH, colH, h, v, target, pend, applyAt}
+
+function sobrat(gl) {
+  NOVOSTI.forEach(n => {
+    mer.font = F_HEAD;
+    let head = perenos(mer, n[0], TEXT_W);
+    if (head.length > 3) { // максимум 3 строчки
+      head = head.slice(0, 3);
+      head[2] += '…';
+    }
+    mer.font = F_BODY;
+    const paras = n[1].map(p => perenos(mer, p, TEXT_W));
+    const headH = head.length * LH;
+    const bodyH = paras.reduce((s, ls) => s + ls.length * LH, 0) + (paras.length - 1) * 12;
+    const fullH = PADY + headH + 18 + bodyH + PADY;
+    const colH = PADY + headH + PADY;
+
+    const cv = document.createElement('canvas');
+    cv.width = Math.round(W * DPR);
+    cv.height = Math.round(fullH * DPR);
+    const c = cv.getContext('2d');
+    c.scale(DPR, DPR);
+    c.textBaseline = 'middle';
+    c.font = F_HEAD;
+    c.fillStyle = 'rgba(0,0,0,0.8)';
+    head.forEach((ln, i) => c.fillText(ln, PADX, PADY + i * LH + LH / 2));
+    c.font = F_BODY;
+    c.fillStyle = 'rgba(0,0,0,0.6)';
+    let y = PADY + headH + 18;
+    paras.forEach(ls => {
+      ls.forEach(ln => { c.fillText(ln, PADX, y + LH / 2); y += LH; });
+      y += 12;
+    });
+
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cv);
+
+    moduli.push({ tex, fullH, colH, bodyTop: PADY + headH + 6,
+                  h: fullH, v: 0, target: fullH, pend: null, applyAt: 0 });
+  });
+}
+
+// ── WebGL ──
+const scena = document.getElementById('scena');
+const gl = scena.getContext('webgl', { antialias: false, alpha: false });
+
+const VS = `
+attribute vec2 a;
+uniform vec2 uRes, uPos, uSize;
+varying vec2 vPx;
+void main() {
+  vPx = a * uSize;
+  vec2 px = uPos + vPx;
+  vec2 clip = px / uRes * 2.0 - 1.0;
+  gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
+}`;
+const FS = `
+precision highp float;
+varying vec2 vPx;
+uniform vec2 uSize;
+uniform float uR, uFullH, uBodyTop, uFade;
+uniform sampler2D uTex;
+void main() {
+  vec2 hsz = uSize * 0.5;
+  float r = min(uR, min(hsz.x, hsz.y));
+  vec2 q = abs(vPx - hsz) - hsz + r;
+  float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+  float a = 1.0 - smoothstep(-1.0, 1.0, d);
+  vec4 t = texture2D(uTex, vec2(vPx.x / uSize.x, vPx.y / uFullH));
+  t.a *= vPx.y > uBodyTop ? uFade : 1.0; // тело новости гаснет фейдом
+  vec3 col = mix(vec3(1.0), t.rgb, t.a);
+  gl_FragColor = vec4(col * a, a);
+}`;
+
+function shader(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw gl.getShaderInfoLog(s);
+  return s;
+}
+const prog = gl.createProgram();
+gl.attachShader(prog, shader(gl.VERTEX_SHADER, VS));
+gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, FS));
+gl.linkProgram(prog);
+if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw gl.getProgramInfoLog(prog);
+gl.useProgram(prog);
+
+const buf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]), gl.STATIC_DRAW);
+const locA = gl.getAttribLocation(prog, 'a');
+gl.enableVertexAttribArray(locA);
+gl.vertexAttribPointer(locA, 2, gl.FLOAT, false, 0, 0);
+
+const U = {};
+['uRes', 'uPos', 'uSize', 'uR', 'uFullH', 'uBodyTop', 'uFade', 'uTex'].forEach(n => U[n] = gl.getUniformLocation(prog, n));
+gl.uniform1i(U.uTex, 0);
+gl.uniform1f(U.uR, RAD);
+gl.enable(gl.BLEND);
+gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+gl.clearColor(0, 0, 0, 1);
+
+function razmer() {
+  scena.width = Math.round(innerWidth * DPR);
+  scena.height = Math.round(innerHeight * DPR);
+  gl.viewport(0, 0, scena.width, scena.height);
+  gl.uniform2f(U.uRes, innerWidth, innerHeight);
+}
+addEventListener('resize', razmer);
+razmer();
+
+// ── состояние ленты ──
+let scroll = 0;
+let derzhim = false;
+let krutim = false;  // кручение началось — якорь отпущен
+let centr = null;    // точка клика — ось кручения
+let uglov = 0;
+let prevU = null;
+let nakoplen = 0;    // накрученные, но ещё не проскроленные пиксели
+let anchorIdx = -1;
+let anchorTop = 0;
+let dovodJob = null; // {idx, start, d0}
+
+function prefiksy() {
+  const S = [0];
+  for (let i = 0; i < moduli.length; i++) S.push(S[i] + moduli[i].h + GAP);
+  return S;
+}
+function polnaya(S) { return S[moduli.length] - GAP + 2 * KRAJ; }
+function verh(S, i) { return KRAJ - scroll + S[i]; }
+
+function blizhajshiy(y) {
+  const S = prefiksy();
+  let best = 0, bestD = Infinity;
+  moduli.forEach((m, i) => {
+    const d = Math.abs(verh(S, i) + m.h / 2 - y);
+    if (d < bestD) { bestD = d; best = i; }
+  });
+  return best;
+}
+
+function shagModulya() {
+  return moduli.reduce((s, m) => s + m.colH, 0) / moduli.length + GAP;
+}
+
+// цели пружин волной от модуля-эпицентра
+function celi(slozhit, epicentr, now) {
+  moduli.forEach((m, i) => {
+    m.pend = slozhit ? m.colH : m.fullH;
+    m.applyAt = now + Math.abs(i - epicentr) * P.volna;
+  });
+}
+
+// ── физика: затухающая пружина высоты ──
+function fizika(now, dt) {
+  const w = 2 * Math.PI / (Math.max(60, P.period) / 1000);
+  const lnr = Math.log(1 / Math.max(0.01, P.zatuh));
+  const zeta = lnr / Math.sqrt(4 * Math.PI * Math.PI + lnr * lnr);
+  const c = 2 * zeta * w;
+  moduli.forEach(m => {
+    if (m.pend !== null && now >= m.applyAt) { m.target = m.pend; m.pend = null; }
+    m.v += (-w * w * (m.h - m.target) - c * m.v) * dt;
+    m.h += m.v * dt;
+  });
+}
+
+function uspokoilis() {
+  return moduli.every(m => m.pend === null && Math.abs(m.h - m.target) < 0.5 && Math.abs(m.v) < 8);
+}
+
+// ── кадр ──
+let prevT = null;
+function kadr(t) {
+  const dt = Math.min(0.033, prevT === null ? 0.016 : (t - prevT) / 1000);
+  prevT = t;
+  fizika(t, dt);
+  const S = prefiksy();
+
+  if (derzhim && !krutim && anchorIdx >= 0) {
+    // якорь: нажатый модуль стоит на месте, пока всё складывается
+    scroll = KRAJ + S[anchorIdx] - anchorTop;
+  } else if (derzhim && krutim && nakoplen) {
+    const v = P.plavn < 10 ? nakoplen : nakoplen * (1 - Math.exp(-dt * 1000 / P.plavn));
+    scroll += v;
+    nakoplen -= v;
+    if (Math.abs(nakoplen) < 0.05) nakoplen = 0;
+  } else if (dovodJob) {
+    const j = dovodJob;
+    const m = moduli[j.idx];
+    const d = verh(S, j.idx) + m.h / 2 - innerHeight / 2;
+    if (j.d0 === null) j.d0 = d;
+    const p = Math.min(1, (t - j.start) / Math.max(1, P.dovod));
+    const e = evalEase(P.dovodEase, P.dovodBez, p);
+    scroll += d - j.d0 * (1 - e);
+    if ((p >= 1 && uspokoilis()) || t - j.start > 3000) dovodJob = null;
+  }
+
+  const maxS = Math.max(0, polnaya(S) - innerHeight);
+  if (!derzhim || krutim) scroll = Math.max(0, Math.min(maxS, scroll));
+
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  const x = (innerWidth - W) / 2;
+  moduli.forEach((m, i) => {
+    const top = verh(S, i);
+    if (top > innerHeight || top + m.h < 0) return;
+    // прозрачность тела: гаснет в начале пути складывания, по-быстрому
+    const pr = Math.min(1, Math.max(0, (m.h - m.colH) / (m.fullH - m.colH)));
+    const lo = 1 - P.fejd;
+    const f = Math.min(1, Math.max(0, (pr - lo) / (1 - lo)));
+    gl.uniform1f(U.uFade, f * f * (3 - 2 * f));
+    gl.uniform1f(U.uBodyTop, m.bodyTop);
+    gl.uniform2f(U.uPos, x, top);
+    gl.uniform2f(U.uSize, W, Math.max(8, m.h));
+    gl.uniform1f(U.uFullH, m.fullH);
+    gl.bindTexture(gl.TEXTURE_2D, m.tex);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  });
+  requestAnimationFrame(kadr);
+}
+
+// ── ввод ──
+addEventListener('pointerdown', (e) => {
+  // холд работает с любой точки экрана, кроме панели
+  if (e.target.closest && e.target.closest('.st-panel, .st-gear, .st-tip')) return;
+  try { e.target.setPointerCapture(e.pointerId); } catch (err) {}
+  dovodJob = null;
+  derzhim = true;
+  krutim = false;
+  centr = { x: e.clientX, y: e.clientY };
+  uglov = 0;
+  prevU = null;
+  nakoplen = 0;
+  anchorIdx = blizhajshiy(e.clientY);
+  anchorTop = verh(prefiksy(), anchorIdx);
+  celi(true, anchorIdx, performance.now());
+});
+
+addEventListener('pointermove', (e) => {
+  if (!derzhim) return;
+  const dx = e.clientX - centr.x;
+  const dy = e.clientY - centr.y;
+  if (dx * dx + dy * dy < 12 * 12) { prevU = null; return; } // мёртвая зона у оси
+  const u = Math.atan2(dy, dx);
+  if (prevU !== null) {
+    let d = u - prevU;
+    if (d > Math.PI) d -= 2 * Math.PI;
+    if (d < -Math.PI) d += 2 * Math.PI;
+    uglov += d;
+    if (Math.abs(uglov) > 0.12) krutim = true;
+    // по часовой d > 0 — лента едет снизу вверх, против — сверху вниз
+    nakoplen += d / (2 * Math.PI) * P.oborot * shagModulya();
+  }
+  prevU = u;
+});
+
+function otpusti() {
+  if (!derzhim) return;
+  derzhim = false;
+  const now = performance.now();
+  const cel = blizhajshiy(innerHeight / 2); // ближайший к центру — под защёлку
+  celi(false, cel, now);
+  dovodJob = { idx: cel, start: now, d0: null };
+}
+addEventListener('pointerup', otpusti);
+addEventListener('pointercancel', otpusti);
+addEventListener('blur', otpusti);
+
+addEventListener('wheel', (e) => {
+  e.preventDefault();
+  if (derzhim) return;
+  dovodJob = null;
+  scroll += e.deltaY;
+}, { passive: false });
+
+// ── старт после шрифтов ──
+Promise.race([
+  document.fonts.load(F_HEAD),
+  new Promise(r => setTimeout(r, 1500)),
+]).then(() => {
+  sobrat(gl);
+  requestAnimationFrame(kadr);
+});
+</script>
+
+</body>
+</html>

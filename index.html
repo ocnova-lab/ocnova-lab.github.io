@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Стенды — 0снова</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #1a1a1a;
+    --muted: #777;
+    --line: #e2e2e2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16161a;
+      --fg: #e8e8e8;
+      --muted: #999;
+      --line: #333;
+    }
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.5;
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 48px 24px;
+  }
+  h1 { font-size: 1.6rem; margin-bottom: 8px; }
+  p.sub { color: var(--muted); margin-bottom: 40px; }
+  ul { list-style: none; }
+  li { border-top: 1px solid var(--line); }
+  li:last-child { border-bottom: 1px solid var(--line); }
+  li a {
+    display: block;
+    padding: 14px 4px;
+    color: var(--fg);
+    text-decoration: none;
+  }
+  li a:hover { background: color-mix(in srgb, var(--fg) 6%, transparent); }
+  li .note { color: var(--muted); font-size: 0.9em; }
+  .empty { color: var(--muted); padding: 14px 4px; }
+</style>
+</head>
+<body>
+  <h1>Стенды</h1>
+  <p class="sub">Рабочие страницы и демо Сергея Гурова</p>
+  <ul id="list">
+    <li><a href="/longread">Горизонтальный лонгрид <span class="note">— абзац = колонка, картинки в два шага до полного экрана · англ.</span></a></li>
+    <li><a href="/obtekanie">Обтекающий текст <span class="note">— портреты бесконечно проходят сквозь текст, строки расступаются волной</span></a></li>
+    <li><a href="/perehody">Переходы изображений <span class="note">— фотографии летят навстречу скроллу и проходят сквозь экран, прогибаясь у камеры · по мотивам Studio Laucke Siebein</span></a></li>
+    <li><a href="/jonway">Номера кадров <span class="note">— WebGL-лента из 200 номеров, скролл двигает, цифры тянутся за курсором шлейфом, кадр плывёт за курсором на заднем плане и «проявляется» из мозаики</span></a></li>
+    <li><a href="/modulnyi">Модульный алгоритмический лонгрид <span class="note">— 100 квадратных модулей, строчки расходятся веером и смыкаются на линии горизонта; сетка-оверлей рисует закон в реальном времени</span></a></li>
+    <li><a href="/perevorot">Перевороты <span class="note">— текст и фото меняются одним поворотом вокруг горизонтальной оси, подмена спрятана на «ребре» · по мотивам разборов из «Моушен приёмов»</span></a></li>
+    <li><a href="/diagonal">Диагональная полоса <span class="note">— текст о менторской группе едет по диагонали от левого верхнего угла к правому нижнему, зациклен; кегль, толщина и ширина вариативного шрифта крутятся в панели · по референсу General Purpose Records</span></a></li>
+    <li><a href="/setka">Сетка <span class="note">— конструктор колонной сетки: колонки, марджины, межколонник в панели; режим «свободная» отпускает полотно за пределы экрана</span></a></li>
+    <li><a href="/koltso">Жидкое кольцо <span class="note">— чёрная форма из капель по кольцу: слипаются и растекаются как жидкость, объект крутится вокруг своей оси; капли, слипание, течение и наклон — в панели</span></a></li>
+  </ul>
+</body>
+</html>

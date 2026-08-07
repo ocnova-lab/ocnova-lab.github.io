@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Перевороты</title>
+<link rel="stylesheet" href="/panel.css" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: #0c0c0e;
+    color: #fff;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 15px;
+    line-height: 1.2;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  canvas#scene {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    display: block;
+  }
+  header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    padding: 1rem;
+    z-index: 6;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .6s;
+  }
+  .ready header { opacity: 1; }
+  header a { color: inherit; pointer-events: auto; }
+
+  /* мелкий список — неподвижная опора, живёт обычным DOM и не поворачивается */
+  .list {
+    position: fixed;
+    top: 0; left: 0;
+    z-index: 3;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .6s;
+  }
+  .ready .list { opacity: 1; }
+  .list .row {
+    position: absolute;
+    white-space: nowrap;
+    font-size: 13px;
+    letter-spacing: .04em;
+    color: #fff;
+    will-change: transform, opacity;
+  }
+
+  .loader {
+    position: fixed;
+    inset: 0;
+    background: #0c0c0e;
+    z-index: 10;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #666;
+    transition: opacity .5s;
+  }
+  .ready .loader { opacity: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+
+  <header>Сергей Гуров — перевороты · смена текста и фото одним поворотом вокруг горизонтальной оси · <a href="/">стенды</a></header>
+  <div class="list" id="list"></div>
+  <div class="loader">загрузка…</div>
+
+<script src="/panel.js"></script>
+<script>
+'use strict';
+/* ============================================================
+   Стенд «Перевороты».
+   Снято с двух видео-референсов (разборы «Моушен приёмы»):
+   - промо часов Omega: карусель текстовых строк — старый блок
+     складывается «от себя» вниз, новый разворачивается сверху;
+     сжатие, наклон строки и «курсив» — следствия одного
+     вращения вокруг горизонтальной оси, чуть завaленной в
+     плоскости экрана;
+   - афиша GANNI: фото в неподвижной рамке заваливается назад
+     до «ребра», на ребре подменяется и разворачивается обратно;
+     рамка не двигается, fade и blur отсутствуют.
+   Связка: общая перспектива на всю сцену, один таймлайн
+   (фото стартует чуть позже текста), одинаковый угол при
+   разной выразительности; мелкий список остаётся плоским.
+   Всё на чистом WebGL, без three.js.
+   ============================================================ */
+
+var ITEMS = [
+  { word: 'ПЛОСКОСТЬ',   row: 'плоскость',   src: 'portret-1.jpg' },
+  { word: 'РЕБРО',       row: 'ребро',       src: 'portret-2.jpg' },
+  { word: 'ПЕРСПЕКТИВА', row: 'перспектива', src: 'portret-3.jpg' },
+  { word: 'ВОЛНА',       row: 'волна',       src: 'portret-4.jpg' }
+];
+var N = ITEMS.length;
+
+/* ── параметры ── */
+var DEFAULTS = {
+  restMs: 1500,      // покой между сменами
+  photoDelayMs: 100, // фото стартует позже текста — «карточка перевернулась целиком»
+  textSize: 88,      // кегль крупного слова
+  textAngle: 85,     // угол поворота текста
+  tiltZ: 8,          // завал оси в плоскости экрана
+  textInMs: 500,     // разворот нового слова
+  textOutMs: 450,    // складывание старого
+  textEase: 'торможение',
+  textBez: [0.33, 1, 0.68, 1],
+  frames: 1,         // сколько рамок с фото (волна — как у афиши)
+  staggerMs: 120,    // сдвиг фазы между рамками
+  photoAngle: 85,    // угол поворота фото
+  axisPct: 15,       // ось: % высоты кадра от нижнего края
+  foldMs: 400,       // складывание до ребра
+  openMs: 450,       // разворот из ребра
+  foldEase: 'разгон',
+  foldBez: [0.32, 0, 0.67, 0],
+  openEase: 'торможение',
+  openBez: [0.33, 1, 0.68, 1],
+  persp: 800,        // перспектива сцены, px — общая, не поэлементная
+  conv: 100,         // схождение: 100 — один центр схода на сцену, 0 — у каждого свой
+};
+var P = Object.assign({}, DEFAULTS);
+try {
+  var saved = JSON.parse(localStorage.getItem('perevorot-params'));
+  if (saved) Object.assign(P, saved);
+} catch (e) {}
+
+/* ── изинги: пресеты, безье-приближения, вычислитель ── */
+var EASES = {
+  'линейный': function (t) { return t; },
+  'разгон': function (t) { return t * t * t; },
+  'торможение': function (t) { return 1 - Math.pow(1 - t, 3); },
+  'плавный': function (t) { return t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; },
+  'выброс': function (t) { var c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); },
+};
+var BEZ_APPROX = {
+  'линейный': [0.25, 0.25, 0.75, 0.75],
+  'разгон': [0.32, 0, 0.67, 0],
+  'торможение': [0.33, 1, 0.68, 1],
+  'плавный': [0.65, 0, 0.35, 1],
+  'выброс': [0.34, 1.56, 0.64, 1],
+};
+function cubicBezierY(b, t) {
+  var x1 = b[0], y1 = b[1], x2 = b[2], y2 = b[3];
+  var s = t;
+  for (var i = 0; i < 8; i++) {
+    var x = 3 * (1 - s) * (1 - s) * s * x1 + 3 * (1 - s) * s * s * x2 + s * s * s;
+    var dx = 3 * (1 - s) * (1 - s) * x1 + 6 * (1 - s) * s * (x2 - x1) + 3 * s * s * (1 - x2);
+    if (Math.abs(dx) < 1e-6) break;
+    s -= (x - t) / dx;
+    if (s < 0) s = 0; if (s > 1) s = 1;
+  }
+  return 3 * (1 - s) * (1 - s) * s * y1 + 3 * (1 - s) * s * s * y2 + s * s * s;
+}
+function evalEase(name, bez, t) {
+  if (t <= 0) return 0; if (t >= 1) return 1;
+  if (name === 'bezier') return cubicBezierY(bez, t);
+  return (EASES[name] || EASES['торможение'])(t);
+}
+
+StendPanel.build({
+  storageKey: 'perevorot-params',
+  params: P,
+  defaults: DEFAULTS,
+  eases: EASES,
+  evalEase: evalEase,
+  bezApprox: BEZ_APPROX,
+  defs: [
+    ['h', 'Ритм'],
+    ['restMs', 'Покой, мс', 400, 4000, 100],
+    ['photoDelayMs', 'Задержка фото, мс', 0, 600, 20],
+    ['h', 'Текст'],
+    ['textSize', 'Кегль крупного', 40, 160, 4],
+    ['textAngle', 'Угол, °', 45, 90, 1],
+    ['tiltZ', 'Завал оси, °', 0, 20, 1],
+    ['textInMs', 'Разворот, мс', 150, 1200, 25],
+    ['textOutMs', 'Складывание, мс', 150, 1200, 25],
+    ['textEase', 'Изинг текста', 'ease'],
+    ['h', 'Фото'],
+    ['frames', 'Рамки', 1, 3, 1],
+    ['staggerMs', 'Волна, мс на рамку', 0, 400, 10],
+    ['photoAngle', 'Угол, °', 45, 90, 1],
+    ['axisPct', 'Ось от низа, %', 0, 50, 1],
+    ['foldMs', 'Складывание, мс', 100, 1000, 25],
+    ['openMs', 'Разворот, мс', 100, 1000, 25],
+    ['foldEase', 'Изинг складывания', 'ease'],
+    ['openEase', 'Изинг разворота', 'ease'],
+    ['h', 'Камера'],
+    ['persp', 'Перспектива, px', 300, 2500, 50],
+    ['conv', 'Схождение, %', 0, 100, 5],
+  ],
+  desc: {
+    restMs: 'Пауза между сменами. На референсах ~1.3–1.5 с.',
+    photoDelayMs: 'Фото стартует позже текста. Небольшая задержка склеивает два блока в «карточка перевернулась целиком».',
+    textSize: 'Размер крупного слова справа от списка.',
+    textAngle: 'Насколько слово заваливается к «ребру». 90 — полностью в полоску.',
+    tiltZ: 'Ось вращения не строго горизонтальная: лёгкий завал даёт «живой» наклон и «курсив» из перспективы. Отдельного skew нет — всё из поворота.',
+    textInMs: 'Разворот нового слова сверху вниз на своё место.',
+    textOutMs: 'Складывание старого слова «от себя» вниз, с угасанием.',
+    textEase: 'Кривая разворота текста; складывание идёт по ней же зеркально.',
+    frames: 'Сколько рамок с фото стоит колонкой. Больше одной — видна волна, как в повторяющихся блоках афиши.',
+    staggerMs: 'Сдвиг фазы между рамками: верхняя уже ребром, нижняя ещё разворачивается.',
+    photoAngle: 'Угол складывания фото. Подмена картинки спрятана в момент «ребра».',
+    axisPct: 'Где проходит ось: 0 — по нижнему краю (низ стоит на месте), выше — низ выезжает на зрителя и ближний край растёт.',
+    foldMs: 'Первая половина: плоскость заваливается назад до ребра.',
+    openMs: 'Вторая половина: новое фото встаёт обратно в плоскость.',
+    foldEase: 'Кривая складывания — до подмены.',
+    openEase: 'Кривая разворота — после подмены.',
+    persp: 'Дистанция камеры. Одна на всю сцену: текст и фото живут в одном пространстве. Меньше — перспектива резче, ближний край шире.',
+    conv: 'Куда сходится перспектива: 100 — один центр на всю сцену (по разбору: элементы в одном пространстве, у боковых виден скос), 0 — у каждого элемента свой центр, повороты симметричные, как при поэлементной CSS-перспективе.',
+  },
+});
+
+/* ── WebGL ── */
+var canvas = document.getElementById('scene');
+var gl = canvas.getContext('webgl', { antialias: true })
+      || canvas.getContext('experimental-webgl', { antialias: true });
+
+var VSH = [
+  'attribute vec2 aPos;',
+  'uniform mat4 uPV;',
+  'uniform mat4 uModel;',
+  'uniform vec2 uSize;',
+  'uniform vec4 uUV;',     // offX, offY, scaleX, scaleY — кроп текстуры
+  'uniform vec2 uShift;',  // экранный сдвиг после проекции — для поэлементного центра схода
+  'uniform vec2 uVp;',
+  'varying vec2 vUv;',
+  'void main() {',
+  '  vUv = uUV.xy + aPos * uUV.zw;',
+  '  vec4 local = vec4((aPos.x - 0.5) * uSize.x, (aPos.y - 0.5) * uSize.y, 0.0, 1.0);',
+  '  gl_Position = uPV * uModel * local;',
+  '  gl_Position.xy += uShift * (2.0 / uVp) * gl_Position.w;',
+  '}'].join('\n');
+var FSH = [
+  'precision mediump float;',
+  'varying vec2 vUv;',
+  'uniform sampler2D uTex;',
+  'uniform float uAlpha;',
+  'void main() { gl_FragColor = texture2D(uTex, vUv) * uAlpha; }'].join('\n');
+
+function compile(type, src) {
+  var s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+var prog = gl.createProgram();
+gl.attachShader(prog, compile(gl.VERTEX_SHADER, VSH));
+gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FSH));
+gl.linkProgram(prog);
+gl.useProgram(prog);
+var U = {};
+['uPV', 'uModel', 'uSize', 'uUV', 'uTex', 'uAlpha', 'uShift', 'uVp'].forEach(function (n) { U[n] = gl.getUniformLocation(prog, n); });
+
+gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]), gl.STATIC_DRAW);
+var aPos = gl.getAttribLocation(prog, 'aPos');
+gl.enableVertexAttribArray(aPos);
+gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+gl.enable(gl.BLEND);
+gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+gl.clearColor(0.047, 0.047, 0.055, 1);
+gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+
+/* ── матрицы (колоночный порядок) ── */
+function matMul(a, b) {
+  var r = new Float32Array(16);
+  for (var c = 0; c < 4; c++)
+    for (var row = 0; row < 4; row++) {
+      var s = 0;
+      for (var k = 0; k < 4; k++) s += a[k * 4 + row] * b[c * 4 + k];
+      r[c * 4 + row] = s;
+    }
+  return r;
+}
+function matT(x, y, z) {
+  return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, x, y, z, 1]);
+}
+function matRX(a) {
+  var c = Math.cos(a), s = Math.sin(a);
+  return new Float32Array([1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, 0, 0, 0, 1]);
+}
+function matRZ(a) {
+  var c = Math.cos(a), s = Math.sin(a);
+  return new Float32Array([c, s, 0, 0, -s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+}
+
+var PV = null;
+function buildPV(W, H) {
+  var D = P.persp;                 // дистанция камеры = CSS-перспектива в px
+  var NEARP = 40, FARP = 8000;
+  var f = 2 * D / H;               // cot(fov/2): на плоскости z=0 единица = пиксел
+  var nf = 1 / (NEARP - FARP);
+  var proj = new Float32Array([
+    f / (W / H), 0, 0, 0,
+    0, f, 0, 0,
+    0, 0, (FARP + NEARP) * nf, -1,
+    0, 0, 2 * FARP * NEARP * nf, 0]);
+  PV = matMul(proj, matT(0, 0, -D));
+  gl.uniformMatrix4fv(U.uPV, false, PV);
+}
+
+/* модель: поворот вокруг оси, проходящей через точку pivot (в локальных px) */
+function modelFor(cx, cy, pivX, pivY, rotX, rotZ) {
+  var m = matMul(matRZ(rotZ), matRX(rotX));
+  m = matMul(matT(cx + pivX, cy + pivY, 0), m);
+  return matMul(m, matT(-pivX, -pivY, 0));
+}
+
+/* центр схода: k=1 — общий (центр экрана), k=0 — свой у элемента.
+   При k<1 часть положения элемента уводится из мира в экранный сдвиг
+   после проекции — перспектива считается ближе к его собственному центру. */
+function drawPlane(tex, w, h, cx, cy, pivX, pivY, rotX, rotZ, uv, alpha) {
+  var k = Math.max(0, Math.min(1, P.conv / 100));
+  var model = modelFor(cx * k, cy * k, pivX, pivY, rotX, rotZ);
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.uniform2f(U.uSize, w, h);
+  gl.uniformMatrix4fv(U.uModel, false, model);
+  gl.uniform2f(U.uShift, cx * (1 - k), cy * (1 - k));
+  gl.uniform4f(U.uUV, uv[0], uv[1], uv[2], uv[3]);
+  gl.uniform1f(U.uAlpha, alpha);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+/* ── текстуры фото ── */
+var photoTex = [], photoUV = [], photosLoaded = 0, started = false;
+ITEMS.forEach(function (it, i) {
+  var img = new Image();
+  img.onload = function () {
+    var t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    photoTex[i] = t;
+    var ar = img.width / img.height;   // кадрируем под квадрат рамки по-центру
+    photoUV[i] = ar < 1
+      ? [0, (1 - ar) / 2, 1, ar]
+      : [(1 - 1 / ar) / 2, 0, 1 / ar, 1];
+    if (++photosLoaded === N) start();
+  };
+  img.src = it.src;
+});
+
+/* ── текстуры слов: канвас → текстура ── */
+var wordTex = [], wordSize = [], wordAscent = [], lastTextSize = 0;
+var tcan = document.createElement('canvas'), tctx = tcan.getContext('2d');
+function buildWordTextures() {
+  var px = P.textSize, dpr = 2;
+  var font = '600 ' + (px * dpr) + 'px -apple-system, "Segoe UI", Roboto, sans-serif';
+  ITEMS.forEach(function (it, i) {
+    tctx.font = font;
+    var m = tctx.measureText(it.word);
+    var asc = (m.actualBoundingBoxAscent || px * dpr * 0.8);
+    var desc = (m.actualBoundingBoxDescent || px * dpr * 0.2);
+    var w = Math.ceil(m.width) + 8, h = Math.ceil(asc + desc) + 8;
+    tcan.width = w; tcan.height = h;
+    tctx.font = font;
+    tctx.fillStyle = '#fff';
+    tctx.textBaseline = 'alphabetic';
+    tctx.fillText(it.word, 4, Math.ceil(asc) + 4);
+    if (!wordTex[i]) wordTex[i] = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, wordTex[i]);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tcan);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    wordSize[i] = [w / dpr, h / dpr];
+    wordAscent[i] = (Math.ceil(asc) + 4) / dpr;
+  });
+  lastTextSize = px;
+}
+
+/* ── раскладка ── */
+var W = 0, H = 0, narrow = false;
+var L = {};  // photoS, photoCX, photoCY[], listLeft, baselineCss, rowH, textLeft
+var ROW_H = 26, FRAME_GAP = 18;
+function layout() {
+  W = window.innerWidth; H = window.innerHeight;
+  narrow = W < 720;
+  var n = Math.round(P.frames);
+  var S = narrow ? Math.min(W * 0.78, H * 0.42) : Math.min(W * 0.36, H * 0.62);
+  S = Math.min(S, (H * 0.72 - (n - 1) * FRAME_GAP) / n);
+  var cx = narrow ? W * 0.5 : W * 0.70;
+  var cy = narrow ? H * 0.30 : H * 0.46;
+  var total = n * S + (n - 1) * FRAME_GAP;
+  var centers = [];
+  for (var f = 0; f < n; f++)
+    centers.push(cy - total / 2 + S / 2 + f * (S + FRAME_GAP));  // css y, волна сверху вниз
+  var listLeft = narrow ? W * 0.08 : W * 0.07;
+  var baselineCss = narrow ? H * 0.72 : H * 0.60;
+  // на узком экране слово не помещается рядом со списком — встаёт строкой выше, во всю ширину
+  var textLeft = narrow ? listLeft : listLeft + 150;
+  L = {
+    n: n, S: S, cx: cx, cys: centers,
+    listLeft: listLeft,
+    baselineCss: baselineCss,
+    wordBaseline: narrow ? baselineCss - ROW_H * 3.6 : baselineCss,
+    textLeft: textLeft,
+    textMaxW: (narrow ? W - 24 : cx - S / 2 - 48) - textLeft,  // слово не должно лезть под рамку
+  };
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.uniform2f(U.uVp, W, H);
+  buildPV(W, H);
+}
+window.addEventListener('resize', layout);
+
+/* css-координаты → мировые (центр экрана, y вверх) */
+function gx(x) { return x - W / 2; }
+function gy(y) { return H / 2 - y; }
+
+/* ── мелкий список (DOM) ── */
+var listEl = document.getElementById('list');
+var rowEls = ITEMS.map(function (it, i) {
+  var d = document.createElement('div');
+  d.className = 'row';
+  d.textContent = '0' + (i + 1) + ' · ' + it.row;
+  listEl.appendChild(d);
+  return d;
+});
+
+/* ── таймлайн ── */
+var idx = 0, prevIdx = 0, phase = 'rest', t0 = 0;
+function transDur() {
+  return Math.max(P.textInMs, P.textOutMs,
+    P.photoDelayMs + P.foldMs + P.openMs + P.staggerMs * (Math.round(P.frames) - 1));
+}
+
+function start() {
+  layout();
+  buildWordTextures();
+  started = true;
+  document.body.classList.add('ready');
+  var m = location.search.match(/[?&]stop=(\d+)/);
+  if (m) {  // стоп-кадр: ?stop=мс от загрузки — один кадр без цикла, для headless-скриншотов
+    var T = +m[1], C = P.restMs + transDur(), k = Math.floor(T / C), rem = T - k * C;
+    idx = k % N;
+    var tEff = rem;
+    if (rem >= P.restMs) { prevIdx = idx; idx = (idx + 1) % N; phase = 'flip'; tEff = rem - P.restMs; }
+    (function freezeLoop() {  // перерисовка того же кадра: буфер не переживает композитинг
+      requestAnimationFrame(freezeLoop);
+      renderFrame(tEff);
+    })();
+    return;
+  }
+  t0 = performance.now();
+  requestAnimationFrame(loop);
+}
+
+function loop(now) {
+  requestAnimationFrame(loop);
+  var t = now - t0;
+  if (phase === 'rest' && t >= P.restMs) {
+    prevIdx = idx; idx = (idx + 1) % N;
+    phase = 'flip'; t0 = now; t = 0;
+  } else if (phase === 'flip' && t >= transDur()) {
+    phase = 'rest'; t0 = now; t = 0;
+  }
+  renderFrame(t);
+}
+
+function renderFrame(t) {
+  if (P.textSize !== lastTextSize) buildWordTextures();
+  if (Math.round(P.frames) !== L.n) layout();
+  buildPV(W, H);   // перспектива могла смениться с панели — дёшево, раз в кадр
+  var flipping = phase === 'flip';
+
+  /* список: сдвиг вниз на одну позицию, нижняя строка заворачивается наверх */
+  var prog01 = flipping ? evalEase(P.textEase, P.textBez, Math.min(1, t / P.textInMs)) : 0;
+  var base = flipping ? prevIdx : idx;
+  for (var i = 0; i < N; i++) {
+    var s = (i - base + N) % N;              // 0 — активная (нижний слот), 3 — за кадром
+    var y = L.baselineCss - s * ROW_H + prog01 * ROW_H;
+    var op;
+    if (s === 0) op = flipping ? 1 - prog01 : 1;              // уходит вниз и гаснет
+    else if (s === 1) op = flipping ? 0.35 + 0.65 * prog01 : 0.35; // становится активной
+    else if (s === 3) op = flipping ? 0.35 * prog01 : 0;      // заворачивается наверх
+    else op = 0.35;
+    rowEls[i].style.transform = 'translate(' + L.listLeft + 'px,' + (y - ROW_H * 0.72) + 'px)';
+    rowEls[i].style.opacity = op;
+  }
+
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  var RAD = Math.PI / 180;
+
+  /* фото: рамки колонкой, волна сверху вниз; подмена — на «ребре» */
+  for (var f = 0; f < L.n; f++) {
+    var texIdx = flipping ? prevIdx : idx, ang = 0;
+    if (flipping) {
+      var tf = t - P.photoDelayMs - f * P.staggerMs;
+      if (tf >= 0 && tf < P.foldMs) {
+        ang = evalEase(P.foldEase, P.foldBez, tf / P.foldMs) * P.photoAngle;
+      } else if (tf >= P.foldMs) {
+        texIdx = idx;
+        var to = Math.min(1, (tf - P.foldMs) / P.openMs);
+        ang = (1 - evalEase(P.openEase, P.openBez, to)) * P.photoAngle;
+      }
+    }
+    if (!photoTex[texIdx]) continue;
+    var pivY = -L.S / 2 + L.S * P.axisPct / 100;   // ось у нижнего края: низ стоит, верх уезжает вглубь
+    drawPlane(photoTex[texIdx], L.S, L.S, gx(L.cx), gy(L.cys[f]), 0, pivY, -ang * RAD, 0, photoUV[texIdx], 1);
+  }
+
+  /* крупное слово: базовая линия совпадает с активной строкой списка */
+  function drawWord(wi, rotX, rotZ, alpha, pivTop) {
+    var w = wordSize[wi][0], h = wordSize[wi][1];
+    var k = Math.min(1, L.textMaxW / w);              // длинное слово ужимается до свободной ширины
+    var cw = w * k, ch = h * k, asc = wordAscent[wi] * k;
+    var cx = gx(L.textLeft + cw / 2);
+    var cy = gy(L.wordBaseline - asc + ch / 2);       // центр из базовой линии
+    var pivX = -cw * 0.25;                             // origin ближе к левому краю
+    var pivY = pivTop ? ch / 2 : -ch / 2;
+    drawPlane(wordTex[wi], cw, ch, cx, cy, pivX, pivY, rotX, rotZ, [0, 0, 1, 1], alpha);
+  }
+  if (flipping) {
+    var eo = evalEase(P.textEase, P.textBez, Math.min(1, t / P.textOutMs));
+    if (eo < 1)  // старое: складывается «от себя» вниз от нижнего края, гаснет
+      drawWord(prevIdx, -P.textAngle * RAD * eo, 0, 1 - eo, false);
+    var ei = evalEase(P.textEase, P.textBez, Math.min(1, t / P.textInMs));
+    // новое: полоской сверху, разворачивается вниз; завал оси уходит вместе с поворотом
+    drawWord(idx, P.textAngle * RAD * (1 - ei), -P.tiltZ * RAD * (1 - ei), 1, true);
+  } else {
+    drawWord(idx, 0, 0, 1, true);
+  }
+}
+</script>
+</body>
+</html>

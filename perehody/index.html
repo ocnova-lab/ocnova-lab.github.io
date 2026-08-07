@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Переходы изображений</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: #000;
+    color: #fff;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 15px;
+    line-height: 1.2;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  canvas#scene {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    display: block;
+  }
+  /* невидимая поверхность, которая ловит настоящий скролл */
+  .scrollsurface {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100vh;
+    overflow-y: scroll;
+    -webkit-overflow-scrolling: touch;
+    opacity: 0.001;
+    z-index: 5;
+  }
+  .scrollsurface .scrollpane { height: 40000vh; }
+
+  header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    padding: 1rem;
+    z-index: 6;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .6s;
+    text-shadow: 0 0 12px rgba(0,0,0,.7);
+  }
+  .ready header { opacity: 1; }
+  header a { color: inherit; pointer-events: auto; }
+
+  /* первая картинка обычным DOM — пока не начали листать */
+  .first {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    pointer-events: none;
+    z-index: 2;
+    opacity: 0;
+    transition: opacity .4s;
+  }
+  .ready .first { opacity: 1; }
+  .scrolling .first { display: none; }
+  .first img {
+    width: 80%; height: 80vh;
+    object-fit: contain;
+  }
+
+  .hint {
+    position: fixed;
+    bottom: 1.2rem; left: 0; right: 0;
+    text-align: center;
+    z-index: 6;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .6s;
+    text-shadow: 0 0 12px rgba(0,0,0,.7);
+  }
+  .ready .hint { opacity: .8; }
+  .scrolling .hint { opacity: 0; }
+
+  .loader {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    z-index: 10;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #666;
+    transition: opacity .5s;
+  }
+  .ready .loader { opacity: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+
+  <div class="scrollsurface" id="surface"><div class="scrollpane"></div></div>
+
+  <header>Сергей Гуров — переходы изображений · по мотивам <a href="https://studio-laucke-siebein.com/" target="_blank" rel="noopener">Studio Laucke Siebein</a> · <a href="/">стенды</a></header>
+  <div class="first"><img src="perehody-img/01.jpg" alt="" /></div>
+  <div class="hint">листайте вниз</div>
+  <div class="loader">загрузка…</div>
+
+<script>
+'use strict';
+/* ============================================================
+   Стенд «Переходы изображений».
+   Устройство снято с studio-laucke-siebein.com (dist/app.js):
+   - каждая картинка — плоскость в 3D, все стоят на одной оси;
+   - скролл двигает плоскости по Z сквозь камеру (z += Δскролла/2);
+   - камера в z=150, ближняя плоскость отсечения 75 — картинка,
+     долетев до экрана, «срезается» от краёв и открывает следующую;
+   - при подлёте (z > 0) геометрия выгибается кубической Безье
+     с силой −z/1.2 — один из трёх типов изгиба на картинку;
+   - очередь из 10 плоскостей с шагом 300, пополняется случайной
+     картинкой с той стороны, куда листают; порядок бесконечный;
+   - изредка пролетает гигантская «стена» из той же картинки,
+     затайленной 10×10, повёрнутая на 0.2 рад.
+   Здесь то же самое на чистом WebGL, без three.js.
+   ============================================================ */
+
+const IMAGES = [
+  {"src":"perehody-img/01.jpg","w":1316,"h":2048},
+  {"src":"perehody-img/02.jpg","w":1536,"h":2048},
+  {"src":"perehody-img/03.jpg","w":1325,"h":1326},
+  {"src":"perehody-img/04.jpg","w":1538,"h":2048},
+  {"src":"perehody-img/05.jpg","w":1514,"h":2048},
+  {"src":"perehody-img/06.jpg","w":853,"h":1280},
+  {"src":"perehody-img/07.jpg","w":1440,"h":960},
+  {"src":"perehody-img/08.jpg","w":753,"h":750},
+  {"src":"perehody-img/09.jpg","w":1536,"h":2048},
+  {"src":"perehody-img/10.jpg","w":2000,"h":1333},
+  {"src":"perehody-img/11.jpg","w":1367,"h":2048},
+  {"src":"perehody-img/12.jpg","w":2048,"h":1366},
+  {"src":"perehody-img/13.jpg","w":1536,"h":2048},
+  {"src":"perehody-img/14.jpg","w":1365,"h":2048},
+  {"src":"perehody-img/15.jpg","w":1365,"h":2048},
+  {"src":"perehody-img/16.jpg","w":1536,"h":2048},
+  {"src":"perehody-img/17.jpg","w":2048,"h":1365},
+  {"src":"perehody-img/18.jpg","w":2048,"h":1365},
+  {"src":"perehody-img/19.jpg","w":2048,"h":1365},
+  {"src":"perehody-img/20.jpg","w":1365,"h":2048},
+  {"src":"perehody-img/21.jpg","w":2048,"h":2048},
+  {"src":"perehody-img/22.jpg","w":721,"h":721}
+];
+// затайленные «стены» — квадрат 1024 (степень двойки, чтобы работал REPEAT)
+const TILES = [
+  {"src":"perehody-img/tile1.jpg","w":1024,"h":1024},
+  {"src":"perehody-img/tile2.jpg","w":1024,"h":1024}
+];
+
+const CAM_Z = 150, NEAR = 75, FAR = 1500;
+const SPACING = 300;        // шаг между плоскостями по Z
+const QUEUE_SIZE = 10;      // сколько плоскостей держим в очереди
+const SCROLL_FACTOR = 0.5;  // Δскролла → ΔZ
+const START_COUNT = 12;     // сколько текстур ждём до старта
+
+const canvas = document.getElementById('scene');
+const surface = document.getElementById('surface');
+const gl = canvas.getContext('webgl', { antialias: true })
+        || canvas.getContext('experimental-webgl', { antialias: true });
+
+/* ---------- шейдеры: изгиб считается в вершинном ---------- */
+const VSH = `
+attribute vec2 aPos;              // сетка 0..1
+uniform mat4 uProj;
+uniform vec2 uSize;               // ширина/высота плоскости в мировых единицах
+uniform float uZ;                 // положение по оси пролёта
+uniform float uBend;              // сила изгиба (−z/1.2)
+uniform float uMode;              // 0: дуга поперёк X, 1: поперёк Y, 2: двойная волна, 3: стена
+uniform float uRotY;
+varying vec2 vUv;
+void main() {
+  vUv = aPos;
+  vec3 p = vec3((aPos.x - 0.5) * uSize.x, (aPos.y - 0.5) * uSize.y, 0.0);
+  if (uMode < 2.5) {
+    float u = uMode < 0.5 ? aPos.x : (uMode < 1.5 ? aPos.y : fract(aPos.y * 2.0));
+    p.z += 3.0 * u * (1.0 - u) * uBend;   // z-профиль кубической Безье с контрольными точками на высоте uBend
+  }
+  if (uRotY != 0.0) {
+    float c = cos(uRotY), s = sin(uRotY);
+    p = vec3(c * p.x + s * p.z, p.y, -s * p.x + c * p.z);
+  }
+  gl_Position = uProj * vec4(p.x, p.y, p.z + uZ - ${CAM_Z.toFixed(1)}, 1.0);
+}`;
+const FSH = `
+precision mediump float;
+varying vec2 vUv;
+uniform sampler2D uTex;
+uniform float uRepeat;
+void main() { gl_FragColor = texture2D(uTex, vUv * uRepeat); }`;
+
+function compile(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+const prog = gl.createProgram();
+gl.attachShader(prog, compile(gl.VERTEX_SHADER, VSH));
+gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FSH));
+gl.linkProgram(prog);
+gl.useProgram(prog);
+const U = {};
+['uProj','uSize','uZ','uBend','uMode','uRotY','uTex','uRepeat'].forEach(n => U[n] = gl.getUniformLocation(prog, n));
+
+/* ---------- общая сетка 32×32 ---------- */
+const GRID = 32;
+const verts = [], idx = [];
+for (let r = 0; r <= GRID; r++)
+  for (let c = 0; c <= GRID; c++) verts.push(c / GRID, r / GRID);
+for (let r = 0; r < GRID; r++)
+  for (let c = 0; c < GRID; c++) {
+    const a = r * (GRID + 1) + c, b = a + 1, d = a + GRID + 1, e = d + 1;
+    idx.push(a, d, b, b, d, e);
+  }
+gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.STATIC_DRAW);
+const aPos = gl.getAttribLocation(prog, 'aPos');
+gl.enableVertexAttribArray(aPos);
+gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
+gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(idx), gl.STATIC_DRAW);
+
+gl.enable(gl.DEPTH_TEST);
+gl.clearColor(0, 0, 0, 1);
+gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+const anisoExt = gl.getExtension('EXT_texture_filter_anisotropic')
+  || gl.getExtension('WEBKIT_EXT_texture_filter_anisotropic');
+
+/* ---------- плоскости ---------- */
+const meshes = [];
+function addMesh(item, isTile) {
+  const m = {
+    tex: gl.createTexture(),
+    w: isTile ? item.w * 2 : item.w / 10,   // у студии: картинки w/10, стены 2*w
+    h: isTile ? item.h * 2 : item.h / 10,
+    mode: isTile ? 3 : Math.floor(Math.random() * 3),
+    rotY: isTile ? 0.2 : 0,
+    repeat: isTile ? 10 : 1,
+    z: 0, visible: false, loaded: false
+  };
+  const img = new Image();
+  img.onload = () => {
+    gl.bindTexture(gl.TEXTURE_2D, m.tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    if (isTile) { // степень двойки: можно повтор и мипмапы
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    } else {
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    }
+    if (anisoExt) gl.texParameterf(gl.TEXTURE_2D, anisoExt.TEXTURE_MAX_ANISOTROPY_EXT,
+      gl.getParameter(anisoExt.MAX_TEXTURE_MAX_ANISOTROPY_EXT));
+    m.loaded = true;
+    checkStart();
+  };
+  img.src = item.src;
+  meshes.push(m);
+}
+IMAGES.forEach(i => addMesh(i, false));
+TILES.forEach(t => addMesh(t, true));
+
+/* ---------- камера ---------- */
+let proj = new Float32Array(16);
+function perspective(fovDeg, aspect) {
+  const f = 1 / Math.tan(fovDeg * Math.PI / 360);
+  const nf = 1 / (NEAR - FAR);
+  proj.set([f / aspect, 0, 0, 0,  0, f, 0, 0,
+            0, 0, (FAR + NEAR) * nf, -1,  0, 0, 2 * FAR * NEAR * nf, 0]);
+}
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  const area = w * h / 1e6;   // подбор поля зрения под площадь окна — как у студии
+  const fov = area < 0.5 ? 75 : area < 0.9 ? 65 : area < 1.6 ? 60 : 58;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  perspective(fov, w / h);
+  gl.uniformMatrix4fv(U.uProj, false, proj);
+  render();
+}
+window.addEventListener('resize', resize);
+
+/* ---------- очередь пролетающих плоскостей ---------- */
+let queue = [], y = 0, lastY = 0, lastDelta = 0, started = false;
+
+function refill() {
+  const pool = meshes.filter(m => m.loaded);
+  let guard = 40;
+  while (queue.length < Math.min(QUEUE_SIZE, pool.length - 1) && guard-- > 0) {
+    const m = pool[Math.floor(Math.random() * pool.length)];
+    if (queue.includes(m)) continue;
+    if (queue.length === 0) {
+      m.z = 200;                                  // первая — сразу за камерой, её показывает DOM-подложка
+    } else if (lastDelta >= 0) {
+      m.z = queue[0].z - SPACING; queue.unshift(m); m.visible = true; continue;
+    } else {
+      m.z = queue[queue.length - 1].z + SPACING;
+    }
+    queue.push(m);
+    m.visible = true;
+  }
+}
+
+function update() {
+  const delta = y - lastY;
+  lastDelta = delta;
+  for (const m of queue) {
+    m.z += delta * SCROLL_FACTOR;
+    if (m.z > 1500 || m.z < -2000) { m.visible = false; m.remove = true; }
+  }
+  queue = queue.filter(m => !m.remove);
+  meshes.forEach(m => m.remove = false);
+  refill();
+  lastY = y;
+}
+
+function render() {
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  for (const m of queue) {
+    if (!m.visible || !m.loaded) continue;
+    gl.bindTexture(gl.TEXTURE_2D, m.tex);
+    gl.uniform2f(U.uSize, m.w, m.h);
+    gl.uniform1f(U.uZ, m.z);
+    gl.uniform1f(U.uBend, m.z > 0 ? -m.z / 1.2 : 0);  // чем ближе к камере, тем сильнее прогиб от зрителя
+    gl.uniform1f(U.uMode, m.mode);
+    gl.uniform1f(U.uRotY, m.rotY);
+    gl.uniform1f(U.uRepeat, m.repeat);
+    gl.drawElements(gl.TRIANGLES, idx.length, gl.UNSIGNED_SHORT, 0);
+  }
+}
+
+/* ---------- скролл ---------- */
+let raf = 0;
+surface.addEventListener('scroll', () => {
+  y = surface.scrollTop;
+  if (!document.body.classList.contains('scrolling') && y > 20)
+    document.body.classList.add('scrolling');
+  if (!started) return;
+  if (!raf) raf = requestAnimationFrame(() => { raf = 0; update(); render(); });
+});
+
+function checkStart() {
+  if (started) return;
+  if (meshes.filter(m => m.loaded).length < Math.min(START_COUNT, meshes.length)) return;
+  started = true;
+  update();
+  render();
+  document.body.classList.add('ready');
+}
+
+resize();
+</script>
+</body>
+</html>
