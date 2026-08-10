@@ -6,6 +6,20 @@
 <title>Моноблок</title>
 <link rel="stylesheet" href="/panel.css" />
 <style>
+  @font-face {
+    font-family: 'JetBrains Mono';
+    src: url('/fonts/JetBrainsMono-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block; /* сетка выводится из шрифта — ждём его, а не мигаем подменой */
+  }
+  @font-face {
+    font-family: 'JetBrains Mono';
+    src: url('/fonts/JetBrainsMono-Bold.woff2') format('woff2');
+    font-weight: 700;
+    font-style: normal;
+    font-display: block;
+  }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { height: 100%; }
   body {
@@ -33,7 +47,7 @@
   /* ── блок: ширина = доля экрана, внутри 24 колонки символов ── */
   #blok {
     position: relative;
-    font-family: Menlo, "DejaVu Sans Mono", "Liberation Mono", "Courier New", monospace;
+    font-family: 'JetBrains Mono', Menlo, "DejaVu Sans Mono", monospace;
     font-weight: 400;
     white-space: pre;
     /* кегль, ширина, интерлиньяж и трекинг ставит закон в скрипте */
