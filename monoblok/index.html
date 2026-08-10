@@ -117,7 +117,7 @@
   <canvas id="osline"></canvas>
   <div id="os"></div>
 
-  <header>Сергей Гуров — моноблок · блок на символьной сетке, вокруг — лента элементов на редактируемой оси движения: кривую двигают в панели, скролл везёт ленту · <a href="/">стенды</a></header>
+  <header>Сергей Гуров — моноблок · блок на символьной сетке, вокруг — лента элементов на редактируемой оси: кольцо правится вершинами в панели, скролл везёт ленту · <a href="/">стенды</a></header>
 
   <div id="blok"><div id="setka"></div></div>
 
@@ -142,12 +142,13 @@
    строки: закон объявлен — вот его линии.
 
    Ось движения (приём «вёрстка по редактируемой оси»):
-   элементы из макета «for vibe code» едут лентой по кривой через
-   экран. Кривая — вход на левой кромке, свободные вершины, выход
-   на правой; все точки таскаются в редакторе-холсте с пропорциями
-   экрана, крайние можно увести за кромку. «Острота» ведёт от
+   элементы из макета «for vibe code» едут лентой по пути через
+   экран. По умолчанию путь замкнут в кольцо вокруг блока; та же
+   ось разомкнётся лентой одной ручкой. Вершины таскаются в
+   редакторе-холсте с пропорциями экрана, их можно уводить за
+   кромку, добавлять и убирать двойным кликом. «Острота» ведёт от
    гладкой кривой к ломаной, «ход» сгущает ленту у вершин или
-   расталкивает от них. Длина ленты равна ширине экрана — цикл
+   расталкивает от них. Длина ленты равна длине пути — кольцо
    замыкается без шва; кегль, как и у блока, выводится замером.
    Скролл (колесо, палец, стрелки) двигает цель, лента догоняет
    её аналогово. Diatype Condensed заменён вариативной Прагматикой,
@@ -203,11 +204,14 @@ var DEFAULTS = {
   osTrack: 200, // разрядка, тысячные кегля (3.6/18 из макета)
   osWdth: 78.5, // ширина знака, % — узкий гротеск вместо Diatype Condensed
   osWght: 450,  // насыщенность знака оси
-  // геометрия оси: вход на левой кромке, две свободные вершины, выход на правой
-  osPts: [[0, 0.06], [0.34, 0.06], [0.68, 0.06], [1, 0.06]],
+  osShape: 'ring', // ось замкнута в кольцо или разомкнута лентой
+  // геометрия оси: вершины в долях экрана; по умолчанию — кольцо вокруг блока
+  osPts: [[0.500, 0.130], [0.666, 0.238], [0.735, 0.500], [0.666, 0.762],
+          [0.500, 0.870], [0.334, 0.762], [0.265, 0.500], [0.334, 0.238]],
   osSharp: 0,   // острота: 0 — гладкая кривая, 1 — ломаная
   osHod: 0,     // ход: −1 спешит от вершин, +1 липнет к ним
-  osRot: 0,     // поворот элемента по касательной к оси, доля
+  osRot: 1,     // поворот элемента по касательной к оси, доля
+  osShift: 0,   // сдвиг поперёк оси, доли кегля: наружу кольца или внутрь
   osSpeed: 14,  // самоход ленты, px/с
   osEase: 88,   // мягкость погони ленты за целью скролла
   osPlate: 'off', // плашка под элементом — тогда цвет вычитается, как в макете
@@ -273,54 +277,83 @@ var OS_LEAD = 20 / 18; // интерлиньяж оси из макета: 20 px
 var OS_BASE = 100;     // кегль замера: чем крупнее, тем меньше ошибка округления
 
 /* ── геометрия оси ───────────────────────────────────────────────
-   Ось — кривая через экран: вход на левой кромке, выход на правой,
-   между ними свободные вершины. Точки живут в долях экрана и
-   таскаются в редакторе; вход и выход можно увести за кромку.
-   y(t) идёт катмулл-ромом по узлам, «острота» подмешивает ломаную,
-   «ход» сгущает или расталкивает элементы у вершин.
+   Ось — путь по экрану через свободные вершины. Кольцо замыкает
+   путь сам на себя, лента оставляет концы открытыми — механизм
+   один: катмулл-ром по вершинам, «острота» подмешивает ломаную,
+   путь меряется по длине (таблица сэмплов), поэтому лента едет
+   ровно и на коротких пролётах не частит.
+   «Ход» сгущает элементы у вершин или расталкивает от них.
    ───────────────────────────────────────────────────────────────── */
 
-function osNodes() {
-  return P.osPts.slice().sort(function (a, b) { return a[0] - b[0]; });
-}
+var osRedrawEditor = null;
+var osPath = null;   // { pts: [{x,y,s}], len, nodeU: [...] } — в пикселях
+var osL = 0, osSpans = [], osFs = 18, osOff = 0, osTarget = 0;
 
-// катмулл-ром по узлам, отсортированным по x; sharp подмешивает ломаную
-function osY(t) {
-  var n = osNodes(), i;
-  if (t <= n[0][0]) return n[0][1];
-  if (t >= n[n.length - 1][0]) return n[n.length - 1][1];
-  for (i = 0; i < n.length - 1 && !(t >= n[i][0] && t <= n[i + 1][0]); i++) {}
-  var p1 = n[i], p2 = n[i + 1];
-  var p0 = n[i - 1] || [2 * p1[0] - p2[0], 2 * p1[1] - p2[1]];
-  var p3 = n[i + 2] || [2 * p2[0] - p1[0], 2 * p2[1] - p1[1]];
-  var u = (t - p1[0]) / (p2[0] - p1[0] || 1e-6);
-  var lin = p1[1] + (p2[1] - p1[1]) * u;
-  var u2 = u * u, u3 = u2 * u;
-  var cr = 0.5 * ((2 * p1[1]) + (-p0[1] + p2[1]) * u +
-                  (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * u2 +
-                  (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * u3);
-  var sharp = P.osSharp;
-  return cr * (1 - sharp) + lin * sharp;
+function osRing() { return P.osShape === 'ring'; }
+
+function buildPath() {
+  var W = window.innerWidth, H = window.innerHeight;
+  var n = P.osPts.length, closed = osRing(), SUB = 20, sharp = P.osSharp;
+  function pt(i) {
+    if (closed) { var p = P.osPts[(i % n + n) % n]; return [p[0] * W, p[1] * H]; }
+    if (i < 0) i = 0; if (i > n - 1) i = n - 1;     // концы держим прямыми
+    return [P.osPts[i][0] * W, P.osPts[i][1] * H];
+  }
+  function cr(a, b, c, d, u) {
+    var u2 = u * u, u3 = u2 * u;
+    return 0.5 * (2 * b + (-a + c) * u + (2 * a - 5 * b + 4 * c - d) * u2 +
+                  (-a + 3 * b - 3 * c + d) * u3);
+  }
+  var pts = [], nodeU = [], cum = 0, prev = null;
+  var segs = closed ? n : n - 1;
+  for (var i = 0; i < segs; i++) {
+    var p0 = pt(i - 1), p1 = pt(i), p2 = pt(i + 1), p3 = pt(i + 2);
+    nodeU.push(cum);
+    for (var j = 0; j < SUB; j++) {
+      var u = j / SUB;
+      var x = cr(p0[0], p1[0], p2[0], p3[0], u), y = cr(p0[1], p1[1], p2[1], p3[1], u);
+      x = x * (1 - sharp) + (p1[0] + (p2[0] - p1[0]) * u) * sharp;
+      y = y * (1 - sharp) + (p1[1] + (p2[1] - p1[1]) * u) * sharp;
+      if (prev) cum += Math.hypot(x - prev[0], y - prev[1]);
+      pts.push({ x: x, y: y, s: cum });
+      prev = [x, y];
+    }
+  }
+  var end = closed ? pt(0) : pt(n - 1);
+  cum += prev ? Math.hypot(end[0] - prev[0], end[1] - prev[1]) : 0;
+  pts.push({ x: end[0], y: end[1], s: cum });
+  nodeU.push(cum);
+  osPath = { pts: pts, len: cum || 1, nodeU: nodeU.map(function (s) { return s / (cum || 1); }) };
 }
 
 // «ход»: где лента идёт плотнее. 0 — ровно, +1 — липнет к вершинам,
-// −1 — спешит от них. Внутри каждого пролёта между узлами меняем темп.
+// −1 — спешит от них. Темп меняем внутри каждого пролёта между вершинами.
 function osWarp(u) {
   var h = P.osHod;
-  if (!h) return u;
-  var n = osNodes(), xs = [0], i;
-  for (i = 0; i < n.length; i++) if (n[i][0] > 0 && n[i][0] < 1) xs.push(n[i][0]);
-  xs.push(1);
+  if (!h || !osPath) return u;
+  var xs = osPath.nodeU, i;
   for (i = 0; i < xs.length - 1 && !(u >= xs[i] && u <= xs[i + 1]); i++) {}
-  var a = xs[i], b = xs[i + 1], p = (u - a) / (b - a || 1e-6);
-  var s = p * p * (3 - 2 * p);                    // липнет к краям пролёта
-  var f = h > 0 ? p + (s - p) * h                  // ...то есть к вершинам
-                : p + (p - s) * (-h);              // ...или расталкивает
+  var a = xs[i], b = xs[i + 1];
+  if (b === undefined || b <= a) return u;
+  var p = (u - a) / (b - a);
+  var s = p * p * (3 - 2 * p);        // липнет к краям пролёта, то есть к вершинам
+  var f = h > 0 ? p + (s - p) * h : p + (p - s) * (-h);
   return a + f * (b - a);
 }
 
-var osRedrawEditor = null;
-var osW = 0, osL = 0, osSpans = [], osFs = 18, osOff = 0, osTarget = 0, osPrev = 0;
+// точка пути по доле длины + угол касательной
+function pathAt(u) {
+  var pts = osPath.pts, len = osPath.len;
+  var s = u * len, lo = 0, hi = pts.length - 1;
+  while (lo < hi - 1) { var m = (lo + hi) >> 1; if (pts[m].s <= s) lo = m; else hi = m; }
+  var a = pts[lo], b = pts[hi];
+  var k = (s - a.s) / ((b.s - a.s) || 1e-6);
+  return {
+    x: a.x + (b.x - a.x) * k,
+    y: a.y + (b.y - a.y) * k,
+    ang: Math.atan2(b.y - a.y, b.x - a.x)
+  };
+}
 
 // ширины элементов и длина ленты: закон опирается на замер, а не на числа
 function measureOs() {
@@ -336,9 +369,9 @@ function measureOs() {
   });
   var lenEm = w.reduce(function (a, b) { return a + b; }, 0) + w.length * P.osGap;
 
-  osW = window.innerWidth;
-  // вписывание: лента длиной ровно в экран замыкается без шва
-  osFs = (P.osFit === 'on') ? osW / lenEm : P.osSize;
+  buildPath();
+  // вписывание: лента длиной ровно в путь — кольцо замыкается без шва
+  osFs = (P.osFit === 'on') ? osPath.len / lenEm : P.osSize;
   os.style.fontSize = osFs + 'px';
 
   osL = lenEm * osFs;
@@ -363,25 +396,22 @@ function drawOsLine() {
   var g = oslineCv.getContext('2d');
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.clearRect(0, 0, W, H);
+  if (!osPath) return;
   g.strokeStyle = 'rgba(180,60,40,.5)';
   g.lineWidth = 1;
   g.beginPath();
-  for (var i = 0; i <= 200; i++) {
-    var t = i / 200;
-    var x = t * W, y = osY(t) * H;
-    i ? g.lineTo(x, y) : g.moveTo(x, y);
-  }
+  osPath.pts.forEach(function (p, i) { i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y); });
   g.stroke();
-  // узлы оси
+  // вершины оси
   g.fillStyle = 'rgba(180,60,40,.5)';
   P.osPts.forEach(function (p) {
     g.beginPath(); g.arc(p[0] * W, p[1] * H, 3, 0, 6.2832); g.fill();
   });
 }
 
-// кадр: лента едет, каждый элемент садится на кривую своей долей пути
+// кадр: лента едет, каждый элемент садится на путь своей долей длины
 function frameOs(dt) {
-  var W = window.innerWidth, H = window.innerHeight;
+  if (!osPath) return;
   osTarget += P.osSpeed * dt;
   var k = 1 - Math.pow(1 - (1 - P.osEase / 100), dt * 60); // аналоговая погоня
   osOff += (osTarget - osOff) * k;
@@ -389,15 +419,13 @@ function frameOs(dt) {
   for (var i = 0; i < osEls.length; i++) {
     var u = ((osSpans[i] + osOff) % osL) / osL;
     if (u < 0) u += 1;
-    var t = osWarp(u);
-    var x = t * W, y = osY(t) * H;
-    var a = 0;
-    if (P.osRot) { // поворот по касательной к оси
-      var d = 0.004;
-      a = Math.atan2((osY(Math.min(1, t + d)) - osY(Math.max(0, t - d))) * H,
-                     (Math.min(1, t + d) - Math.max(0, t - d)) * W) * P.osRot;
-    }
-    osEls[i].style.transform = 'translate(' + x + 'px,' + y + 'px) rotate(' + a + 'rad)';
+    var el = osEls[i];
+    if (u > 1) { el.style.visibility = 'hidden'; continue; } // лента длиннее пути
+    el.style.visibility = '';
+    var p = pathAt(osWarp(u));
+    var off = P.osShift * osFs; // поперёк оси — по нормали к касательной
+    var x = p.x - Math.sin(p.ang) * off, y = p.y + Math.cos(p.ang) * off;
+    el.style.transform = 'translate(' + x + 'px,' + y + 'px) rotate(' + (p.ang * P.osRot) + 'rad)';
   }
 }
 
@@ -466,9 +494,11 @@ var ui = StendPanel.build({
     ['osWght', 'Насыщенность', 100, 900, 10],
     ['osPlate', 'Плашка под элементом', 'select', [['off', 'нет'], ['on', 'тёмная — как в макете']]],
     ['h', 'Движение по оси'],
+    ['osShape', 'Форма оси', 'select', [['ring', 'кольцо — замкнута'], ['line', 'лента — разомкнута']]],
     ['osSharp', 'Острота оси', 0, 1, 0.01],
     ['osHod', 'Ход', -1, 1, 0.01],
     ['osRot', 'Поворот по касательной', 0, 1, 0.01],
+    ['osShift', 'Сдвиг поперёк оси', -4, 4, 0.05],
     ['osSpeed', 'Самоход, px/с', -200, 200, 1],
     ['osEase', 'Мягкость погони', 0, 97, 1],
     ['h', 'Датчик'],
@@ -486,9 +516,11 @@ var ui = StendPanel.build({
     osWdth: 'Ширина знака вариативной Прагматики. В макете стоит ABC Diatype Condensed; 78.5% подгоняют ряд под макетные 2882 px.',
     osWght: 'Насыщенность вариативной Прагматики. В макете — Diatype Condensed Medium.',
     osPlate: 'Тёмная плашка под каждым элементом. С ней цвет знаков рождается вычитанием, как в макете, — выходит макетный сине-серый; без неё тот же цвет посчитан от поля стенда.',
+    osShape: 'Кольцо замыкает путь сам на себя — лента идёт по кругу без конца. Лента разомкнута: элементы уходят за последнюю вершину и появляются у первой.',
     osSharp: 'Ноль — ось идёт гладкой кривой через вершины, единица — ломаной с углами на вершинах.',
     osHod: 'Как лента распределяется вдоль оси. Ноль — ровно; вправо — элементы липнут к вершинам и разрежаются между ними; влево — наоборот, спешат от вершин.',
     osRot: 'Насколько элемент доворачивается по касательной к оси. Ноль — все стоят горизонтально, единица — ложатся вдоль кривой.',
+    osShift: 'Насколько элементы отодвинуты от самой оси по нормали: минус уводит наружу кольца, плюс — внутрь. Считается в долях кегля, поэтому держится при смене размера.',
     osSpeed: 'Постоянный ход ленты. Ноль — ось стоит и живёт только от скролла.',
     osEase: 'Инерция погони: лента догоняет цель скролла мягко. Ноль — мгновенно, к 97 — тягуче.',
     osLine: 'Показать саму кривую оси и её узлы поверх экрана.',
@@ -523,6 +555,7 @@ var ui = StendPanel.build({
   function iy(py) { return EY0 + py / cv.height * (EY1 - EY0); }
 
   function redraw() {
+    if (!osPath) buildPath(); // редактор может открыться раньше первого замера
     var w = cv.clientWidth || 240;
     var ratio = window.innerHeight / window.innerWidth;
     var h = w * ratio * ((EY1 - EY0) / (EX1 - EX0));
@@ -543,18 +576,22 @@ var ui = StendPanel.build({
     g.fillStyle = 'rgba(127,127,127,.16)';
     g.fillRect(EX(0), EY(0), EX(1) - EX(0), EY(1) - EY(0));
 
+    // тот же путь, что и на экране, только в долях
     g.strokeStyle = '#e0603c';
     g.lineWidth = 1.5;
     g.beginPath();
-    for (var i = 0; i <= 160; i++) {
-      var t = i / 160;
-      i ? g.lineTo(EX(t), EY(osY(t))) : g.moveTo(EX(t), EY(osY(t)));
-    }
+    var sw = window.innerWidth, sh = window.innerHeight;
+    osPath.pts.forEach(function (p, i) {
+      var x = EX(p.x / sw), y = EY(p.y / sh);
+      i ? g.lineTo(x, y) : g.moveTo(x, y);
+    });
+    if (osRing()) g.closePath();
     g.stroke();
 
     P.osPts.forEach(function (p, i) {
       g.beginPath(); g.arc(EX(p[0]), EY(p[1]), 4.5, 0, 6.2832);
-      g.fillStyle = (i === 0 || i === P.osPts.length - 1) ? '#e0603c' : '#fff';
+      // у разомкнутой ленты крайние вершины — вход и выход
+      g.fillStyle = (!osRing() && (i === 0 || i === P.osPts.length - 1)) ? '#e0603c' : '#fff';
       g.fill();
       g.lineWidth = 1.5; g.strokeStyle = '#e0603c'; g.stroke();
     });
@@ -583,18 +620,26 @@ var ui = StendPanel.build({
     if (drag < 0) return;
     var pt = pick(e);
     P.osPts[drag] = [Math.max(EX0, Math.min(EX1, pt[0])), Math.max(EY0, Math.min(EY1, pt[1]))];
-    ui.save(); redraw(); drawOsLine();
+    ui.save(); measureOs(); redraw();
   });
   cv.addEventListener('pointerup', function () { drag = -1; });
   cv.addEventListener('dblclick', function (e) {
     var pt = pick(e), i = nearest(pt);
-    if (i > 0 && i < P.osPts.length - 1 && P.osPts.length > 3) {
+    if (i >= 0 && P.osPts.length > 3) {
       P.osPts.splice(i, 1);           // двойной по вершине — убрать
     } else if (i < 0) {
-      P.osPts.push([pt[0], pt[1]]);   // двойной по полю — добавить вершину
-      P.osPts.sort(function (a, b) { return a[0] - b[0]; });
+      // новая вершина встаёт в тот пролёт, к которому ближе указатель
+      var W = window.innerWidth, H = window.innerHeight, best = 0, bd = 1e9;
+      var n = P.osPts.length, lim = osRing() ? n : n - 1;
+      for (var k = 0; k < lim; k++) {
+        var a = P.osPts[k], b = P.osPts[(k + 1) % n];
+        var mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+        var d = Math.hypot((mx - pt[0]) * W, (my - pt[1]) * H);
+        if (d < bd) { bd = d; best = k; }
+      }
+      P.osPts.splice(best + 1, 0, [pt[0], pt[1]]);
     }
-    ui.save(); redraw(); drawOsLine();
+    ui.save(); measureOs(); redraw();
   });
 
   osRedrawEditor = redraw;
@@ -609,7 +654,7 @@ var last = '', prevT = 0;
   prevT = now || 0;
   var s = [P.frac, P.lead, P.track, P.grid,
            P.osFit, P.osSize, P.osGap, P.osTrack, P.osWdth, P.osWght,
-           P.osSharp, P.osPlate, P.osLine, JSON.stringify(P.osPts),
+           P.osShape, P.osSharp, P.osPlate, P.osLine, JSON.stringify(P.osPts),
            window.innerWidth, window.innerHeight].join('|');
   if (s !== last) {
     last = s;
