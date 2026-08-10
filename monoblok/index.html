@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Моноблок</title>
+<link rel="stylesheet" href="/panel.css" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: #eae9e4;
+    color: #1b1b1b;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 15px;
+    line-height: 1.2;
+    overflow: hidden;
+    overscroll-behavior: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    padding: 1rem;
+    z-index: 6;
+    color: #6a6a66;
+    pointer-events: none;
+  }
+  header a { color: inherit; pointer-events: auto; }
+
+  /* ── блок: ширина = доля экрана, внутри 24 колонки символов ── */
+  #blok {
+    position: relative;
+    font-family: Menlo, "DejaVu Sans Mono", "Liberation Mono", "Courier New", monospace;
+    font-weight: 400;
+    white-space: pre;
+    /* кегль, ширина, интерлиньяж и трекинг ставит закон в скрипте */
+  }
+  #blok .ln {
+    position: relative;
+    height: 1lh;
+  }
+  #blok .c, #blok .r { position: absolute; top: 0; }
+  #blok .c { left: 50%; transform: translateX(-50%); }
+  /* трекинг добавляет пробел и после последнего знака — правый край его снимает */
+  #blok .r { right: 0; margin-right: calc(-1 * var(--track, 0px)); }
+
+  /* ── датчик: символьная сетка блока ── */
+  #setka {
+    position: absolute;
+    top: 0; left: 0;
+    pointer-events: none;
+    display: none;
+    outline: 1px solid rgba(180, 60, 40, 0.5);
+  }
+  body.grid #setka { display: block; }
+</style>
+</head>
+<body>
+  <header>Сергей Гуров — моноблок · адресный блок на символьной сетке: 24 колонки, ширина блока — доля экрана, кегль вычисляется из неё · <a href="/">стенды</a></header>
+
+  <div id="blok"><div id="setka"></div></div>
+
+<script src="/panel.js"></script>
+<script>
+'use strict';
+/* ============================================================
+   Стенд «Моноблок» — по референсу с адресом на THEANXIETTTY.
+
+   Закон блока:
+   строка блока = 24 колонки моноширинного шрифта. Ширина блока
+   задаётся долей ширины экрана, а кегль не подбирается на глаз,
+   а вычисляется из неё: кегль = ширина / (24 × (шаг знака + трекинг)).
+   Шаг знака берётся замером у самого шрифта, поэтому подмена
+   гарнитуры не ломает сетку.
+
+   Внутри строки три зоны — левый край, центр, правый край.
+   Центр честный (не по колонкам), поэтому нечётные строки
+   вроде «PHONE» стоят ровно посередине, как в оригинале.
+
+   Датчик «Символьная сетка» показывает те самые 24 колонки и
+   строки: закон объявлен — вот его линии.
+   ============================================================ */
+
+var COLS = 24; // ширина блока в знаках — задана самой длинной строкой
+
+// Строки блока: raw — вся строка целиком (ровно 24 знака),
+// l / c / r — левый край, центр, правый край; bold — жирная зона строки.
+var LINES = [
+  { c: '814 BERRY STREET' },
+  { raw: 'SAN FRANCISCO . CP 94158' },
+  { l: '3', c: 'CA — USA', bold: 'c', r: '1' },
+  { l: '2', r: '2' },
+  { l: '1', c: 'PHONE', r: '3' },
+  { raw: '+   00  1  415  324 1379' },
+  { c: 'THEANXIETTTY.COM' },
+  { c: 'REPEAT' }
+];
+
+var DEFAULTS = {
+  frac: 25,     // ширина блока, % ширины экрана
+  lead: 1.14,   // интерлиньяж, доли кегля
+  track: 0,     // трекинг, тысячные кегля
+  grid: 'off'   // датчик: символьная сетка
+};
+var P = Object.assign({}, DEFAULTS);
+try {
+  var saved = JSON.parse(localStorage.getItem('monoblok-params'));
+  if (saved) Object.assign(P, saved);
+} catch (e) {}
+
+// ?frac=33&lead=1.4&track=60&grid=on — параметры из адреса (удобно для скриншотов)
+new URLSearchParams(location.search).forEach(function (v, k) {
+  if (!(k in DEFAULTS)) return;
+  P[k] = (k === 'grid') ? v : parseFloat(v);
+});
+
+// ── разметка блока ──
+var blok = document.getElementById('blok');
+var setka = document.getElementById('setka');
+LINES.forEach(function (L) {
+  var ln = document.createElement('div');
+  ln.className = 'ln';
+  if (L.raw) {
+    ln.textContent = L.raw;
+  } else {
+    ['l', 'c', 'r'].forEach(function (zone) {
+      if (!L[zone]) return;
+      var s = document.createElement('span');
+      s.className = zone;
+      s.textContent = L[zone];
+      if (L.bold === zone) s.style.fontWeight = 700;
+      ln.appendChild(s);
+    });
+  }
+  blok.appendChild(ln);
+});
+
+// ── шаг знака: спрашиваем у самого шрифта, а не помним числом ──
+var advRatio = 0.6; // до замера — обычная моношириная доля кегля
+function measureAdvance() {
+  var cv = document.createElement('canvas').getContext('2d');
+  cv.font = '100px ' + getComputedStyle(blok).fontFamily;
+  var w = cv.measureText('MMMMMMMMMM').width; // десять знаков — меньше ошибка округления
+  if (w > 0) advRatio = w / 10 / 100;
+}
+
+function apply() {
+  var target = window.innerWidth * P.frac / 100; // ширина блока
+  var track = P.track / 1000;                    // трекинг в долях кегля
+  var fs = target / (COLS * (advRatio + track));
+
+  blok.style.width = target + 'px';
+  blok.style.fontSize = fs + 'px';
+  blok.style.lineHeight = P.lead;
+  blok.style.letterSpacing = (track * fs) + 'px';
+  blok.style.setProperty('--track', (track * fs) + 'px');
+
+  // датчик рисует ту же сетку, из которой выведен кегль
+  var colw = target / COLS;
+  var lineh = fs * P.lead;
+  setka.style.width = target + 'px';
+  setka.style.height = (lineh * LINES.length) + 'px';
+  setka.style.backgroundImage =
+    'repeating-linear-gradient(90deg, rgba(180,60,40,.35) 0 1px, transparent 1px ' + colw + 'px),' +
+    'repeating-linear-gradient(180deg, rgba(180,60,40,.35) 0 1px, transparent 1px ' + lineh + 'px)';
+  document.body.classList.toggle('grid', P.grid === 'on');
+}
+
+// ── панель ──
+StendPanel.build({
+  storageKey: 'monoblok-params',
+  params: P,
+  defaults: DEFAULTS,
+  defs: [
+    ['h', 'Блок'],
+    ['frac', 'Доля ширины экрана, %', 8, 70, 0.5],
+    ['lead', 'Интерлиньяж', 0.85, 2.2, 0.01],
+    ['track', 'Трекинг, ‰ кегля', -40, 150, 1],
+    ['h', 'Датчик'],
+    ['grid', 'Символьная сетка', 'select', [['off', 'скрыть'], ['on', 'показать']]]
+  ],
+  desc: {
+    frac: 'Ширина блока в долях ширины экрана. Кегль пересчитывается за ней: 24 знака всегда занимают ровно эту ширину. В оригинале — четверть экрана.',
+    lead: 'Расстояние между строками в долях кегля. 1.14 — как в оригинале.',
+    track: 'Разрядка между знаками, тысячные кегля. Колонка становится шире — кегль уменьшается, ширина блока держится.',
+    grid: 'Показать 24 колонки и строки, из которых выведен кегль.'
+  }
+});
+
+// панель пишет прямо в P — сторожим значения и ширину экрана
+var last = '';
+(function tick() {
+  var s = [P.frac, P.lead, P.track, P.grid, window.innerWidth].join('|');
+  if (s !== last) { last = s; apply(); }
+  requestAnimationFrame(tick);
+})();
+
+measureAdvance();
+apply();
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(function () { measureAdvance(); apply(); });
+}
+</script>
+</body>
+</html>
