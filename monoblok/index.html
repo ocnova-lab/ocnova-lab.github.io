@@ -20,6 +20,14 @@
     font-style: normal;
     font-display: block;
   }
+  @font-face {
+    font-family: 'Pragmatica Next VF';
+    src: url('/fonts/PragmaticaNextVF.woff') format('woff-variations');
+    font-weight: 100 900;
+    font-stretch: 50% 100%;
+    font-style: normal;
+    font-display: block;
+  }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { height: 100%; }
   body {
@@ -36,13 +44,39 @@
   }
   header {
     position: fixed;
-    top: 0; left: 0; right: 0;
+    left: 0; right: 0;
     padding: 1rem;
     z-index: 6;
     color: #6a6a66;
     pointer-events: none;
+    /* верх ставит скрипт — сразу под осью */
   }
   header a { color: inherit; pointer-events: auto; }
+
+  /* ── ось: строка элементов во всю ширину экрана ── */
+  #os {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%;
+    z-index: 5;
+    display: flex;
+    align-items: flex-start;
+    font-family: 'Pragmatica Next VF', "Helvetica Neue", Arial, sans-serif;
+    text-transform: uppercase;
+    overflow: hidden;
+    /* кегль, ширину знака, промежуток и разрядку ставит закон в скрипте */
+  }
+  #os .el {
+    flex: none;
+    white-space: pre;
+    text-box-trim: trim-both;
+    text-box-edge: cap alphabetic;
+  }
+  /* с подложкой цвет рождается вычитанием, как в макете */
+  body.os-dark #os { background: #323232; }
+  body.os-dark #os .el { color: #9ba9b2; mix-blend-mode: difference; }
+  /* без подложки вычитать не из чего — тот же цвет посчитан от поля стенда */
+  body:not(.os-dark) #os .el { color: #4f4032; }
 
   /* ── блок: ширина = доля экрана, внутри 24 колонки символов ── */
   #blok {
@@ -73,7 +107,9 @@
 </style>
 </head>
 <body>
-  <header>Сергей Гуров — моноблок · адресный блок на символьной сетке: 24 колонки, ширина блока — доля экрана, кегль вычисляется из неё · <a href="/">стенды</a></header>
+  <div id="os"></div>
+
+  <header>Сергей Гуров — моноблок · адресный блок на символьной сетке: 24 колонки, ширина блока — доля экрана, кегль вычисляется из неё; сверху — ось элементов во всю ширину · <a href="/">стенды</a></header>
 
   <div id="blok"><div id="setka"></div></div>
 
@@ -96,6 +132,13 @@
 
    Датчик «Символьная сетка» показывает те самые 24 колонки и
    строки: закон объявлен — вот его линии.
+
+   Ось сверху — из макета «for vibe code»: ряд элементов узким
+   гротеском вразрядку. Закон тот же: весь ряд занимает ровно
+   ширину экрана, кегль выводится замером ряда, а не подбором.
+   Diatype Condensed заменён вариативной Прагматикой, сужённой
+   до макетной ширины ряда. Цвет знаков рождается вычитанием
+   из подложки (mix-blend-mode: difference), как в макете.
    ============================================================ */
 
 var COLS = 24; // ширина блока в знаках — задана самой длинной строкой
@@ -113,11 +156,42 @@ var LINES = [
   { c: 'REPEAT' }
 ];
 
+// Ось сверху — по макету «for vibe code» (2822:44076): строка элементов,
+// набранных узким гротеском вразрядку. Массив — элемент оси; вложенный
+// массив — элемент в несколько строк.
+var OS_ITEMS = [
+  'osnova', '®', 'lab.',
+  '1', '1', '1', '1', '1',
+  ['authors design', 'workshop'],
+  '2', '2', '2', '2',
+  '–    00:05:42    –',
+  'sergei gurov',
+  '3', '3', '3',
+  ['oakmoss, green fig', 'charcoal'],
+  ['107–325.67', '/5'],
+  '4', '4',
+  ['mossfield soft', 'volcanic salted', 'wind'],
+  'aewol andelok',
+  '5',
+  ['mossfield soft', 'volcanic salted', 'wind'],
+  ['oakmoss, green fig', 'charcoal'],
+  'aewol andelok',
+  '0', '0', '0'
+];
+
 var DEFAULTS = {
   frac: 25,     // ширина блока, % ширины экрана
   lead: 1.14,   // интерлиньяж, доли кегля
   track: 0,     // трекинг, тысячные кегля
-  grid: 'off'   // датчик: символьная сетка
+  grid: 'off',  // датчик: символьная сетка
+  osFit: 'on',  // ось: вписывать в ширину экрана
+  osSize: 18,   // кегль оси, px — когда ось не вписывается
+  osGap: 1.83,  // промежуток между элементами, доли кегля (33/18 из макета)
+  osTrack: 200, // разрядка, тысячные кегля (3.6/18 из макета)
+  osWdth: 78.5, // ширина знака, % — узкий гротеск вместо Diatype Condensed
+  osWght: 450,  // насыщенность знака оси
+  osPad: 0,     // поля по краям, доли кегля (в макете ось идёт от края до края)
+  osBack: 'dark' // подложка оси
 };
 var P = Object.assign({}, DEFAULTS);
 try {
@@ -125,10 +199,10 @@ try {
   if (saved) Object.assign(P, saved);
 } catch (e) {}
 
-// ?frac=33&lead=1.4&track=60&grid=on — параметры из адреса (удобно для скриншотов)
+// ?frac=33&grid=on&osBack=none — параметры из адреса (удобно для скриншотов)
 new URLSearchParams(location.search).forEach(function (v, k) {
   if (!(k in DEFAULTS)) return;
-  P[k] = (k === 'grid') ? v : parseFloat(v);
+  P[k] = (typeof DEFAULTS[k] === 'number') ? parseFloat(v) : v;
 });
 
 // ── разметка блока ──
@@ -151,6 +225,58 @@ LINES.forEach(function (L) {
   }
   blok.appendChild(ln);
 });
+
+// ── ось: те же элементы, что в макете, в один ряд ──
+var os = document.getElementById('os');
+var header = document.querySelector('header');
+var osEls = OS_ITEMS.map(function (it) {
+  var el = document.createElement('div');
+  el.className = 'el';
+  if (Array.isArray(it)) {
+    it.forEach(function (s) {
+      var d = document.createElement('div');
+      d.textContent = s;
+      el.appendChild(d);
+    });
+  } else {
+    el.textContent = it;
+  }
+  os.appendChild(el);
+  return el;
+});
+
+var OS_LEAD = 20 / 18; // интерлиньяж оси из макета: 20 px на кегле 18
+var OS_BASE = 100;     // кегль замера: чем крупнее, тем меньше ошибка округления
+
+function applyOs() {
+  var track = P.osTrack / 1000;
+  os.style.fontVariationSettings = "'wdth' " + P.osWdth + ", 'wght' " + P.osWght;
+  os.style.letterSpacing = track + 'em';
+  os.style.lineHeight = OS_LEAD;
+  os.style.gap = P.osGap + 'em';
+  // разрядка добавляет пробел и после последнего знака элемента — снимаем,
+  // иначе промежуток между элементами больше макетного
+  osEls.forEach(function (el) { el.style.marginRight = (-track) + 'em'; });
+
+  var fs = P.osSize;
+  if (P.osFit === 'on') {
+    // закон оси: весь ряд плюс поля занимают ровно ширину экрана,
+    // кегль выводится из неё. Ряд в долях кегля — величина постоянная,
+    // её и меряем: fs × (ряд + два поля) = ширина экрана.
+    os.style.padding = '0';
+    os.style.fontSize = OS_BASE + 'px';
+    // край ряда — по знаку, а не по хвосту разрядки после него
+    var span = osEls[osEls.length - 1].getBoundingClientRect().right
+             - osEls[0].getBoundingClientRect().left
+             - track * OS_BASE;
+    fs = window.innerWidth / (span / OS_BASE + 2 * P.osPad);
+  }
+  os.style.fontSize = fs + 'px';
+  os.style.padding = '0 ' + (P.osPad * fs) + 'px';
+
+  document.body.classList.toggle('os-dark', P.osBack === 'dark');
+  header.style.top = os.offsetHeight + 'px';
+}
 
 // ── шаг знака: спрашиваем у самого шрифта, а не помним числом ──
 var advRatio = 0.6; // до замера — обычная моношириная доля кегля
@@ -193,6 +319,15 @@ StendPanel.build({
     ['frac', 'Доля ширины экрана, %', 8, 70, 0.5],
     ['lead', 'Интерлиньяж', 0.85, 2.2, 0.01],
     ['track', 'Трекинг, ‰ кегля', -40, 150, 1],
+    ['h', 'Ось сверху'],
+    ['osFit', 'Вписывать в экран', 'select', [['on', 'весь ряд в ширину'], ['off', 'свой кегль']]],
+    ['osSize', 'Кегль оси, px', 6, 28, 0.5],
+    ['osGap', 'Промежуток, доли кегля', 0.4, 5, 0.01],
+    ['osTrack', 'Разрядка, ‰ кегля', 0, 400, 5],
+    ['osWdth', 'Ширина знака, %', 50, 100, 0.5],
+    ['osWght', 'Насыщенность', 100, 900, 10],
+    ['osPad', 'Поля по краям, доли кегля', 0, 6, 0.1],
+    ['osBack', 'Подложка', 'select', [['dark', 'тёмная — как в макете'], ['none', 'нет — поле стенда']]],
     ['h', 'Датчик'],
     ['grid', 'Символьная сетка', 'select', [['off', 'скрыть'], ['on', 'показать']]]
   ],
@@ -200,6 +335,14 @@ StendPanel.build({
     frac: 'Ширина блока в долях ширины экрана. Кегль пересчитывается за ней: 24 знака всегда занимают ровно эту ширину. В оригинале — четверть экрана.',
     lead: 'Расстояние между строками в долях кегля. 1.14 — как в оригинале.',
     track: 'Разрядка между знаками, тысячные кегля. Колонка становится шире — кегль уменьшается, ширина блока держится.',
+    osFit: 'Весь ряд занимает ровно ширину экрана: кегль оси выводится из неё замером. Со «своим кеглем» ось живёт макетным размером и уходит за правый край.',
+    osSize: 'Кегль оси, когда она не вписывается в экран. В макете — 18 px.',
+    osGap: 'Расстояние между элементами оси в долях кегля. В макете 33 px на кегле 18 — это 1.83.',
+    osTrack: 'Разрядка оси. В макете 3.6 px на кегле 18 — это 200‰.',
+    osWdth: 'Ширина знака вариативной Прагматики. В макете стоит ABC Diatype Condensed; 78.5% подгоняют ряд под макетные 2882 px.',
+    osWght: 'Насыщенность вариативной Прагматики. В макете — Diatype Condensed Medium.',
+    osPad: 'Отступ оси от краёв экрана в долях кегля. В макете ось идёт от края до края — 0; поле отодвигает крайние знаки, кегль пересчитывается.',
+    osBack: 'Цвет знаков рождается вычитанием из подложки: на тёмной выходит макетный сине-серый, на светлом поле стенда — тёплый серо-коричневый.',
     grid: 'Показать 24 колонки и строки, из которых выведен кегль.'
   }
 });
@@ -207,15 +350,18 @@ StendPanel.build({
 // панель пишет прямо в P — сторожим значения и ширину экрана
 var last = '';
 (function tick() {
-  var s = [P.frac, P.lead, P.track, P.grid, window.innerWidth].join('|');
-  if (s !== last) { last = s; apply(); }
+  var s = [P.frac, P.lead, P.track, P.grid,
+           P.osFit, P.osSize, P.osGap, P.osTrack, P.osWdth, P.osWght, P.osPad, P.osBack,
+           window.innerWidth].join('|');
+  if (s !== last) { last = s; apply(); applyOs(); }
   requestAnimationFrame(tick);
 })();
 
 measureAdvance();
 apply();
+applyOs();
 if (document.fonts && document.fonts.ready) {
-  document.fonts.ready.then(function () { measureAdvance(); apply(); });
+  document.fonts.ready.then(function () { measureAdvance(); apply(); applyOs(); });
 }
 </script>
 </body>
