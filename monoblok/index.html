@@ -117,7 +117,7 @@
   <canvas id="osline"></canvas>
   <div id="os"></div>
 
-  <header>Сергей Гуров — моноблок · блок на символьной сетке, вокруг — две петли в одном потоке: слова на внешней, метки на внутренней; обе правятся вершинами в панели · <a href="/">стенды</a></header>
+  <header>Сергей Гуров — моноблок · блок на символьной сетке, вокруг — поток строк на редактируемой оси: фразы набираются в строки, строки едут по петле · <a href="/">стенды</a></header>
 
   <div id="blok"><div id="setka"></div></div>
 
@@ -141,16 +141,16 @@
    Датчик «Символьная сетка» показывает те самые 24 колонки и
    строки: закон объявлен — вот его линии.
 
-   Оси движения (приём «вёрстка по осям», вариант с петлёй):
-   элементы из макета «for vibe code» идут ОДНИМ потоком, где атом —
-   строка, а не объект. Ролей две: поток (слова) едет по своей
-   петле, метки (® и цифры-отбивки) — по своей. Доля пути у них
-   общая, кривая — своя; отсюда сопряжение: метка всегда стоит
-   против своего места в потоке, как бы ни гнули обе петли.
-   По умолчанию обе замкнуты в кольца вокруг блока; та же ось
-   размыкается лентой одной ручкой. Вершины обеих осей таскаются
-   в одном редакторе-холсте с пропорциями экрана, их можно уводить
-   за кромку, добавлять и убирать двойным кликом. «Острота» ведёт от
+   Ось движения (приём «вёрстка по редактируемой оси»):
+   элементы из макета «for vibe code» — фразы-атомы. Атомы
+   набираются в СТРОКИ по заданной ширине (узкая несёт одну фразу,
+   широкая склеивает несколько целиком; фразу набор не рвёт), и по
+   оси едут именно строки. Отсюда строчная структура движения:
+   ширина строки и шаг ритма перестраивают поток на ходу.
+   Ось по умолчанию замкнута в кольцо вокруг блока и размыкается
+   лентой одной ручкой. Вершины таскаются в редакторе-холсте с
+   пропорциями экрана, их можно уводить за кромку, добавлять и
+   убирать двойным кликом. «Острота» ведёт от
    гладкой кривой к ломаной, «ход» сгущает ленту у вершин или
    расталкивает от них. Длина ленты равна длине пути — кольцо
    замыкается без шва; кегль, как и у блока, выводится замером.
@@ -208,15 +208,13 @@ var DEFAULTS = {
   osTrack: 200, // разрядка, тысячные кегля (3.6/18 из макета)
   osWdth: 78.5, // ширина знака, % — узкий гротеск вместо Diatype Condensed
   osWght: 450,  // насыщенность знака оси
-  osAtom: 'line',  // атом потока: строка или элемент целиком
   osShape: 'ring', // ось замкнута в кольцо или разомкнута лентой
   // геометрия оси: вершины в долях экрана; по умолчанию — кольцо вокруг блока
   osPts: [[0.500, 0.130], [0.666, 0.238], [0.735, 0.500], [0.666, 0.762],
           [0.500, 0.870], [0.334, 0.762], [0.265, 0.500], [0.334, 0.238]],
-  // вторая ось — метки (® и цифры-отбивки): своя кривая, тот же поток
-  os2Pts: [[0.500, 0.250], [0.610, 0.320], [0.655, 0.500], [0.610, 0.680],
-           [0.500, 0.750], [0.390, 0.680], [0.345, 0.500], [0.390, 0.320]],
-  os2Shift: 0,  // сдвиг меток поперёк своей оси, доли кегля
+  osLineW: 20,  // ширина строки набора, доли кегля: сколько фраз склеится
+  osRitm: 'width', // ритм потока: шаг по ширине строки или постоянный
+  osStep: 22,   // постоянный шаг строки, доли кегля
   osSharp: 0,   // острота: 0 — гладкая кривая, 1 — ломаная
   osHod: 0,     // ход: −1 спешит от вершин, +1 липнет к ним
   osRot: 1,     // поворот элемента по касательной к оси, доля
@@ -264,43 +262,74 @@ LINES.forEach(function (L) {
 });
 
 /* ── поток оси ────────────────────────────────────────────────────
-   Атом потока — строка, а не объект: многострочный элемент встаёт
-   в поток отдельными строками, каждая своим шагом. Роли две:
-   поток (слова) и метки (одиночные знаки — ® и цифры-отбивки).
-   Обе роли живут в ОДНОМ потоке — доля пути у них общая, а кривая
-   у каждой своя. Это и есть сопряжение двух осей.
+   Атом набора — фраза (строка макета): многострочный элемент
+   входит в поток отдельными строками. Атомы набираются в СТРОКИ
+   по заданной ширине: узкая строка несёт одну фразу, широкая
+   склеивает несколько целиком — фразу набор не рвёт. По оси едут
+   именно строки, поэтому у движения есть строчная структура:
+   крутишь ширину строки — набор перестраивается на ходу.
    ───────────────────────────────────────────────────────────────── */
 var os = document.getElementById('os');
 var header = document.querySelector('header');
-var osEls = [], osRoles = [];
+var osEls = [];
 
-function isMark(t) { return /^[0-9®]{1,2}$/.test(t.trim()); }
+// плоский список фраз-атомов в порядке макета
+var OS_ATOMS = [];
+OS_ITEMS.forEach(function (it) {
+  if (Array.isArray(it)) it.forEach(function (t) { OS_ATOMS.push(t); });
+  else OS_ATOMS.push(it);
+});
 
-function buildEls() {
+// мерка атомов: ширины в долях кегля, чтобы набор не зависел от размера
+var osMeter = document.createElement('div');
+osMeter.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;top:0;left:0';
+os.appendChild(osMeter);
+var osAtomW = [];
+
+function measureAtoms() {
+  osMeter.textContent = '';
+  var spans = OS_ATOMS.map(function (t) {
+    var sp = document.createElement('span');
+    sp.textContent = t;
+    sp.style.cssText = 'display:block;width:max-content';
+    osMeter.appendChild(sp);
+    return sp;
+  });
+  var track = P.osTrack / 1000;
+  osAtomW = spans.map(function (sp) {
+    return sp.getBoundingClientRect().width / OS_BASE - track; // без хвоста разрядки
+  });
+  osMeter.textContent = '';
+}
+
+// набор: атомы склеиваются в строки, пока строка не шире заданного
+function setLines() {
+  var lines = [], cur = [], w = 0;
+  for (var i = 0; i < OS_ATOMS.length; i++) {
+    var aw = osAtomW[i] || 0;
+    var add = cur.length ? P.osGap + aw : aw;
+    if (cur.length && w + add > P.osLineW) { lines.push({ a: cur, w: w }); cur = []; w = 0; add = aw; }
+    cur.push(i); w += add;
+  }
+  if (cur.length) lines.push({ a: cur, w: w });
+
   os.textContent = '';
-  osEls = []; osRoles = [];
-  function add(lines) {
+  os.appendChild(osMeter);
+  osEls = lines.map(function (L) {
     var el = document.createElement('div');
     el.className = 'el';
-    var mark = lines.length === 1 && isMark(lines[0]);
-    if (mark) el.classList.add('mark');
-    lines.forEach(function (t, i) {
-      if (lines.length === 1) { el.textContent = t; return; }
-      var d = document.createElement('div');
-      d.textContent = t;
-      el.appendChild(d);
+    el.style.display = 'flex';
+    el.style.gap = P.osGap + 'em';
+    L.a.forEach(function (i) {
+      var sp = document.createElement('span');
+      sp.textContent = OS_ATOMS[i];
+      el.appendChild(sp);
     });
     os.appendChild(el);
-    osEls.push(el);
-    osRoles.push(mark ? 1 : 0);
-  }
-  OS_ITEMS.forEach(function (it) {
-    if (!Array.isArray(it)) return add([it]);
-    if (P.osAtom === 'line') it.forEach(function (t) { add([t]); }); // строка — атом
-    else add(it);                                                   // элемент целиком
+    return el;
   });
+  return lines;
 }
-buildEls();
 
 var OS_LEAD = 20 / 18; // интерлиньяж оси из макета: 20 px на кегле 18
 var OS_BASE = 100;     // кегль замера: чем крупнее, тем меньше ошибка округления
@@ -315,7 +344,7 @@ var OS_BASE = 100;     // кегль замера: чем крупнее, тем
    ───────────────────────────────────────────────────────────────── */
 
 var osRedrawEditor = null;
-var osPath = null, osPath2 = null; // пути обеих осей, в пикселях
+var osPath = null;   // путь оси в пикселях: { pts, len, nodeU }
 var osL = 0, osSpans = [], osFs = 18, osOff = 0, osTarget = 0;
 
 function osRing() { return P.osShape === 'ring'; }
@@ -355,10 +384,7 @@ function buildPath(PTS) {
   return { pts: pts, len: cum || 1, nodeU: nodeU.map(function (s) { return s / (cum || 1); }) };
 }
 
-function buildPaths() {
-  osPath = buildPath(P.osPts);
-  osPath2 = buildPath(P.os2Pts);
-}
+function buildPath0() { osPath = buildPath(P.osPts); }
 
 // «ход»: где лента идёт плотнее. 0 — ровно, +1 — липнет к вершинам,
 // −1 — спешит от них. Темп меняем внутри каждого пролёта между вершинами.
@@ -389,32 +415,33 @@ function pathAt(path, u) {
   };
 }
 
-// ширины элементов и длина ленты: закон опирается на замер, а не на числа
+// замер атомов → набор строк → ритм потока → кегль из длины пути
 function measureOs() {
   var track = P.osTrack / 1000;
   os.style.fontVariationSettings = "'wdth' " + P.osWdth + ", 'wght' " + P.osWght;
   os.style.letterSpacing = track + 'em';
   os.style.lineHeight = OS_LEAD;
-  osEls.forEach(function (el) { el.style.transform = 'none'; });
 
   os.style.fontSize = OS_BASE + 'px';
-  var w = osEls.map(function (el) {
-    return el.getBoundingClientRect().width / OS_BASE - track; // без хвоста разрядки
-  });
-  var lenEm = w.reduce(function (a, b) { return a + b; }, 0) + w.length * P.osGap;
+  measureAtoms();
+  var lines = setLines();
 
-  buildPaths();
-  // вписывание: лента длиной ровно в путь — кольцо замыкается без шва
+  // ритм: шаг строки постоянный или по её собственной ширине
+  var steps = lines.map(function (L) {
+    return P.osRitm === 'even' ? P.osStep : L.w + P.osGap;
+  });
+  var lenEm = steps.reduce(function (a, b) { return a + b; }, 0);
+
+  buildPath0();
+  // вписывание: поток строк ровно замыкает путь — кегль выводится из него
   osFs = (P.osFit === 'on') ? osPath.len / lenEm : P.osSize;
   os.style.fontSize = osFs + 'px';
 
   osL = lenEm * osFs;
   osSpans = [];
   var s = 0;
-  for (var i = 0; i < w.length; i++) {
-    osSpans.push(s);
-    s += (w[i] + P.osGap) * osFs;
-  }
+  for (var i = 0; i < steps.length; i++) { osSpans.push(s); s += steps[i] * osFs; }
+
   document.body.classList.toggle('os-plate', P.osPlate === 'on');
   document.body.classList.toggle('os-line', P.osLine === 'on');
   drawOsLine();
@@ -431,15 +458,12 @@ function drawOsLine() {
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.clearRect(0, 0, W, H);
   if (!osPath) return;
-  [[osPath, P.osPts, 'rgba(180,60,40,.5)'], [osPath2, P.os2Pts, 'rgba(40,90,180,.45)']]
-  .forEach(function (a) {
-    g.strokeStyle = a[2]; g.fillStyle = a[2]; g.lineWidth = 1;
-    g.beginPath();
-    a[0].pts.forEach(function (p, i) { i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y); });
-    g.stroke();
-    a[1].forEach(function (p) {
-      g.beginPath(); g.arc(p[0] * W, p[1] * H, 3, 0, 6.2832); g.fill();
-    });
+  g.strokeStyle = 'rgba(180,60,40,.5)'; g.fillStyle = 'rgba(180,60,40,.5)'; g.lineWidth = 1;
+  g.beginPath();
+  osPath.pts.forEach(function (p, i) { i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y); });
+  g.stroke();
+  P.osPts.forEach(function (p) {
+    g.beginPath(); g.arc(p[0] * W, p[1] * H, 3, 0, 6.2832); g.fill();
   });
 }
 
@@ -456,10 +480,8 @@ function frameOs(dt) {
     var el = osEls[i];
     if (u > 1) { el.style.visibility = 'hidden'; continue; } // лента длиннее пути
     el.style.visibility = '';
-    // доля потока общая, а кривая — своя у каждой роли: так оси сопрягаются
-    var mark = osRoles[i] === 1;
-    var p = pathAt(mark ? osPath2 : osPath, osWarp(u));
-    var off = (mark ? P.os2Shift : P.osShift) * osFs; // поперёк оси, по нормали
+    var p = pathAt(osPath, osWarp(u));
+    var off = P.osShift * osFs; // поперёк оси, по нормали
     var x = p.x - Math.sin(p.ang) * off, y = p.y + Math.cos(p.ang) * off;
     el.style.transform = 'translate(' + x + 'px,' + y + 'px) rotate(' + (p.ang * P.osRot) + 'rad)';
   }
@@ -524,6 +546,7 @@ var ui = StendPanel.build({
     ['h', 'Ось сверху'],
     ['osFit', 'Вписывать в экран', 'select', [['on', 'весь ряд в ширину'], ['off', 'свой кегль']]],
     ['osSize', 'Кегль оси, px', 6, 28, 0.5],
+    ['osLineW', 'Ширина строки, кегли', 3, 60, 0.5],
     ['osGap', 'Промежуток, доли кегля', 0.4, 5, 0.01],
     ['osTrack', 'Разрядка, ‰ кегля', 0, 400, 5],
     ['osWdth', 'Ширина знака, %', 50, 100, 0.5],
@@ -531,12 +554,12 @@ var ui = StendPanel.build({
     ['osPlate', 'Плашка под элементом', 'select', [['off', 'нет'], ['on', 'тёмная — как в макете']]],
     ['h', 'Движение по оси'],
     ['osShape', 'Форма оси', 'select', [['ring', 'кольцо — замкнута'], ['line', 'лента — разомкнута']]],
-    ['osAtom', 'Атом потока', 'select', [['line', 'строка'], ['item', 'элемент целиком']]],
     ['osSharp', 'Острота оси', 0, 1, 0.01],
     ['osHod', 'Ход', -1, 1, 0.01],
     ['osRot', 'Поворот по касательной', 0, 1, 0.01],
     ['osShift', 'Сдвиг поперёк оси', -4, 4, 0.05],
-    ['os2Shift', 'Сдвиг меток поперёк', -4, 4, 0.05],
+    ['osRitm', 'Ритм потока', 'select', [['width', 'шаг по ширине строки'], ['even', 'постоянный шаг']]],
+    ['osStep', 'Шаг строки, доли кегля', 3, 60, 0.5],
     ['osSpeed', 'Самоход, px/с', -200, 200, 1],
     ['osEase', 'Мягкость погони', 0, 97, 1],
     ['h', 'Датчик'],
@@ -558,8 +581,9 @@ var ui = StendPanel.build({
     osSharp: 'Ноль — ось идёт гладкой кривой через вершины, единица — ломаной с углами на вершинах.',
     osHod: 'Как лента распределяется вдоль оси. Ноль — ровно; вправо — элементы липнут к вершинам и разрежаются между ними; влево — наоборот, спешат от вершин.',
     osRot: 'Насколько элемент доворачивается по касательной к оси. Ноль — все стоят горизонтально, единица — ложатся вдоль кривой.',
-    osAtom: 'Что считается единицей потока. «Строка» — многострочный элемент встаёт в поток отдельными строками, каждая своим шагом (так текст сопрягается со второй осью построчно). «Элемент целиком» — блок едет одним куском.',
-    os2Shift: 'То же для меток — ® и цифр-отбивок, которые едут по второй оси.',
+    osLineW: 'Ширина строки набора в кеглях. Узкая строка несёт одну фразу, широкая склеивает несколько целиком — фразу набор не рвёт. Крутишь ширину — поток пересобирается на ходу.',
+    osRitm: 'Как строки стоят в потоке. «По ширине» — каждая занимает столько, сколько набрала. «Постоянный шаг» — все строки идут через равный интервал, как интерлиньяж, независимо от длины.',
+    osStep: 'Величина постоянного шага в долях кегля. Работает, когда ритм постоянный.',
     osShift: 'Насколько элементы отодвинуты от самой оси по нормали: минус уводит наружу кольца, плюс — внутрь. Считается в долях кегля, поэтому держится при смене размера.',
     osSpeed: 'Постоянный ход ленты. Ноль — ось стоит и живёт только от скролла.',
     osEase: 'Инерция погони: лента догоняет цель скролла мягко. Ноль — мгновенно, к 97 — тягуче.',
@@ -595,7 +619,7 @@ var ui = StendPanel.build({
   function iy(py) { return EY0 + py / cv.height * (EY1 - EY0); }
 
   function redraw() {
-    if (!osPath) buildPaths(); // редактор может открыться раньше первого замера
+    if (!osPath) buildPath0(); // редактор может открыться раньше первого замера
     var w = cv.clientWidth || 240;
     var ratio = window.innerHeight / window.innerWidth;
     var h = w * ratio * ((EY1 - EY0) / (EX1 - EX0));
@@ -616,74 +640,66 @@ var ui = StendPanel.build({
     g.fillStyle = 'rgba(127,127,127,.16)';
     g.fillRect(EX(0), EY(0), EX(1) - EX(0), EY(1) - EY(0));
 
-    // обе оси на одном холсте: рыжая — поток, синяя — метки
+    // тот же путь, что и на экране, только в долях
     var sw = window.innerWidth, sh = window.innerHeight;
-    [[osPath, P.osPts, '#e0603c'], [osPath2, P.os2Pts, '#3a68b8']].forEach(function (a) {
-      g.strokeStyle = a[2];
-      g.lineWidth = 1.5;
-      g.beginPath();
-      a[0].pts.forEach(function (p, i) {
-        var x = EX(p.x / sw), y = EY(p.y / sh);
-        i ? g.lineTo(x, y) : g.moveTo(x, y);
-      });
-      if (osRing()) g.closePath();
-      g.stroke();
-      a[1].forEach(function (p, i) {
-        g.beginPath(); g.arc(EX(p[0]), EY(p[1]), 4.5, 0, 6.2832);
-        // у разомкнутой ленты крайние вершины — вход и выход
-        g.fillStyle = (!osRing() && (i === 0 || i === a[1].length - 1)) ? a[2] : '#fff';
-        g.fill();
-        g.lineWidth = 1.5; g.strokeStyle = a[2]; g.stroke();
-      });
+    g.strokeStyle = '#e0603c';
+    g.lineWidth = 1.5;
+    g.beginPath();
+    osPath.pts.forEach(function (p, i) {
+      var x = EX(p.x / sw), y = EY(p.y / sh);
+      i ? g.lineTo(x, y) : g.moveTo(x, y);
+    });
+    if (osRing()) g.closePath();
+    g.stroke();
+    P.osPts.forEach(function (p, i) {
+      g.beginPath(); g.arc(EX(p[0]), EY(p[1]), 4.5, 0, 6.2832);
+      // у разомкнутой ленты крайние вершины — вход и выход
+      g.fillStyle = (!osRing() && (i === 0 || i === P.osPts.length - 1)) ? '#e0603c' : '#fff';
+      g.fill();
+      g.lineWidth = 1.5; g.strokeStyle = '#e0603c'; g.stroke();
     });
   }
 
-  var drag = -1, dragAx = null;
+  var drag = -1;
   function pick(e) {
     var r = cv.getBoundingClientRect();
     var x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
     return [EX0 + x * (EX1 - EX0), EY0 + y * (EY1 - EY0)];
   }
   function nearest(pt) {
-    var best = -1, bd = 0.05, ax = null;
-    [P.osPts, P.os2Pts].forEach(function (arr) {
-      arr.forEach(function (p, i) {
-        var d = Math.hypot(p[0] - pt[0], p[1] - pt[1]);
-        if (d < bd) { bd = d; best = i; ax = arr; }
-      });
+    var best = -1, bd = 0.05;
+    P.osPts.forEach(function (p, i) {
+      var d = Math.hypot(p[0] - pt[0], p[1] - pt[1]);
+      if (d < bd) { bd = d; best = i; }
     });
-    return { i: best, ax: ax };
+    return best;
   }
   cv.addEventListener('pointerdown', function (e) {
-    var hit = nearest(pick(e));
-    drag = hit.i; dragAx = hit.ax;
+    drag = nearest(pick(e));
     if (drag >= 0) { cv.setPointerCapture(e.pointerId); e.preventDefault(); }
   });
   cv.addEventListener('pointermove', function (e) {
     if (drag < 0) return;
     var pt = pick(e);
-    dragAx[drag] = [Math.max(EX0, Math.min(EX1, pt[0])), Math.max(EY0, Math.min(EY1, pt[1]))];
+    P.osPts[drag] = [Math.max(EX0, Math.min(EX1, pt[0])), Math.max(EY0, Math.min(EY1, pt[1]))];
     ui.save(); measureOs(); redraw();
   });
-  cv.addEventListener('pointerup', function () { drag = -1; dragAx = null; });
+  cv.addEventListener('pointerup', function () { drag = -1; });
   cv.addEventListener('dblclick', function (e) {
-    var pt = pick(e), hit = nearest(pt);
-    if (hit.i >= 0 && hit.ax.length > 3) {
-      hit.ax.splice(hit.i, 1);          // двойной по вершине — убрать
-    } else if (hit.i < 0) {
-      // новая вершина встаёт в ближайший пролёт ближайшей оси
-      var W = window.innerWidth, H = window.innerHeight;
-      var bd = 1e9, bestAx = P.osPts, bestK = 0;
-      [P.osPts, P.os2Pts].forEach(function (arr) {
-        var n = arr.length, lim = osRing() ? n : n - 1;
-        for (var k = 0; k < lim; k++) {
-          var a = arr[k], b = arr[(k + 1) % n];
-          var mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
-          var d = Math.hypot((mx - pt[0]) * W, (my - pt[1]) * H);
-          if (d < bd) { bd = d; bestAx = arr; bestK = k; }
-        }
-      });
-      bestAx.splice(bestK + 1, 0, [pt[0], pt[1]]);
+    var pt = pick(e), i = nearest(pt);
+    if (i >= 0 && P.osPts.length > 3) {
+      P.osPts.splice(i, 1);             // двойной по вершине — убрать
+    } else if (i < 0) {
+      // новая вершина встаёт в тот пролёт, к которому ближе указатель
+      var W = window.innerWidth, H = window.innerHeight, bd = 1e9, bestK = 0;
+      var n = P.osPts.length, lim = osRing() ? n : n - 1;
+      for (var k = 0; k < lim; k++) {
+        var a = P.osPts[k], b = P.osPts[(k + 1) % n];
+        var mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+        var d = Math.hypot((mx - pt[0]) * W, (my - pt[1]) * H);
+        if (d < bd) { bd = d; bestK = k; }
+      }
+      P.osPts.splice(bestK + 1, 0, [pt[0], pt[1]]);
     }
     ui.save(); measureOs(); redraw();
   });
@@ -694,18 +710,17 @@ var ui = StendPanel.build({
 })();
 
 // панель пишет прямо в P — сторожим значения, лента едет каждый кадр
-var last = '', prevT = 0, atomWas = P.osAtom;
+var last = '', prevT = 0;
 (function tick(now) {
   var dt = prevT ? Math.min(0.05, (now - prevT) / 1000) : 0;
   prevT = now || 0;
   var s = [P.frac, P.lead, P.track, P.grid,
            P.osFit, P.osSize, P.osGap, P.osTrack, P.osWdth, P.osWght,
-           P.osShape, P.osAtom, P.osSharp, P.osPlate, P.osLine,
-           JSON.stringify(P.osPts), JSON.stringify(P.os2Pts),
+           P.osShape, P.osLineW, P.osRitm, P.osStep, P.osSharp, P.osPlate, P.osLine,
+           JSON.stringify(P.osPts),
            window.innerWidth, window.innerHeight].join('|');
   if (s !== last) {
     last = s;
-    if (P.osAtom !== atomWas) { atomWas = P.osAtom; buildEls(); }
     apply(); measureOs();
     if (osRedrawEditor) osRedrawEditor();
   }
