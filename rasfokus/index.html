@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Расфокус</title>
+<link rel="stylesheet" href="/panel.css" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: #e7ecf6;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 15px;
+    overflow: hidden;
+    overscroll-behavior: none;
+    cursor: grab;
+  }
+  body.drag { cursor: grabbing; }
+  canvas#scene {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    display: block;
+  }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<script src="/panel.js"></script>
+<script>
+/* ─────────────────────────────────────────────────────────────────
+   Расфокус — строка мутнеет, опускаясь по экрану.
+
+   На референсе (постер KCC UK × Germany Open Call 2021) размытия нет:
+   у букв растёт ОБВОДКА. Сверху экрана обводки нет вовсе, ниже она
+   толстеет, и буквы сначала жирнеют, потом слипаются в одну кляксу.
+   Толщина берётся не из номера строки, а из её положения на экране:
+   при скролле одна и та же строка проясняется, пока поднимается вверх.
+
+   Текст зациклен: конец переходит в начало, скролл бесконечный.
+   ───────────────────────────────────────────────────────────────── */
+
+var TEXT = 'Around 1940 Max Bill first applied a modular grid to book layout, ' +
+  'earning the well-deserved title of “father of the grid.” In the second ' +
+  'half of the twentieth century Josef Müller-Brockmann took the grid approach ' +
+  'to a religious strictness: a grid of 8 modular cells, then 20, then 32. ' +
+  'For him the module was “an expression of the will to order and clarity, ' +
+  'of objectivity instead of subjectivity.” But inside the new religion lived ' +
+  'a curious paradox: the more detailed the grid, the more freedom it gave the ' +
+  'designer. And still every layout was assembled and approved by a human — ' +
+  'so the demands on the designer’s professionalism and competence kept growing.';
+
+var PALETTES = {
+  blue:  { bg: '#e7ecf6', ink: '#1b2db3' },  // цвета постера
+  black: { bg: '#ffffff', ink: '#111111' },
+  night: { bg: '#101014', ink: '#f0f0f2' },
+};
+
+var DEFAULTS = {
+  /* текст */
+  size: 4.4,        // кегль, % ширины экрана
+  lead: 96,         // интерлиньяж, % кегля
+  band: 76,         // ширина полосы, % ширины экрана
+  track: 0,         // трекинг, % кегля
+  weight: 700,
+  /* расфокус */
+  maxStroke: 28,    // максимальный прирост обводки на сторону, % кегля
+  clean: 24,        // чистая зона сверху, % высоты экрана
+  full: 100,        // полный расфокус достигнут на, % высоты экрана
+  growEase: 'разгон',
+  growBez: [0.32, 0, 0.67, 0],
+  /* ход */
+  auto: 0,          // автоход, строк/с
+  wheel: 100,       // чувствительность колеса, %
+  lag: 55,          // инерция, %
+  /* вид */
+  palette: 'blue',
+};
+var P = Object.assign({}, DEFAULTS);
+P.growBez = DEFAULTS.growBez.slice();
+try {
+  var saved = JSON.parse(localStorage.getItem('rasfokus-params') || '{}');
+  Object.keys(saved).forEach(function (k) { if (k in P) P[k] = saved[k]; });
+} catch (e) {}
+
+var EASES = {
+  'линейный': function (t) { return t; },
+  'разгон': function (t) { return t * t * t; },
+  'торможение': function (t) { return 1 - Math.pow(1 - t, 3); },
+  'плавный': function (t) { return t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; },
+  'квадрат': function (t) { return t * t; },
+};
+var BEZ_APPROX = {
+  'линейный': [0.25, 0.25, 0.75, 0.75],
+  'разгон': [0.32, 0, 0.67, 0],
+  'торможение': [0.33, 1, 0.68, 1],
+  'плавный': [0.65, 0, 0.35, 1],
+  'квадрат': [0.45, 0, 0.75, 0.3],
+};
+function cubicBezierY(b, t) {
+  var x1 = b[0], y1 = b[1], x2 = b[2], y2 = b[3];
+  var s = t;
+  for (var i = 0; i < 8; i++) {
+    var x = 3 * (1 - s) * (1 - s) * s * x1 + 3 * (1 - s) * s * s * x2 + s * s * s;
+    var dx = 3 * (1 - s) * (1 - s) * x1 + 6 * (1 - s) * s * (x2 - x1) + 3 * s * s * (1 - x2);
+    if (Math.abs(dx) < 1e-6) break;
+    s -= (x - t) / dx;
+    if (s < 0) s = 0; if (s > 1) s = 1;
+  }
+  return 3 * (1 - s) * (1 - s) * s * y1 + 3 * (1 - s) * s * s * y2 + s * s * s;
+}
+function evalEase(name, bez, t) {
+  if (t <= 0) return 0; if (t >= 1) return 1;
+  if (name === 'bezier') return cubicBezierY(bez, t);
+  return (EASES[name] || EASES['разгон'])(t);
+}
+
+StendPanel.build({
+  storageKey: 'rasfokus-params',
+  params: P,
+  defaults: DEFAULTS,
+  eases: EASES,
+  evalEase: evalEase,
+  bezApprox: BEZ_APPROX,
+  defs: [
+    ['h', 'Текст'],
+    ['size', 'Кегль, % ширины', 1.5, 10, 0.1],
+    ['lead', 'Интерлиньяж, % кегля', 60, 180, 1],
+    ['band', 'Ширина полосы, %', 30, 100, 1],
+    ['track', 'Трекинг, % кегля', -4, 20, 0.5],
+    ['weight', 'Насыщенность', 400, 700, 300],
+    ['h', 'Расфокус'],
+    ['maxStroke', 'Обводка внизу, % кегля', 0, 60, 1],
+    ['clean', 'Чистая зона сверху, %', 0, 70, 1],
+    ['full', 'Максимум на высоте, %', 30, 100, 1],
+    ['growEase', 'Кривая роста', 'ease'],
+    ['h', 'Ход'],
+    ['auto', 'Автоход, строк/с', 0, 4, 0.1],
+    ['wheel', 'Колесо, %', 20, 300, 5],
+    ['lag', 'Инерция, %', 0, 95, 1],
+    ['h', 'Вид'],
+    ['palette', 'Палитра', 'select', [
+      ['blue', 'Синий на светлом'],
+      ['black', 'Чёрный на белом'],
+      ['night', 'Ночь'],
+    ]],
+  ],
+  desc: {
+    size: 'Кегль считается от ширины экрана, поэтому картинка одинаковая на любом мониторе.',
+    lead: 'Расстояние между строками в долях кегля. Меньше 100 — строки заходят друг на друга, внизу каша смыкается в сплошное поле, как на постере.',
+    band: 'Ширина полосы набора: по ней ломается текст. Кегль постоянный, край рваный — выключка по центру.',
+    track: 'Разрядка букв. Плотный набор быстрее слипается в кляксу при той же обводке.',
+    weight: 'Times даёт два настоящих начертания: 400 и 700. Жирное слипается раньше.',
+    maxStroke: 'Толщина обводки в самой мутной точке — прирост на сторону в долях кегля. 0 — эффекта нет, 30 и выше — буквы внизу срастаются.',
+    clean: 'Верхняя полоса экрана, где обводки нет совсем. Строка, попавшая сюда, читается как обычный набор.',
+    full: 'На какой высоте экрана обводка выходит на максимум. Меньше 100 — низ экрана целиком в максимальной каше.',
+    growEase: 'Как обводка растёт от чистой зоны вниз. «Разгон» держит текст читаемым дольше и валит его резко у самого низа; «линейный» размазывает переход по всему экрану.',
+    auto: 'Лента едет сама, без колеса — удобно для записи видео. 0 — стоит.',
+    wheel: 'Насколько сильно колесо толкает ленту.',
+    lag: 'Насколько лениво лента догоняет колесо. 0 — встаёт мгновенно.',
+    palette: 'Синий на светлом — цвета референса.',
+  },
+});
+
+/* ── холст ── */
+var cv = document.getElementById('scene');
+var ctx = cv.getContext('2d');
+var W = 0, H = 0, dpr = 1;
+
+function fontStr(size) {
+  return P.weight + ' ' + size.toFixed(2) + 'px "Times New Roman", Times, "Liberation Serif", serif';
+}
+
+/* ── разбивка текста на строки: постоянный кегль, перенос по полосе ── */
+var lines = [];
+var lineH = 0, size = 0;
+var layoutKey = '';
+
+function layout() {
+  size = P.size / 100 * W;
+  lineH = size * P.lead / 100;
+  var band = P.band / 100 * W;
+  ctx.font = fontStr(size);
+  if ('letterSpacing' in ctx) ctx.letterSpacing = (P.track / 100 * size).toFixed(2) + 'px';
+
+  var words = TEXT.split(' ');
+  lines = [];
+  var cur = '';
+  for (var i = 0; i < words.length; i++) {
+    var probe = cur ? cur + ' ' + words[i] : words[i];
+    if (cur && ctx.measureText(probe).width > band) {
+      lines.push(cur);
+      cur = words[i];
+    } else {
+      cur = probe;
+    }
+  }
+  if (cur) lines.push(cur);
+}
+
+function resize() {
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  layout();
+  need = true;
+}
+window.addEventListener('resize', resize);
+
+/* ── ход ленты: колесо, перетаскивание, клавиши, автоход ── */
+var off = 0;      // где лента стоит сейчас
+var target = 0;   // куда её толкнули
+var need = true;
+
+window.addEventListener('wheel', function (e) {
+  if (e.target.closest && e.target.closest('.st-panel')) return;
+  e.preventDefault();
+  target += e.deltaY * P.wheel / 100;
+}, { passive: false });
+
+var dragY = null;
+window.addEventListener('pointerdown', function (e) {
+  if (e.target.closest && (e.target.closest('.st-panel') || e.target.closest('.st-gear'))) return;
+  dragY = e.clientY; document.body.classList.add('drag');
+});
+window.addEventListener('pointermove', function (e) {
+  if (dragY === null) return;
+  target += dragY - e.clientY;
+  dragY = e.clientY;
+});
+window.addEventListener('pointerup', function () { dragY = null; document.body.classList.remove('drag'); });
+window.addEventListener('pointercancel', function () { dragY = null; document.body.classList.remove('drag'); });
+
+window.addEventListener('keydown', function (e) {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  if (e.key === 'ArrowDown' || e.key === ' ') { target += lineH; e.preventDefault(); }
+  else if (e.key === 'ArrowUp') { target -= lineH; e.preventDefault(); }
+  else if (e.key === 'PageDown') { target += H * 0.8; e.preventDefault(); }
+  else if (e.key === 'PageUp') { target -= H * 0.8; e.preventDefault(); }
+});
+
+/* ── кадр ── */
+function draw() {
+  var pal = PALETTES[P.palette] || PALETTES.blue;
+  document.body.style.background = pal.bg;
+  ctx.fillStyle = pal.bg;
+  ctx.fillRect(0, 0, W, H);
+
+  if (!lines.length) return;
+  ctx.font = fontStr(size);
+  if ('letterSpacing' in ctx) ctx.letterSpacing = (P.track / 100 * size).toFixed(2) + 'px';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.miterLimit = 2;
+  ctx.fillStyle = pal.ink;
+  ctx.strokeStyle = pal.ink;
+
+  var n = lines.length;
+  var total = n * lineH;
+  var o = ((off % total) + total) % total;   // петля: конец переходит в начало
+  var cleanY = P.clean / 100 * H;            // выше этой линии обводки нет
+  var fullY = Math.max(cleanY + 1, P.full / 100 * H);
+  var maxW = P.maxStroke / 100 * size;
+  var cx = W / 2;
+
+  var first = Math.floor(o / lineH) - 1;
+  for (var k = first; ; k++) {
+    var top = k * lineH - o;
+    if (top > H) break;
+    if (top + lineH < -maxW * 2) continue;
+    var idx = ((k % n) + n) % n;
+    var mid = top + lineH / 2;
+
+    // положение строки на экране → толщина обводки
+    var t = (mid - cleanY) / (fullY - cleanY);
+    t = t < 0 ? 0 : (t > 1 ? 1 : t);
+    var w = evalEase(P.growEase, P.growBez, t) * maxW;
+
+    var base = top + (lineH + size * 0.66) / 2;   // оптический центр по капители
+    if (w > 0.05) {
+      ctx.lineWidth = w * 2;                      // обводка идёт на обе стороны контура
+      ctx.strokeText(lines[idx], cx, base);
+    }
+    ctx.fillText(lines[idx], cx, base);
+  }
+}
+
+var last = 0;
+function frame(ts) {
+  var dt = last ? Math.min((ts - last) / 1000, 0.05) : 0;
+  last = ts;
+
+  // параметры набора поменялись — пересобрать строки
+  var key = [P.size, P.lead, P.band, P.track, P.weight].join('|');
+  if (key !== layoutKey) { layoutKey = key; layout(); need = true; }
+
+  if (P.auto > 0) { target += P.auto * lineH * dt; need = true; }
+  if (Math.abs(target - off) > 0.01) {
+    var smooth = Math.pow(P.lag / 100, dt * 60);
+    off = target + (off - target) * smooth;
+    need = true;
+  } else {
+    off = target;
+  }
+
+  if (need) { draw(); need = false; }
+  requestAnimationFrame(frame);
+}
+
+/* Times должен быть готов до замеров ширины строк */
+function start() {
+  resize();
+  // ?line=N — с какой строки стоит лента (для снимков и ссылок на кадр).
+  // По умолчанию вход с первой строки: лента бесконечная, «пустого начала»
+  // у неё нет, поэтому просто ставим её так, чтобы верхняя строка была целой.
+  var m = location.search.match(/[?&]line=(-?\d+(?:\.\d+)?)/);
+  off = target = m ? parseFloat(m[1]) * lineH : -size * 0.13;
+  requestAnimationFrame(frame);
+}
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(start); else start();
+
+// перерисовать после правки любой ручки панели
+document.addEventListener('input', function () { need = true; }, true);
+document.addEventListener('pointerup', function () { need = true; }, true);
+</script>
+</body>
+</html>
