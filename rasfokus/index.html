@@ -6,6 +6,22 @@
 <title>Расфокус</title>
 <link rel="stylesheet" href="/panel.css" />
 <style>
+  @font-face { font-family: "Editorial New"; font-weight: 100; font-style: normal;
+    src: url("/fonts/EditorialNew-Ultralight.woff") format("woff"); font-display: swap; }
+  @font-face { font-family: "Editorial New"; font-weight: 200; font-style: normal;
+    src: url("/fonts/EditorialNew-Thin.woff") format("woff"); font-display: swap; }
+  @font-face { font-family: "Editorial New"; font-weight: 300; font-style: normal;
+    src: url("/fonts/EditorialNew-Light.woff") format("woff"); font-display: swap; }
+  @font-face { font-family: "Editorial New"; font-weight: 400; font-style: normal;
+    src: url("/fonts/EditorialNew-Regular.woff") format("woff"); font-display: swap; }
+  @font-face { font-family: "Editorial New"; font-weight: 500; font-style: normal;
+    src: url("/fonts/EditorialNew-Medium.woff") format("woff"); font-display: swap; }
+  @font-face { font-family: "Editorial New"; font-weight: 700; font-style: normal;
+    src: url("/fonts/EditorialNew-Bold.woff") format("woff"); font-display: swap; }
+  @font-face { font-family: "Editorial New"; font-weight: 800; font-style: normal;
+    src: url("/fonts/EditorialNew-Ultrabold.woff") format("woff"); font-display: swap; }
+  @font-face { font-family: "Editorial New"; font-weight: 900; font-style: normal;
+    src: url("/fonts/EditorialNew-Heavy.woff") format("woff"); font-display: swap; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { height: 100%; }
   body {
@@ -59,6 +75,7 @@ var DEFAULTS = {
   band: 76,         // ширина полосы, % ширины экрана
   track: 0,         // трекинг, % кегля
   weight: 700,
+  face: 'editorial',
   /* расфокус */
   maxStroke: 28,    // максимальный прирост обводки на сторону, % кегля
   clean: 24,        // чистая зона сверху, % высоты экрана
@@ -125,11 +142,15 @@ var PANEL = StendPanel.build({
   bezApprox: BEZ_APPROX,
   defs: [
     ['h', 'Набор'],
+    ['face', 'Гарнитура', 'select', [
+      ['editorial', 'Editorial New'],
+      ['times', 'Times New Roman'],
+    ]],
     ['size', 'Кегль, % ширины', 1.5, 12, 0.1],
     ['lead', 'Интерлиньяж, % кегля', 60, 180, 1],
     ['band', 'Ширина колонки, %', 20, 100, 1],
     ['track', 'Трекинг, % кегля', -4, 20, 0.5],
-    ['weight', 'Насыщенность', 400, 700, 300],
+    ['weight', 'Насыщенность', 100, 900, 100],
     ['h', 'Эффект'],
     ['clean', 'Линия чёткости, % высоты', 0, 100, 1],
     ['maxStroke', 'Толщина обводки, % кегля', 0, 60, 1],
@@ -154,7 +175,8 @@ var PANEL = StendPanel.build({
     lead: 'Расстояние между строками в долях кегля. Меньше 100 — строки заходят друг на друга, внизу каша смыкается в сплошное поле, как на постере.',
     band: 'Ширина колонки в процентах от ширины экрана: по ней ломается текст. Кегль постоянный, край рваный — выключка по центру.',
     track: 'Разрядка букв. Плотный набор быстрее слипается в кляксу при той же обводке.',
-    weight: 'Times даёт два настоящих начертания: 400 и 700. Жирное слипается раньше.',
+    face: 'Editorial New — контрастная антиква: тонкие соединительные штрихи съедаются обводкой раньше толстых, буква тает неравномерно. Times ровнее по контрасту и держится дольше.',
+    weight: 'Восемь настоящих начертаний Editorial New — от ультратонкого до Heavy. Жирное слипается в кляксу раньше. У Times настоящих только два: 400 и 700.',
     clean: 'Горизонт эффекта: линия на экране, где обводка равна нулю. 0 — у самого верха, 100 — у самого низа. Всё, что выше линии, набрано чисто; ниже — обводка растёт. Пока крутите ручку, линия видна на экране.',
     maxStroke: 'Сила эффекта: толщина обводки в максимуме — прирост на сторону в долях кегля. 0 — эффекта нет, 30 и выше — буквы внизу срастаются в кляксу.',
     full: 'Вторая линия: где обводка выходит на свой максимум. Между двумя линиями эффект и разгоняется. Меньше 100 — низ экрана целиком в максимальной каше.',
@@ -176,14 +198,32 @@ var cv = document.getElementById('scene');
 var ctx = cv.getContext('2d');
 var W = 0, H = 0, dpr = 1;
 
+var FACES = {
+  editorial: '"Editorial New", "Times New Roman", Times, serif',
+  times: '"Times New Roman", Times, "Liberation Serif", serif',
+};
 function fontStr(size) {
-  return P.weight + ' ' + size.toFixed(2) + 'px "Times New Roman", Times, "Liberation Serif", serif';
+  return P.weight + ' ' + size.toFixed(2) + 'px ' + (FACES[P.face] || FACES.editorial);
 }
 
 /* ── разбивка текста на строки: постоянный кегль, перенос по полосе ── */
 var lines = [];
-var lineH = 0, size = 0;
+var lineH = 0, size = 0, capRatio = 0.7;
 var layoutKey = '';
+var asked = {};   // какие начертания уже заказаны у браузера
+
+/* Шрифт, который живёт только в canvas, браузер сам не грузит:
+   пока не попросишь через document.fonts.load, меряется фолбэк. */
+function ensureFont() {
+  if (!document.fonts || P.face !== 'editorial') return;
+  var key = P.weight;
+  if (asked[key]) return;
+  asked[key] = true;
+  document.fonts.load(key + ' 40px "Editorial New"').then(function () {
+    // приехало настоящее начертание — пересобрать строки по его метрикам
+    layoutKey = ''; layout(); need = true; draw();
+  });
+}
 
 function layout() {
   size = P.size / 100 * W;
@@ -191,6 +231,9 @@ function layout() {
   var band = P.band / 100 * W;
   ctx.font = fontStr(size);
   if ('letterSpacing' in ctx) ctx.letterSpacing = (P.track / 100 * size).toFixed(2) + 'px';
+
+  var cap = ctx.measureText('H');
+  if (cap.actualBoundingBoxAscent) capRatio = cap.actualBoundingBoxAscent / size;
 
   var words = TEXT.split(' ');
   lines = [];
@@ -291,7 +334,7 @@ function draw() {
     t = t < 0 ? 0 : (t > 1 ? 1 : t);
     var w = evalEase(P.growEase, P.growBez, t) * maxW;
 
-    var base = top + (lineH + size * 0.66) / 2;   // оптический центр по капители
+    var base = top + (lineH + size * capRatio) / 2;   // оптический центр по капители
     if (w > 0.05) {
       ctx.lineWidth = w * 2;                      // обводка идёт на обе стороны контура
       ctx.strokeText(lines[idx], cx, base);
@@ -327,8 +370,8 @@ function frame(ts) {
   last = ts;
 
   // параметры набора поменялись — пересобрать строки
-  var key = [P.size, P.lead, P.band, P.track, P.weight].join('|');
-  if (key !== layoutKey) { layoutKey = key; layout(); need = true; }
+  var key = [P.face, P.size, P.lead, P.band, P.track, P.weight].join('|');
+  if (key !== layoutKey) { layoutKey = key; ensureFont(); layout(); need = true; }
 
   // ручки горизонта тронули — зажечь датчик на полторы секунды
   if (P.clean !== seenClean || P.full !== seenFull) {
@@ -359,6 +402,7 @@ function start() {
   // По умолчанию вход с первой строки: лента бесконечная, «пустого начала»
   // у неё нет, поэтому просто ставим её так, чтобы верхняя строка была целой.
   var m = location.search.match(/[?&]line=(-?\d+(?:\.\d+)?)/);
+  ensureFont();
   off = target = m ? parseFloat(m[1]) * lineH : -size * 0.13;
   requestAnimationFrame(frame);
 }
