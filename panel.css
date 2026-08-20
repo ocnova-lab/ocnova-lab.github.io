@@ -207,3 +207,23 @@
 .st-panel .card[hidden], .st-panel canvas.curve[hidden] { display: none; }
 .st-panel label.st-fold { text-decoration: underline dotted rgba(255,255,255,.3); text-underline-offset: 3px; }
 .st-panel .val-edit { width: 76px; background: transparent; border: 1px solid var(--st-accent, #0A84FF); border-radius: 6px; color: inherit; font: inherit; text-align: right; padding: 2px 6px; outline: none; }
+
+/* цветовая ручка: квадрат-пипетка в правой колонке строки */
+.st-panel input[type="color"].st-color {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 44px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  cursor: pointer;
+}
+.st-panel input[type="color"].st-color::-webkit-color-swatch-wrapper { padding: 0; }
+.st-panel input[type="color"].st-color::-webkit-color-swatch {
+  border: 1px solid var(--st-track);
+  border-radius: 5px;
+}
+.st-theme-nothing input[type="color"].st-color,
+.st-theme-nothing input[type="color"].st-color::-webkit-color-swatch { border-radius: 0; }

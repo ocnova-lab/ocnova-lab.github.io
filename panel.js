@@ -14,6 +14,7 @@
          ['h', 'Секция'],                //   заголовок секции
          [key, 'Подпись', min, max, шаг],//   слайдер
          [key, 'Подпись', 'ease'],       //   изинг: селект + редактор безье
+         [key, 'Подпись', 'color'],      //   цвет: квадрат-пипетка ('#rrggbb')
        ],
        desc: { key: 'описание...' },     // всплывающие подсказки
        eases: EASES,                     // словарь пресетов-изингов
@@ -243,6 +244,17 @@
         });
         controls[d[0]] = function () { prSel.value = P[d[0]]; };
         row.appendChild(prSel);
+        host.appendChild(row);
+        return;
+      }
+      if (d[2] === 'color') {
+        // [key, подпись, 'color'] — параметр живёт строкой '#rrggbb'
+        var ci = document.createElement('input');
+        ci.type = 'color'; ci.className = 'st-color';
+        ci.value = P[d[0]];
+        ci.addEventListener('input', function () { P[d[0]] = ci.value; save(); });
+        controls[d[0]] = function () { ci.value = P[d[0]]; };
+        row.appendChild(ci);
         host.appendChild(row);
         return;
       }

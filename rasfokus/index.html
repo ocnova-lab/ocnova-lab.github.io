@@ -52,12 +52,6 @@ var TEXT = 'Around 1940 Max Bill first applied a modular grid to book layout, ' 
   'designer. And still every layout was assembled and approved by a human — ' +
   'so the demands on the designer’s professionalism and competence kept growing.';
 
-var PALETTES = {
-  blue:  { bg: '#e7ecf6', ink: '#1b2db3' },  // цвета постера
-  black: { bg: '#ffffff', ink: '#111111' },
-  night: { bg: '#101014', ink: '#f0f0f2' },
-};
-
 var DEFAULTS = {
   /* текст */
   size: 4.4,        // кегль, % ширины экрана
@@ -75,8 +69,10 @@ var DEFAULTS = {
   auto: 0,          // автоход, строк/с
   wheel: 100,       // чувствительность колеса, %
   lag: 55,          // инерция, %
-  /* вид */
+  /* цвет */
   palette: 'blue',
+  bg: '#e7ecf6',    // цвета постера
+  ink: '#1b2db3',
 };
 var P = Object.assign({}, DEFAULTS);
 P.growBez = DEFAULTS.growBez.slice();
@@ -117,7 +113,10 @@ function evalEase(name, bez, t) {
   return (EASES[name] || EASES['разгон'])(t);
 }
 
-StendPanel.build({
+var firstVisit = false;
+try { firstVisit = !localStorage.getItem('rasfokus-params'); } catch (e) {}
+
+var PANEL = StendPanel.build({
   storageKey: 'rasfokus-params',
   params: P,
   defaults: DEFAULTS,
@@ -125,44 +124,52 @@ StendPanel.build({
   evalEase: evalEase,
   bezApprox: BEZ_APPROX,
   defs: [
-    ['h', 'Текст'],
-    ['size', 'Кегль, % ширины', 1.5, 10, 0.1],
+    ['h', 'Набор'],
+    ['size', 'Кегль, % ширины', 1.5, 12, 0.1],
     ['lead', 'Интерлиньяж, % кегля', 60, 180, 1],
-    ['band', 'Ширина полосы, %', 30, 100, 1],
+    ['band', 'Ширина колонки, %', 20, 100, 1],
     ['track', 'Трекинг, % кегля', -4, 20, 0.5],
     ['weight', 'Насыщенность', 400, 700, 300],
-    ['h', 'Расфокус'],
-    ['maxStroke', 'Обводка внизу, % кегля', 0, 60, 1],
-    ['clean', 'Чистая зона сверху, %', 0, 70, 1],
-    ['full', 'Максимум на высоте, %', 30, 100, 1],
+    ['h', 'Эффект'],
+    ['clean', 'Линия чёткости, % высоты', 0, 100, 1],
+    ['maxStroke', 'Толщина обводки, % кегля', 0, 60, 1],
+    ['full', 'Максимум на высоте, %', 0, 100, 1],
     ['growEase', 'Кривая роста', 'ease'],
+    ['h', 'Цвет'],
+    ['palette', 'Палитра', 'preset', [
+      ['blue', 'Синий на светлом', { bg: '#e7ecf6', ink: '#1b2db3' }],
+      ['black', 'Чёрный на белом', { bg: '#ffffff', ink: '#111111' }],
+      ['night', 'Ночь', { bg: '#101014', ink: '#f0f0f2' }],
+      ['own', 'Свои цвета', {}],
+    ]],
+    ['bg', 'Фон', 'color'],
+    ['ink', 'Текст', 'color'],
     ['h', 'Ход'],
     ['auto', 'Автоход, строк/с', 0, 4, 0.1],
     ['wheel', 'Колесо, %', 20, 300, 5],
     ['lag', 'Инерция, %', 0, 95, 1],
-    ['h', 'Вид'],
-    ['palette', 'Палитра', 'select', [
-      ['blue', 'Синий на светлом'],
-      ['black', 'Чёрный на белом'],
-      ['night', 'Ночь'],
-    ]],
   ],
   desc: {
     size: 'Кегль считается от ширины экрана, поэтому картинка одинаковая на любом мониторе.',
     lead: 'Расстояние между строками в долях кегля. Меньше 100 — строки заходят друг на друга, внизу каша смыкается в сплошное поле, как на постере.',
-    band: 'Ширина полосы набора: по ней ломается текст. Кегль постоянный, край рваный — выключка по центру.',
+    band: 'Ширина колонки в процентах от ширины экрана: по ней ломается текст. Кегль постоянный, край рваный — выключка по центру.',
     track: 'Разрядка букв. Плотный набор быстрее слипается в кляксу при той же обводке.',
     weight: 'Times даёт два настоящих начертания: 400 и 700. Жирное слипается раньше.',
-    maxStroke: 'Толщина обводки в самой мутной точке — прирост на сторону в долях кегля. 0 — эффекта нет, 30 и выше — буквы внизу срастаются.',
-    clean: 'Верхняя полоса экрана, где обводки нет совсем. Строка, попавшая сюда, читается как обычный набор.',
-    full: 'На какой высоте экрана обводка выходит на максимум. Меньше 100 — низ экрана целиком в максимальной каше.',
+    clean: 'Горизонт эффекта: линия на экране, где обводка равна нулю. 0 — у самого верха, 100 — у самого низа. Всё, что выше линии, набрано чисто; ниже — обводка растёт. Пока крутите ручку, линия видна на экране.',
+    maxStroke: 'Сила эффекта: толщина обводки в максимуме — прирост на сторону в долях кегля. 0 — эффекта нет, 30 и выше — буквы внизу срастаются в кляксу.',
+    full: 'Вторая линия: где обводка выходит на свой максимум. Между двумя линиями эффект и разгоняется. Меньше 100 — низ экрана целиком в максимальной каше.',
     growEase: 'Как обводка растёт от чистой зоны вниз. «Разгон» держит текст читаемым дольше и валит его резко у самого низа; «линейный» размазывает переход по всему экрану.',
     auto: 'Лента едет сама, без колеса — удобно для записи видео. 0 — стоит.',
     wheel: 'Насколько сильно колесо толкает ленту.',
     lag: 'Насколько лениво лента догоняет колесо. 0 — встаёт мгновенно.',
-    palette: 'Синий на светлом — цвета референса.',
+    palette: 'Готовые пары цветов. «Синий на светлом» — цвета референса; любая правка фона или текста ниже делает палитру своей.',
+    bg: 'Цвет фона.',
+    ink: 'Цвет текста и обводки — они всегда одного цвета, иначе буквы не слипались бы в единую кляксу.',
   },
 });
+
+// стенд про ручки — на первом заходе панель открыта, дальше как оставил
+if (firstVisit) PANEL.panel.hidden = false;
 
 /* ── холст ── */
 var cv = document.getElementById('scene');
@@ -214,6 +221,10 @@ window.addEventListener('resize', resize);
 var off = 0;      // где лента стоит сейчас
 var target = 0;   // куда её толкнули
 var need = true;
+var flashA = 0;   // яркость датчика: горит, пока крутишь горизонт эффекта
+var flashUntil = 0;
+var seenClean = null, seenFull = null;
+var cleanY = 0, fullY = 0;
 
 window.addEventListener('wheel', function (e) {
   if (e.target.closest && e.target.closest('.st-panel')) return;
@@ -244,9 +255,8 @@ window.addEventListener('keydown', function (e) {
 
 /* ── кадр ── */
 function draw() {
-  var pal = PALETTES[P.palette] || PALETTES.blue;
-  document.body.style.background = pal.bg;
-  ctx.fillStyle = pal.bg;
+  document.body.style.background = P.bg;
+  ctx.fillStyle = P.bg;
   ctx.fillRect(0, 0, W, H);
 
   if (!lines.length) return;
@@ -257,14 +267,14 @@ function draw() {
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
   ctx.miterLimit = 2;
-  ctx.fillStyle = pal.ink;
-  ctx.strokeStyle = pal.ink;
+  ctx.fillStyle = P.ink;
+  ctx.strokeStyle = P.ink;
 
   var n = lines.length;
   var total = n * lineH;
   var o = ((off % total) + total) % total;   // петля: конец переходит в начало
-  var cleanY = P.clean / 100 * H;            // выше этой линии обводки нет
-  var fullY = Math.max(cleanY + 1, P.full / 100 * H);
+  cleanY = P.clean / 100 * H;                // выше этой линии обводки нет
+  fullY = Math.max(cleanY + 1, P.full / 100 * H);
   var maxW = P.maxStroke / 100 * size;
   var cx = W / 2;
 
@@ -288,6 +298,27 @@ function draw() {
     }
     ctx.fillText(lines[idx], cx, base);
   }
+
+  // датчик закона: две линии — где эффекта нет и где он в максимуме
+  if (flashA > 0.01) {
+    ctx.save();
+    ctx.globalAlpha = flashA;
+    ctx.strokeStyle = P.ink;
+    ctx.fillStyle = P.ink;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 5]);
+    ctx.font = '500 12px -apple-system, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'right';   // подписи справа: слева живёт панель
+    [[cleanY, 'линия чёткости — обводка 0'], [fullY, 'максимум обводки']].forEach(function (l, i) {
+      var y = Math.round(l[0]) + 0.5;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillRect(W - 2, y - (i ? 14 : 0), 2, 14);
+      ctx.fillText(l[1], W - 8, y + (i ? -5 : 13));
+      ctx.setLineDash([6, 5]);
+    });
+    ctx.restore();
+  }
 }
 
 var last = 0;
@@ -298,6 +329,15 @@ function frame(ts) {
   // параметры набора поменялись — пересобрать строки
   var key = [P.size, P.lead, P.band, P.track, P.weight].join('|');
   if (key !== layoutKey) { layoutKey = key; layout(); need = true; }
+
+  // ручки горизонта тронули — зажечь датчик на полторы секунды
+  if (P.clean !== seenClean || P.full !== seenFull) {
+    if (seenClean !== null) flashUntil = ts + 1500;
+    seenClean = P.clean; seenFull = P.full;
+    need = true;
+  }
+  var fa = flashUntil > ts ? Math.min(1, (flashUntil - ts) / 400) : 0;
+  if (fa !== flashA) { flashA = fa; need = true; }
 
   if (P.auto > 0) { target += P.auto * lineH * dt; need = true; }
   if (Math.abs(target - off) > 0.01) {
