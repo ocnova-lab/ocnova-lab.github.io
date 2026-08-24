@@ -180,8 +180,17 @@
     flex: 0 0 auto; height: var(--avail); width: var(--col);
     margin-right: var(--gut); --u: var(--ub);
   }
-  /* колонки с текстом: не влез по высоте — перетекает в соседнюю */
-  .col.flow { column-width: var(--col); column-gap: var(--gut); column-fill: auto; }
+  /* Колонки с текстом: не влез по высоте — перетекает в соседнюю.
+     Верхнее поле держит место индекса и правку на базовую линию, а сам индекс
+     выведен из потока — иначе он занимал бы место только в первой колонке,
+     и перетёкшее продолжение начиналось бы выше соседей. */
+  .col.flow { position: relative; column-width: var(--col); column-gap: var(--gut);
+              column-fill: auto; padding-top: var(--pt, 0px); }
+  /* индекс стоит в отведённом ему поле, ширина — покойная мера колонки,
+     поэтому он не едет и не участвует в потоке многоколонника */
+  /* координаты выведены: верхний левый угол колонки, ширина — покойная мера */
+  .col.flow > .idx { position: absolute; top: 0; left: 0; width: var(--col);
+                     margin-bottom: 0; }
   /* замерная поза: одна колонка, высота по содержимому */
   .col.flow.gauge { column-width: auto; height: auto; }
 
@@ -213,8 +222,7 @@
 
   /* открывающая раздел колонка: индекс на левом флаге */
   .col.open > .idx { text-align: left; }
-  .col.lead-col .idx, .col.head-col .idx { margin-bottom: calc(11px * var(--u)); }
-  .col.cap-col .idx { margin-bottom: calc(10px * var(--u)); }
+
 
   /* ── титул ── */
   .col.title { text-align: center; }
@@ -237,6 +245,13 @@
               scrollbar-width: none; overscroll-behavior: contain; }
   .scroller::-webkit-scrollbar { display: none; }
   /* ── ход ленты ── */
+  /* щуп стоит вне видимости, координаты берутся замером и в раскладке не участвуют */
+  #probe { position: absolute; top: 0; left: 0; width: 200px; visibility: hidden;
+           pointer-events: none;
+           /* модуль набора объявлен на колонке — щупу его надо повторить,
+              иначе кегли в нём падают к запасному значению и замер врёт */
+           --u: var(--ub); }
+  #probe .bl { display: inline-block; width: 0; height: 0; vertical-align: baseline; }
   #rail { position: fixed; left: 0; right: 0; bottom: 0; height: 1px; background: var(--hair); }
   #rail i { display: block; height: 100%; width: 0; background: var(--ink); }
   #toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
@@ -269,6 +284,10 @@
 </head>
 <body>
 <div id="strip" lang="en"></div>
+<!-- щуп базовой линии: нулевой строчный блок по базовой линии показывает,
+     где она проходит внутри строки каждого стиля. Считать это из метрик
+     шрифта нельзя — у трёх гарнитур свои ascender и descender. -->
+<div id="probe" aria-hidden="true"><p class="main"><i class="bl"></i>H</p><p class="lead"><i class="bl"></i>H</p><p class="cap"><i class="bl"></i>H</p></div>
 <div id="rail"><i></i></div>
 <div id="toast">ссылка скопирована</div>
 
@@ -604,6 +623,18 @@ function layout() {
 
   if (mobile) return layoutMob(vw);
 
+  /* Базовая линия первой строки — одна на все колонки. Верхнее поле колонки =
+     место индекса + поправка на то, где базовая линия проходит внутри строки
+     этого стиля. Тогда первые строки соседних колонок стоят на одной линии,
+     а перетёкшее продолжение — на той же, что и текст с индексом. */
+  var probe = document.getElementById('probe'), bl = {};
+  ['main', 'lead', 'cap'].forEach(function (k) {
+    var e = probe.querySelector('p.' + k), i = e.querySelector('.bl');
+    bl[k] = i.getBoundingClientRect().top - e.getBoundingClientRect().top;
+  });
+  var LAB = Math.round(P.dscSize * u * P.dscLead / 100 + 10 * u);
+  root.style.setProperty('--lab', LAB + 'px');
+
   var avail = Math.max(200, vh - 2 * PAD);
   // строка индекса по фактическому набору + отбивка 17, всё в модуле
   var lab = Math.round((P.dscSize * P.dscLead / 100 + 17) * u);
@@ -615,12 +646,19 @@ function layout() {
      жмёт и титул упирается в колонку, слабину отдают буферы. Ужимается
      то, что пусто, а не то, что читают. */
   ctx = {
-    u: u, avail: avail, lab: lab,
+    u: u, avail: avail, lab: lab, LAB: LAB,
     titleW: Math.max(COL, vw - 2 * (COL + GUT))
   };
   ctx.tbufW = Math.max(0, Math.round((vw - ctx.titleW - 2 * GUT) / 2));
 
-  cols.forEach(function (c) { if (c.el.classList.contains('flow')) gauge(c); });
+  cols.forEach(function (c) {
+    if (!c.el.classList.contains('flow')) return;
+    var stil = c.el.querySelector('p.lead') ? 'lead'
+             : c.el.querySelector('p.cap') ? 'cap' : 'main';
+    c.pt = Math.round(ctx.LAB + bl.main - bl[stil]);
+    c.el.style.paddingTop = c.pt + 'px';
+    gauge(c);
+  });
   cols.forEach(place);
   cols.forEach(function (c) { if (c.el.classList.contains('flow')) guard(c); });  // страховка на фрагментацию
   wins.forEach(function (w) { w.draw(); });
@@ -696,11 +734,12 @@ function gauge(c) {
   var e = c.el;
   e.classList.add('gauge');          // одна колонка, высота по содержимому
   e.style.width = COL + 'px';
-  c.h1 = e.offsetHeight;
+  c.h1 = e.offsetHeight - (c.pt || 0);   // без верхнего поля: только набор
   e.classList.remove('gauge');
 }
 function spanFor(c) {
-  return Math.max(1, Math.min(8, Math.ceil((c.h1 || 1) / Math.max(1, ctx.avail))));
+  var mesto = Math.max(1, ctx.avail - (c.pt || 0));
+  return Math.max(1, Math.min(8, Math.ceil((c.h1 || 1) / mesto)));
 }
 function widthAt(n) { return Math.round(n * COL + (n - 1) * GUT); }
 /* РАСХОД ЛЕНТЫ. Позиции копятся вперёд по цепочке: левый край колонки —
