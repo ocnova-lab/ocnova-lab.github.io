@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Библиотека органов управления</title>
+<link rel="stylesheet" href="/panel.css" />
+<style>
+  @font-face { font-family: "Even Mono"; font-weight: 400; font-style: normal;
+    src: url("/fonts/EvenMono-Regular.woff2") format("woff2"),
+         url("/fonts/EvenMono-Regular.woff") format("woff"); font-display: swap; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg, #101014); color: var(--ink, #f0f0f2);
+    font-family: "Even Mono", ui-monospace, monospace;
+    display: grid; place-items: center; overflow: hidden;
+  }
+  main { width: min(92vw, 720px); }
+  h1 { font-size: clamp(18px, 2.6vw, 30px); font-weight: 400; letter-spacing: -0.01em;
+       margin-bottom: clamp(14px, 2vh, 26px); }
+  ul { list-style: none; display: grid; gap: clamp(6px, 1vh, 12px); }
+  li { display: grid; grid-template-columns: minmax(9ch, 15ch) 1fr; gap: 1.5ch;
+       font-size: clamp(11px, 1.25vw, 14px); line-height: 1.5; }
+  b { font-weight: 400; color: var(--acc, #4d8dff); }
+  code { opacity: .58; word-break: break-word; }
+  p.hint { margin-top: clamp(14px, 2.4vh, 28px); font-size: clamp(10px, 1.1vw, 12px); opacity: .45; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Библиотека органов управления</h1>
+  <ul id="spisok"></ul>
+  <p class="hint">Шестерёнка слева внизу — все органы живые. Объявление копируется в defs как есть.</p>
+</main>
+
+<script src="/panel.js"></script>
+<script src="/panel-lib/anchor.js"></script>
+<script src="/panel-lib/segment.js"></script>
+<script src="/panel-lib/toggle.js"></script>
+<script src="/panel-lib/nabor.js"></script>
+<script>
+/* ─────────────────────────────────────────────────────────────────
+   Библиотека органов управления — живой каталог ручек панели.
+
+   Смотрит: ни на что, страница служебная. Реагирует: не реагирует.
+   Закон: не применяется — это каталог, а не стенд композиции.
+   Приём: «Набор приёмов в панели» — каждый орган включается и щупается.
+
+   Что где: принципы и таблица «эффект → ручки» —
+   ~/.claude/skills/stend/references/panel.md; карточки приёмов —
+   «ИТМО — Вёрстка/Приёмы панелей/»; код органов — /panel-lib/*.js.
+   Параметры адреса: ?panel=1 — панель открыта сразу, ?reset=1 — сброс.
+   ───────────────────────────────────────────────────────────────── */
+
+var ORGANY = [
+  ['слайдер',   "[key, 'Кегль, % ширины', 1.5, 12, 0.1]"],
+  ['селект',    "[key, 'Гарнитура', 'select', [['evenmono', 'Even Mono']]]"],
+  ['пресет',    "[key, 'Палитра', 'preset', [['night', 'Ночь', { bg: '#101014' }]]]"],
+  ['пипетка',   "[key, 'Фон', 'color']"],
+  ['изинг',     "[key, 'Кривая проезда', 'ease']"],
+  ['якорь',     "[key, 'Якорь', 'anchor']"],
+  ['сегментер', "[key, 'Тип сетки', 'segment', [['lesenka', 'Лесенка']]]"],
+  ['тумблер',   "[key, '', 'toggle', ['Показать сетку', 'Скрыть сетку']]"],
+  ['набор',     "[key, 'Ходы', 'nabor', [['akcent', 'Акцент']]]"],
+];
+document.getElementById('spisok').innerHTML = ORGANY.map(function (o) {
+  return '<li><b>' + o[0] + '</b><code>' + o[1].replace(/</g, '&lt;') + '</code></li>';
+}).join('');
+
+var EASES = { 'линейный': [0, 0, 1, 1], 'плавный': [0.65, 0, 0.35, 1], 'мягкий выход': [0.23, 1, 0.32, 1] };
+function bezier(b, t) {                     // кубическая кривая по оси Y от параметра t
+  var u = 1 - t;
+  return 3 * u * u * t * b[1] + 3 * u * t * t * b[3] + t * t * t;
+}
+function evalEase(name, bez, t) { return bezier(bez || EASES[name] || EASES['линейный'], t); }
+
+var DEFAULTS = {
+  size: 4.5, face: 'evenmono', palette: 'night', bg: '#101014', ink: '#f0f0f2', acc: '#4d8dff',
+  hodEase: 'плавный', hodBez: EASES['плавный'].slice(),
+  yakor: 'c', vid: 'lesenka', setka: true, priemy: ['akcent'],
+};
+var P = Object.assign({}, DEFAULTS);
+try { Object.assign(P, JSON.parse(localStorage.getItem('panel-lib-params') || '{}')); } catch (e) {}
+if (!Array.isArray(P.priemy)) P.priemy = DEFAULTS.priemy.slice();
+
+function prilozhit() {
+  var s = document.body.style;
+  s.setProperty('--bg', P.bg); s.setProperty('--ink', P.ink); s.setProperty('--acc', P.acc);
+  document.querySelector('main').style.opacity = P.setka ? 1 : 0.25;
+  document.querySelector('main').style.textAlign =
+    ({ l: 'left', c: 'center', r: 'right' })[P.yakor.replace(/^[tb]/, '')] || 'left';
+}
+
+StendPanel.build({
+  storageKey: 'panel-lib-params', params: P, defaults: DEFAULTS,
+  eases: EASES, evalEase: evalEase, bezApprox: EASES,
+  defs: [
+    ['h', 'Свои органы'],
+    ['size', 'Кегль, % ширины', 1.5, 12, 0.1],
+    ['face', 'Гарнитура', 'select', [['evenmono', 'Even Mono'], ['times', 'Times New Roman']]],
+    ['palette', 'Палитра', 'preset', [
+      ['night', 'Ночь', { bg: '#101014', ink: '#f0f0f2', acc: '#4d8dff' }],
+      ['white', 'Чёрное на белом', { bg: '#ffffff', ink: '#111111', acc: '#1b2db3' }],
+      ['svoi', 'Свои цвета', {}],
+    ]],
+    ['bg', 'Фон', 'color'],
+    ['ink', 'Текст', 'color'],
+    ['hodEase', 'Кривая хода', 'ease'],
+    ['h', 'Из библиотеки'],
+    ['vid', 'Тип сетки', 'segment', [
+      ['kolonnaya', 'Колонная'], ['lesenka', 'Лесенка'], ['rezinka', 'Резинка']]],
+    ['setka', '', 'toggle', ['Показать содержимое', 'Приглушить содержимое']],
+    ['yakor', 'Якорь', 'anchor'],
+    ['priemy', 'Ходы', 'nabor', [
+      ['akcent', 'Акцент'], ['vybor', 'Выбор'], ['propusk', 'Пропуск'], ['obedinenie', 'Объединение']]],
+  ],
+  desc: {
+    size: 'кегль набора долей ширины экрана — коридор, а не литерал',
+    yakor: 'точка привязки одним органом вместо двух списков',
+    vid: 'закон сетки: смена варианта перестраивает композицию',
+    setka: 'подпись говорит действие, а не состояние',
+    priemy: 'композиционные ходы включаются независимо',
+  },
+  onChange: prilozhit,
+});
+prilozhit();
+document.querySelector('main').style.fontSize = 'inherit';
+</script>
+</body>
+</html>

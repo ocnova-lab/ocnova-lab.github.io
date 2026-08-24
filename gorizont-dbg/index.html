@@ -980,5 +980,22 @@ window.addEventListener('resize', function () {
 window.addEventListener('load', function () { layout(); gotoHash(startHash); measure(); });
 document.fonts && document.fonts.ready.then(function () { layout(); measure(); });
 </script>
+
+<script>
+setTimeout(function(){
+  var t=document.getElementById('01-01');
+  var r=t.getBoundingClientRect(); mx=r.left+20; my=r.top+40;
+  setTimeout(function(){
+    var cs=getComputedStyle(t);
+    document.title='DBG '+JSON.stringify({
+      rested: rested(), liveCol: liveCol && liveCol.id, k: cs.getPropertyValue('--k'),
+      u: cs.getPropertyValue('--u'), w: t.offsetWidth, fs: cs.fontSize,
+      pfs: getComputedStyle(t.querySelector('p')).fontSize,
+      at: (function(){var e=document.elementFromPoint(mx,my); return e? e.tagName+'.'+e.className:'нет'})(),
+      zoom: P.zoom, mx: mx, my: my, lastPush: lastPush
+    });
+  }, 1500);
+}, 1200);
+</script>
 </body>
 </html>
