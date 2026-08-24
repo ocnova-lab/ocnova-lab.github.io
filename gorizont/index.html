@@ -225,8 +225,12 @@
 
 
   /* ── титул ── */
-  .col.title { text-align: center; }
+  /* Титул занимает экран целиком, поэтому боковые поля даёт он сам:
+     без них строка упирается в края там, где мера шире экрана. */
+  .col.title { text-align: center; padding-left: var(--gut); padding-right: var(--gut); }
   .col.title .idx { margin-bottom: calc(43px * var(--u)); }
+  /* мера титула: длину строки держит текст, а не соседи по ленте */
+  .col.title h1 { max-width: calc(var(--ttl-mera, 26) * 1ch); margin: 0 auto; }
   .col.title h1 {
     font-family: "Dent Display", "Even Mono", ui-monospace, monospace; font-weight: 400;
     letter-spacing: var(--ttl-tr); line-height: var(--ttl-lh);
@@ -272,7 +276,7 @@
   /* ── мобайл: те же колонки, только друг под другом ── */
   html.mob, body.mob { height: auto; overflow: visible; }   /* в мобайле крутится сам документ */
   body.mob #strip { position: static; display: block; overflow: visible;
-                    height: auto; padding: 0 20px var(--pad); }
+                    height: auto; padding: var(--gap-big, 0px) 20px var(--pad); }
   body.mob .col { width: auto !important; height: auto !important;
                   column-width: auto !important; margin-right: 0 !important; }
   /* межколонник, поставленный на попа: обычная отбивка между колонками */
@@ -341,7 +345,9 @@ var DEFAULTS = {
   gapBig: 120,     // мобайл: пропуск перед разделом
   gapMid: 72,      // мобайл: пропуск между группами
   gapSml: 40,      // мобайл: пропуск у картинки
-  ttl: [46, 88],   // коридор кегля титула, px
+  ttlSize: 60,     // кегль титула при базовой колонке, px
+  ttl: [46, 96],   // коридор кегля титула в настоящих пикселах
+  ttlMera: 26,     // мера титула, знаков — ею и держится длина строки
   ttlLead: 117,    // интерлиньяж титула, % кегля
   ttlTrack: -1.5,  // трекинг титула, % кегля
   leadSize: 25.5,  // врезка и заголовок раздела
@@ -515,9 +521,6 @@ function build() {
       case 'buffer':
         c = el('div', 'col buffer');
         c.dataset.gap = gapLevel(i);
-        // буферы по бокам титула — те самые, что держат его по центру экрана
-        if ((DATA[i - 1] && DATA[i - 1].t === 'title') ||
-            (DATA[i + 1] && DATA[i + 1].t === 'title')) c.classList.add('tbuf');
         break;
 
       case 'title':
@@ -624,6 +627,7 @@ function layout() {
     root.style.setProperty('--' + n[0] + '-tr', (n[3] / 100).toFixed(4) + 'em');
   });
   root.style.setProperty('--pad', PAD + 'px');
+  root.style.setProperty('--ttl-mera', P.ttlMera);
   root.style.setProperty('--vybeg',
     Math.round(Math.max(200, vh - 2 * PAD) * P.vybeg / 100) + 'px');
   ['bg', 'ink'].forEach(function (k) {
@@ -649,16 +653,19 @@ function layout() {
   var lab = Math.round((P.dscSize * P.dscLead / 100 + 17) * u);
   root.style.setProperty('--avail', avail + 'px');
 
-  /* Титул и его буферы. Тройка «буфер + титул + буфер» обязана ровно
-     заполнять экран — тогда титул всегда по центру. Пока титул шире
-     колонки, буферы стоят колонкой, а слабину берёт титул; когда экран
-     жмёт и титул упирается в колонку, слабину отдают буферы. Ужимается
-     то, что пусто, а не то, что читают. */
+  /* ТИТУЛ ЗАНИМАЕТ ЭКРАН ЦЕЛИКОМ, а длину строки держит мера самого текста.
+     Раньше по бокам стояли буферы: они не давали строке растянуться на широком
+     экране, но на узком отбирали у титула ширину — и кегль, выведенный из неё,
+     проваливался в нижнюю границу коридора ровно там, где смотрят чаще всего.
+     Ограничивать длину строки должна мера, а не сосед: колонка титула равна
+     экрану (значит титул по центру по построению, на любой ширине), а текст
+     внутри неё не шире назначенного числа знаков. Кегль освободился и идёт
+     модулем, как все остальные стили, внутри своего коридора. */
+
   ctx = {
     u: u, avail: avail, lab: lab, LAB: LAB,
-    titleW: Math.max(COL, vw - 2 * (COL + GUT))
+    titleW: vw
   };
-  ctx.tbufW = Math.max(0, Math.round((vw - ctx.titleW - 2 * GUT) / 2));
 
   cols.forEach(function (c) {
     if (!c.el.classList.contains('flow')) return;
@@ -687,14 +694,14 @@ function place(c) {
   var stavit = function (w) { c.w1 = Math.round(w); e.style.width = c.w1 + 'px'; };
 
   if (d.t === 'buffer') {
-    stavit(e.classList.contains('tbuf') ? ctx.tbufW : COL);
+    stavit(COL);
     return;
   }
   if (d.t === 'title') {
     stavit(ctx.titleW);
-    // коридор кегля титула: границы — решение глаза, они же ручка-коридор
+    // кегль титула — модулем, внутри коридора в настоящих пикселах
     e.style.setProperty('--ttl',
-      Math.max(P.ttl[0] * ctx.u, Math.min(P.ttl[1] * ctx.u, ctx.titleW / 1531 * 60)).toFixed(1) + 'px');
+      Math.max(P.ttl[0], Math.min(P.ttl[1], P.ttlSize * ctx.u)).toFixed(1) + 'px');
     return;
   }
   if (d.t === 'fig') {
@@ -760,14 +767,11 @@ function raskhod() {
   for (var i = 0; i < cols.length; i++) {
     var c = cols[i];
     c.l = acc; c.rr = acc + c.w1;
-    /* Точка, к которой ведёт адрес фрагмента, — не всегда левый край колонки.
-       Титул задуман по центру экрана между двумя буферами, и ставить его
-       левым краем к краю экрана значит ломать саму его композицию: вести
-       надо к началу тройки «буфер + титул + буфер». */
+    /* Точка, к которой ведёт адрес фрагмента. Пока она совпадает с левым
+       краем колонки — титул занимает экран целиком и потому центрируется сам.
+       Останется отдельной величиной: композиция блока может включать то, что
+       стоит перед ним, и тогда якорь обязан вести к началу композиции. */
     c.yakor = c.l;
-    if (c.d.t === 'title' && i > 0 && cols[i - 1].el.classList.contains('tbuf')) {
-      c.yakor = cols[i - 1].l;
-    }
     if (c.el.id) stops.push({ id: c.el.id, l: c.l, r: c.rr, y: c.yakor });
     acc += c.w1 + GUT;
   }
@@ -789,6 +793,8 @@ function guard(c) {
 
 function layoutMob(vw) {
   root.style.setProperty('--avail', 'auto');
+  // верхний пропуск держал буфер перед титулом; буфера нет — держит поле ленты
+  root.style.setProperty('--gap-big', P.gapBig + 'px');
   wins.forEach(function (w) { w.draw(); });
   cols.forEach(function (c) {
     var d = c.d, e = c.el;
@@ -804,7 +810,7 @@ function layoutMob(vw) {
     if (d.t === 'title') {
       var w = vw - 40;
       e.style.setProperty('--ttl',
-        Math.max(22 * U, Math.min(P.ttl[1] * U, w / 1531 * 60)).toFixed(1) + 'px');
+        Math.max(P.ttl[0], Math.min(P.ttl[1], P.ttlSize * U)).toFixed(1) + 'px');
     }
   });
 }
@@ -1180,7 +1186,9 @@ StendPanel.build({
   bezApprox: BEZ_APPROX,
   defs: [
     ['h', 'Набор'],
-    ['ttl', 'Титул: кегль, px', 'koridor', 20, 90, 1],
+    ['ttlSize', 'Титул: кегль, px', 20, 120, 1],
+    ['ttl', 'Титул: коридор кегля, px', 'koridor', 20, 140, 1],
+    ['ttlMera', 'Титул: мера, знаков', 8, 60, 1],
     ['', 'Титул', 'para', [
       ['ttlLead', 'строка', 80, 200, 1], ['ttlTrack', 'трекинг', -10, 5, 0.1]]],
     ['', 'Врезка', 'para', [
@@ -1245,7 +1253,9 @@ StendPanel.build({
     mod: 'Коридор модуля набора. Модуль — фактическая колонка, делённая на базовые 340; на него множатся все кегли и отбивки. Когда колонка упирается в свой минимум, модуль перестаёт падать за ней: дальше укорачивается мера строки, а не кегль.',
     gut: 'Расстояние между колонками при базовой колонке 340 — на экране оно множится на модуль вместе с набором. Входит в пролёт широких блоков, а его половина с каждой стороны отдана колонке под наведение.',
     pad: 'Поле сверху и снизу при базовой колонке 340 — на экране множится на модуль.',
-    ttl: 'Кегль титула течёт от ширины его колонки внутри этих границ. Обе — решение глаза, принятое заранее.',
+    ttlSize: 'Кегль титула при базовой колонке 340 — дальше он множится на модуль, как и остальные стили.',
+    ttl: 'Границы, за которые кегль титула не выходит ни на каком экране. В настоящих пикселах, а не в модуле: это решение глаза о том, что читаемо и что уже громоздко.',
+    ttlMera: 'Длину строки титула держит его собственная мера, а не соседи по ленте. Титул занимает экран целиком и потому всегда по центру; текст внутри не шире этого числа знаков.',
     ttlLead: 'Титул: интерлиньяж и трекинг. Интерлиньяж в % кегля — держится сам, когда кегль меняется; трекинг тоже в % кегля.',
     leadSize: 'Врезка и заголовок раздела: кегль в пикселах при базовой колонке 340, интерлиньяж и трекинг в % кегля.',
     mainSize: 'Основной текст: кегль в пикселах при базовой колонке 340. Все кегли множатся на модуль колонки, поэтому ручка «Колонка» тянет набор за собой.',
@@ -1295,7 +1305,7 @@ function setLive(el) {
            P.mainSize, P.mainLead, P.mainTrack, P.dscSize, P.dscLead, P.dscTrack,
            P.naborPath, P.maskaPath, P.ttlPath,
            P.gapBig, P.gapMid, P.gapSml,
-           P.bg, P.ink, String(P.ttl)].join(',');
+           P.bg, P.ink, String(P.ttl), P.ttlSize, P.ttlMera].join(',');
   if (s !== sig) { sig = s; layout(); }
   nabor();
   maska();

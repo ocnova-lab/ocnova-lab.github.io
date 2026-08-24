@@ -16,7 +16,6 @@
 // ВНИМАНИЕ: в макете индекс «02 – 11» стоял на двух колонках подряд,
 // здесь вторая и все следующие сдвинуты на единицу (02 – 12 … 02 – 15).
 window.GORIZONT = [
-  { t: "buffer" },
   { t: "title", date: "28 April /2026", text: "The Evolution of the Grid: \nfrom Position to Algorithm. From Blueprint to Law" },
   { t: "buffer" },
   { t: "lead", n: "01 – 00", text: "A classical grid remembered where things stand. An algorithmic one remembers how to find out. Therein lies the main difference between the old and the new. The printed and the digital.", by: "by Magdalena Major." },
