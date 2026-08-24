@@ -240,6 +240,10 @@
   /* ── картинки ── */
   .col.fig .idx, .col.figs .idx { margin-bottom: calc(17px * var(--u)); }
   .col.fig img { display: block; width: 100%; height: auto; }
+  /* Раскрытие картинки: верхний край стоит, нижний идёт вниз, содержимое
+     сжато по вертикали и распрямляется. Меняется не высота коробки, а масштаб
+     содержимого — тогда раскрытие не двигает ни соседей, ни ход стопки. */
+  .scroller img, .scroller .draw { transform-origin: top center; }
   .draw { display: block; width: 100%; aspect-ratio: var(--ar); }
   .draw svg { display: block; width: 100%; height: 100%; }
   .scroller .draw + .draw { margin-top: calc(54px * var(--u)); }
@@ -332,6 +336,9 @@ var DEFAULTS = {
   naborDsc: 1,     // перебирать дескрипторы: индексы, подписи, строку автора
   naborFoto: 60,   // сдвиг картинки под подписью, % её высоты
   vybeg: 50,       // выбег стопки после последней картинки, % высоты ленты
+  fotoPath: 760,   // картинка: путь раскрытия по высоте, px хода; 0 — выключено
+  fotoEase: 'торможение',
+  fotoBez: [0.33, 1, 0.68, 1],
   maskaPath: 700,  // врезка: за сколько пикселов хода строки выезжают из-под маски, 0 — выключено
   maskaSdvig: 45,  // сдвиг строк, % пути — насколько строки расходятся во времени
   maskaEase: 'торможение',
@@ -600,7 +607,9 @@ function build() {
         [].map.call(c.querySelectorAll('.idx, .cap, .by'), function (e) {
         return { el: e, txt: e.textContent, shown: null };
       }),
-      foto: c.querySelector('img.thumb')
+      foto: c.querySelector('img.thumb'),
+      // картинки колонки — те, что раскрываются по высоте (портрет подписи не в счёт)
+      raskr: [].slice.call(c.querySelectorAll('.scroller img, .scroller .draw'))
     });
   });
 }
@@ -924,6 +933,29 @@ function maska() {
   }
 }
 
+/* РАСКРЫТИЕ КАРТИНКИ (снято с показа Сергея в Фигме, 2026-08-25).
+   Картинка приходит не целиком: её верхний край стоит, нижний идёт вниз, а
+   содержимое сжато по вертикали и распрямляется по мере раскрытия — как
+   штора. Доля берётся тем же законом, что у текста: насколько колонка вошла
+   с правого края. Масштабируется содержимое, а не коробка: высота в потоке
+   не меняется, поэтому раскрытие не двигает соседей и не дёргает ход стопки. */
+function raskrytie() {
+  if (mobile || !P.fotoPath) return;
+  var vw = window.innerWidth, sl = strip.scrollLeft;
+  for (var i = 0; i < cols.length; i++) {
+    var c = cols[i];
+    if (!c.raskr || !c.raskr.length) continue;
+    var p = TIHO ? 1 : (vw - (c.l - sl)) / P.fotoPath;
+    p = p < 0 ? 0 : p > 1 ? 1 : p;
+    var q = evalEase(P.fotoEase, P.fotoBez, p);
+    if (q === c.raskrQ) continue;
+    c.raskrQ = q;
+    for (var k = 0; k < c.raskr.length; k++) {
+      c.raskr[k].style.transform = q >= 1 ? '' : 'scaleY(' + Math.max(0.001, q).toFixed(4) + ')';
+    }
+  }
+}
+
 function nabor() {
   if (TIHO) {                       // «меньше движения»: текст стоит набранным
     for (var t = 0; t < cols.length; t++) {
@@ -1217,6 +1249,8 @@ StendPanel.build({
     ['naborDsc', '', 'toggle', ['Перебирать и дескрипторы', 'Не трогать дескрипторы']],
     ['naborFoto', 'Сдвиг картинки подписи, %', 0, 200, 5],
     ['vybeg', 'Выбег стопки, % высоты', 0, 150, 5],
+    ['fotoPath', 'Картинка: путь раскрытия, px', 0, 2000, 20],
+    ['fotoEase', 'Картинка: кривая раскрытия', 'ease'],
     ['maskaPath', 'Врезка: путь выезда, px', 0, 2000, 20],
     ['maskaSdvig', 'Врезка: сдвиг строк, %', 0, 95, 1],
     ['maskaEase', 'Врезка: кривая выезда', 'ease'],
@@ -1268,6 +1302,8 @@ StendPanel.build({
     naborLatch: 'Набранное больше не рассыпается при ходе назад.',
     naborDsc: 'Индексы над колонками, подписи к картинкам и строка автора перебираются тем же законом, что и тело.',
     naborFoto: 'Насколько картинка под подписью приходит сверху, в долях своей высоты. Пока текст пересобирается, она доезжает до места.',
+    fotoPath: 'Картинка приходит раскрываясь: верхний край стоит, нижний идёт вниз, содержимое распрямляется. За сколько пикселов хода она успевает раскрыться. 0 — приходит готовой.',
+    fotoEase: 'Кривая раскрытия. «Своя (безье)» открывает редактор.',
     vybeg: 'Сколько стопка картинок крутится после последней картинки, в долях высоты ленты. Последняя успевает встать в полный рост и побыть одна, а не упирается в конец ровно в тот момент, когда пришла. 0 — упирается сразу.',
     maskaPath: 'Врезка появляется иначе, чем тело: строки выезжают снизу из-под собственной маски. За сколько пикселов хода они успевают выехать. 0 — выключено.',
     maskaSdvig: 'Какая часть пути уходит на расхождение строк. 0 — все выезжают разом и читаются как сдвиг блока; больше — строка за строкой.',
@@ -1303,12 +1339,13 @@ function setLive(el) {
   var s = [P.colDolya, String(P.col), String(P.mod), P.gut, P.pad, P.mob, P.figFit, P.dbg, P.dbgbuf,
            P.ttlLead, P.ttlTrack, P.leadSize, P.leadLead, P.leadTrack,
            P.mainSize, P.mainLead, P.mainTrack, P.dscSize, P.dscLead, P.dscTrack,
-           P.naborPath, P.maskaPath, P.ttlPath,
+           P.naborPath, P.maskaPath, P.ttlPath, P.fotoPath,
            P.gapBig, P.gapMid, P.gapSml,
            P.bg, P.ink, String(P.ttl), P.ttlSize, P.ttlMera].join(',');
   if (s !== sig) { sig = s; layout(); }
   nabor();
   maska();
+  raskrytie();
   var now = performance.now();
   if (!rested()) { setLive(null); lastLook = 0; }
   else if (now - lastLook > 90) {
