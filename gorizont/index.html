@@ -307,10 +307,12 @@
    Ниже — параметры, раскладка и ход. */
 
 var DEFAULTS = {
-  col: 340,        // базовая колонка
-  gut: 30,         // межколонник
-  pad: 20,         // поле сверху и снизу
-  wheel: 80,       // ход колеса, %
+  colDolya: 30,    // колонка: доля экрана, %
+  col: [260, 400], // коридор колонки, px
+  mod: [90, 125],  // коридор модуля набора, % (100 — базовая колонка 340)
+  gut: 34,         // межколонник при базовой колонке, px
+  pad: 25,         // поле сверху и снизу при базовой колонке, px
+  wheel: 95,       // ход колеса, %
   lag: 80,         // инерция, %
   snap: false,     // притяжение к краю колонки
   wake: 150,       // пауза, после которой колонка отдаёт колесо себе, мс
@@ -329,13 +331,13 @@ var DEFAULTS = {
   gapBig: 120,     // мобайл: пропуск перед разделом
   gapMid: 72,      // мобайл: пропуск между группами
   gapSml: 40,      // мобайл: пропуск у картинки
-  ttl: [34, 74],   // коридор кегля титула, px
+  ttl: [46, 88],   // коридор кегля титула, px
   ttlLead: 117,    // интерлиньяж титула, % кегля
   ttlTrack: -1.5,  // трекинг титула, % кегля
-  leadSize: 30,    // врезка и заголовок раздела
+  leadSize: 25.5,  // врезка и заголовок раздела
   leadLead: 130,
   leadTrack: 2.1,
-  mainSize: 16,    // основной текст
+  mainSize: 15,    // основной текст
   mainLead: 160,
   mainTrack: 1,
   dscSize: 11,     // дескриптор: индексы, подписи, строка автора
@@ -383,10 +385,31 @@ var mobile = false;
 function flag(v) { return v !== 0 && v !== '0' && v !== false && v !== ''; }
 
 /* ── пролёт ── */
-var GUT = 30;
-function gutSet() { GUT = P.gut; }
-function span(n) { return n * P.col + (n - 1) * GUT; }
-function spanFits(w) { return Math.max(1, Math.floor((w + GUT) / (P.col + GUT))); }
+/* КОЛОННАЯ СЕТКА — ЗАКОН 3, ДОЛИ И КОРИДОР.
+   Колонка живёт долей экрана внутри коридора: доля держит пропорцию (в экране
+   всегда примерно одно и то же число колонок), коридор не даёт ей выродиться
+   на краях — не шире, чем задумано, и не уже, чем читается.
+       колонка = clamp(мин, экран × доля, макс)
+   Набор живёт модулем колонки — модуль = фактическая колонка / 340, все кегли
+   и отбивки множатся на него, поэтому мера строки в знаках не плывёт. У модуля
+   свой коридор: когда колонка упирается в свой минимум, кегль перестаёт падать
+   за ней. Лучше короткая строка читаемым кеглем, чем удобная мера, которую не
+   разобрать, — с этого места мера укорачивается, а не кегль.
+   Межколонник и поля тоже едут модулем: сетка — один объект, а не три числа.
+   Ручки межколонника, поля и кеглей названы «при базовой колонке»: они задают
+   значение при модуле 100 %, а на экране показывают своё × модуль. */
+var COL = 340, GUT = 34, PAD = 25, U = 1;
+function setka(vw, mob) {
+  // в мобайле колонка не считается долей: она и есть экран минус поля
+  COL = mob ? Math.max(200, Math.round(vw - 40))
+            : Math.round(Math.max(P.col[0], Math.min(P.col[1], vw * P.colDolya / 100)));
+  U = Math.max(P.mod[0] / 100, Math.min(P.mod[1] / 100, COL / 340));
+  GUT = Math.round(P.gut * U);
+  PAD = Math.round(P.pad * U);
+}
+function gutSet() { }   // без ручки: остаток прежнего устройства, ничего не делает
+function span(n) { return n * COL + (n - 1) * GUT; }
+function spanFits(w) { return Math.max(1, Math.floor((w + GUT) / (COL + GUT))); }
 
 /* ── адрес фрагмента ── */
 function anchorOf(d) {
@@ -577,10 +600,10 @@ function layout() {
   root.classList.toggle('mob', mobile);
   document.body.classList.toggle('dbg', flag(P.dbg));
   document.body.classList.toggle('dbgbuf', flag(P.dbgbuf));
-  var u = P.col / 340;                     // модуль набора: колонка макета
+  setka(vw, mobile);
+  var u = U;
   root.style.setProperty('--ub', u.toFixed(4));
-  root.style.setProperty('--col', P.col + 'px');
-  gutSet();
+  root.style.setProperty('--col', COL + 'px');
   root.style.setProperty('--gut', GUT + 'px');
   root.style.setProperty('--gutmin', P.gut + 'px');
   [['ttl', null, P.ttlLead, P.ttlTrack],
@@ -591,14 +614,14 @@ function layout() {
     root.style.setProperty('--' + n[0] + '-lh', (n[2] / 100).toFixed(4));
     root.style.setProperty('--' + n[0] + '-tr', (n[3] / 100).toFixed(4) + 'em');
   });
-  root.style.setProperty('--pad', P.pad + 'px');
+  root.style.setProperty('--pad', PAD + 'px');
   ['bg', 'ink'].forEach(function (k) {
     root.style.setProperty('--' + k, P[k]);
   });
 
   if (mobile) return layoutMob(vw);
 
-  var avail = Math.max(200, vh - 2 * P.pad);
+  var avail = Math.max(200, vh - 2 * PAD);
   // строка индекса по фактическому набору + отбивка 17, всё в модуле
   var lab = Math.round((P.dscSize * P.dscLead / 100 + 17) * u);
   root.style.setProperty('--avail', avail + 'px');
@@ -610,7 +633,7 @@ function layout() {
      то, что пусто, а не то, что читают. */
   ctx = {
     u: u, avail: avail, lab: lab,
-    titleW: Math.max(P.col, vw - 2 * (P.col + GUT))
+    titleW: Math.max(COL, vw - 2 * (COL + GUT))
   };
   ctx.tbufW = Math.max(0, Math.round((vw - ctx.titleW - 2 * GUT) / 2));
 
@@ -634,7 +657,7 @@ function place(c) {
   var stavit = function (w) { c.w1 = Math.round(w); e.style.width = c.w1 + 'px'; };
 
   if (d.t === 'buffer') {
-    stavit(e.classList.contains('tbuf') ? ctx.tbufW : P.col);
+    stavit(e.classList.contains('tbuf') ? ctx.tbufW : COL);
     return;
   }
   if (d.t === 'title') {
@@ -689,14 +712,14 @@ function figW(sp, w, h, room) {
 function gauge(c) {
   var e = c.el;
   e.classList.add('gauge');          // одна колонка, высота по содержимому
-  e.style.width = P.col + 'px';
+  e.style.width = COL + 'px';
   c.h1 = e.offsetHeight;
   e.classList.remove('gauge');
 }
 function spanFor(c) {
   return Math.max(1, Math.min(8, Math.ceil((c.h1 || 1) / Math.max(1, ctx.avail))));
 }
-function widthAt(n) { return Math.round(n * P.col + (n - 1) * GUT); }
+function widthAt(n) { return Math.round(n * COL + (n - 1) * GUT); }
 /* РАСХОД ЛЕНТЫ. Позиции копятся вперёд по цепочке: левый край колонки —
    это сумма покойных мер и межколонников до неё. Считается раз за
    перекладку, в прокрутке геометрия не читается. */
@@ -737,9 +760,8 @@ function layoutMob(vw) {
     e.style.setProperty('--room', '');
     if (d.t === 'title') {
       var w = vw - 40;
-      var u = P.col / 340;
       e.style.setProperty('--ttl',
-        Math.max(22 * u, Math.min(P.ttl[1] * u, w / 1531 * 60)).toFixed(1) + 'px');
+        Math.max(22 * U, Math.min(P.ttl[1] * U, w / 1531 * 60)).toFixed(1) + 'px');
     }
   });
 }
@@ -977,7 +999,7 @@ function snap() {
     var d = Math.abs(st.l - cur);
     if (d < bd) { bd = d; best = st.l; }
   });
-  if (best != null && bd > 1 && bd < P.col) rideTo(best);
+  if (best != null && bd > 1 && bd < COL) rideTo(best);
 }
 
 window.addEventListener('keydown', function (e) {
@@ -1062,7 +1084,9 @@ StendPanel.build({
       ['dscSize', 'кегль', 7, 20, 0.5], ['dscLead', 'строка', 80, 240, 1],
       ['dscTrack', 'трекинг', -8, 8, 0.1]]],
     ['h', 'Сетка'],
-    ['col', 'Колонка, px', 200, 560, 5],
+    ['colDolya', 'Колонка: доля экрана, %', 10, 60, 0.5],
+    ['col', 'Колонка, px', 'koridor', 180, 700, 10],
+    ['mod', 'Набор: модуль, %', 'koridor', 50, 170, 1],
     ['gut', 'Межколонник, px', 0, 90, 1],
     ['pad', 'Поле сверху и снизу, px', 0, 120, 1],
     ['h', 'Картинка'],
@@ -1102,8 +1126,11 @@ StendPanel.build({
     ['', 'Правки', 'otkat']
   ],
   desc: {
-    col: 'Базовая ширина колонки. Всё широкое считается пролётами: N·колонка + (N−1)·межколонник. Она же модуль набора — кегли и отбивки идут от неё.',
-    gut: 'Расстояние между колонками. Входит в пролёт широких блоков, а его половина с каждой стороны отдана колонке под наведение.',
+    colDolya: 'Какую долю экрана занимает колонка. Пока доля укладывается в коридор, в экране остаётся примерно одно и то же число колонок на любом разрешении.',
+    col: 'Границы, за которые колонка не выходит. Верхняя — ширина, задуманная глазом; нижняя — та, уже которой строка перестаёт читаться. Между ними ширину решает доля экрана.',
+    mod: 'Коридор модуля набора. Модуль — фактическая колонка, делённая на базовые 340; на него множатся все кегли и отбивки. Когда колонка упирается в свой минимум, модуль перестаёт падать за ней: дальше укорачивается мера строки, а не кегль.',
+    gut: 'Расстояние между колонками при базовой колонке 340 — на экране оно множится на модуль вместе с набором. Входит в пролёт широких блоков, а его половина с каждой стороны отдана колонке под наведение.',
+    pad: 'Поле сверху и снизу при базовой колонке 340 — на экране множится на модуль.',
     ttl: 'Кегль титула течёт от ширины его колонки внутри этих границ. Обе — решение глаза, принятое заранее.',
     ttlLead: 'Титул: интерлиньяж и трекинг. Интерлиньяж в % кегля — держится сам, когда кегль меняется; трекинг тоже в % кегля.',
     leadSize: 'Врезка и заголовок раздела: кегль в пикселах при базовой колонке 340, интерлиньяж и трекинг в % кегля.',
@@ -1144,7 +1171,7 @@ function setLive(el) {
   if (liveCol) liveCol.classList.add('live');
 }
 (function watch() {
-  var s = [P.col, P.gut, P.pad, P.mob, P.figFit, P.dbg, P.dbgbuf,
+  var s = [P.colDolya, String(P.col), String(P.mod), P.gut, P.pad, P.mob, P.figFit, P.dbg, P.dbgbuf,
            P.ttlLead, P.ttlTrack, P.leadSize, P.leadLead, P.leadTrack,
            P.mainSize, P.mainLead, P.mainTrack, P.dscSize, P.dscLead, P.dscTrack,
            P.naborPath, P.maskaPath,
