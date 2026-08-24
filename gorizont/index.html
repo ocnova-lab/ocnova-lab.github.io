@@ -712,10 +712,22 @@ function raskhod() {
   for (var i = 0; i < cols.length; i++) {
     var c = cols[i];
     c.l = acc; c.rr = acc + c.w1;
-    if (c.el.id) stops.push({ id: c.el.id, l: c.l, r: c.rr });
+    /* Точка, к которой ведёт адрес фрагмента, — не всегда левый край колонки.
+       Титул задуман по центру экрана между двумя буферами, и ставить его
+       левым краем к краю экрана значит ломать саму его композицию: вести
+       надо к началу тройки «буфер + титул + буфер». */
+    c.yakor = c.l;
+    if (c.d.t === 'title' && i > 0 && cols[i - 1].el.classList.contains('tbuf')) {
+      c.yakor = cols[i - 1].l;
+    }
+    if (c.el.id) stops.push({ id: c.el.id, l: c.l, r: c.rr, y: c.yakor });
     acc += c.w1 + GUT;
   }
   measure();
+}
+function yakorX(id) {
+  for (var i = 0; i < stops.length; i++) if (stops[i].id === id) return stops[i].y;
+  return null;
 }
 
 /* Страховка на фрагментацию: строка не рвётся пополам, поэтому колонок
@@ -1094,8 +1106,10 @@ function gotoHash(h, glide) {
   var t = document.getElementById(h);
   if (!t) return;
   if (mobile) { t.scrollIntoView({ behavior: glide ? 'smooth' : 'auto' }); return; }
-  if (glide) { rideTo(t.offsetLeft); return; }
-  cur = tgt = hold(t.offsetLeft); strip.scrollLeft = cur; measure();
+  var x = yakorX(h);
+  if (x == null) x = t.offsetLeft;
+  if (glide) { rideTo(x); return; }
+  cur = tgt = hold(x); strip.scrollLeft = cur; measure();
 }
 window.addEventListener('hashchange', function () { gotoHash(null, true); });
 
