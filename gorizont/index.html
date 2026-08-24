@@ -92,6 +92,12 @@
 Лента расступается: соседи справа встают за выросшей колонкой по цепочке,
 левый край читаемой колонки не двигается — место чтения не теряется.
 Растёт только колонка с набором: картинка и так занимает максимум по высоте.
+Дескриптор не растёт никогда — ни индекс над колонкой, ни строка автора,
+ни подпись к картинке: служебный слой набора держит свой кегль, растёт то,
+что читают. Колонка-подпись набрана дескриптором целиком, поэтому не растёт
+вовсе. Колонка под курсором ищется по оси ленты, а не попаданием в саму
+колонку: межколонник делится пополам между соседями, чтобы над лентой не
+осталось мест, где курсор проваливается в пустоту.
 
 ДВА СКРОЛЛА (закон 13. Рубеж ◌, смотрит на скролл, реагирует щелчком —
 кандидат, стенд первый прецедент). Колонка с прокруткой забирает себе
@@ -190,7 +196,9 @@
   /* ── набор ── */
   .idx {
     font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: calc(11px * var(--u)); line-height: calc(20px * var(--u));
+    /* дескриптор — служебный слой: от --ub, а не от --u, поэтому рост
+       живой колонки его не касается. Растёт то, что читают. */
+    font-size: calc(11px * var(--ub)); line-height: calc(20px * var(--ub));
     letter-spacing: -0.01em; color: var(--ink); text-align: center;
     margin-bottom: calc(10px * var(--u)); white-space: pre;
   }
@@ -204,12 +212,12 @@
   .lead { font-size: calc(20px * var(--u)); line-height: calc(30px * var(--u));
           letter-spacing: -0.01em; }
   .cap  { font-family: "JetBrains Mono", ui-monospace, monospace;
-          font-size: calc(11px * var(--u)); line-height: calc(20px * var(--u));
+          font-size: calc(11px * var(--ub)); line-height: calc(20px * var(--ub));
           letter-spacing: -0.01em; color: var(--ink); }
   .by   { font-family: "JetBrains Mono", ui-monospace, monospace;
-          font-size: calc(11px * var(--u)); line-height: calc(20px * var(--u));
+          font-size: calc(11px * var(--ub)); line-height: calc(20px * var(--ub));
           letter-spacing: -0.01em; text-align: center; margin-top: calc(20px * var(--u)); }
-  .thumb { display: block; width: calc(50px * var(--u)); height: calc(50px * var(--u));
+  .thumb { display: block; width: calc(50px * var(--ub)); height: calc(50px * var(--ub));
            margin-top: calc(20px * var(--u)); }
 
   /* открывающая раздел колонка: индекс на левом флаге */
@@ -639,15 +647,25 @@ function figW(sp, w, h, room) {
    ceil(высота·k / высота экрана). Замер не участвует в кадре анимации. */
 function gauge(c) {
   var e = c.el;
+  e.classList.add('gauge');          // одна колонка, высота по содержимому
   e.style.setProperty('--k', 1);
   e.style.width = P.col + 'px';
-  e.classList.add('gauge');          // одна колонка, высота по содержимому
   c.h1 = e.offsetHeight;
+  // второй замер — в выросшем виде. Просто умножить первый на масштаб
+  // нельзя: дескриптор внутри колонки не растёт, доля его высоты меняется.
+  var z = kMax(c);
+  if (z === 1) c.hz = c.h1;
+  else {
+    e.style.setProperty('--k', z);
+    e.style.width = Math.round(P.col * z) + 'px';
+    c.hz = e.offsetHeight;
+    e.style.setProperty('--k', 1);
+  }
   e.classList.remove('gauge');
 }
 function spanFor(c, k) {
-  var need = Math.ceil((c.h1 || 1) * k / Math.max(1, ctx.avail));
-  return Math.max(1, Math.min(8, need));
+  var h = (k === 1 ? c.h1 : c.hz) || 1;
+  return Math.max(1, Math.min(8, Math.ceil(h / Math.max(1, ctx.avail))));
 }
 function widthAt(n, k) { return Math.round(n * P.col * k + (n - 1) * P.gut * k); }
 function fit(c, k) { c.el.style.width = widthAt(spanFor(c, k), k) + 'px'; }
@@ -656,9 +674,14 @@ function fit(c, k) { c.el.style.width = widthAt(spanFor(c, k), k) + 'px'; }
    разных значений. Кривая — из того же слота панели, что и у проезда.
    Растёт только колонка с набором: картинка и так занимает максимум по
    высоте, увеличивать её значит выводить её из экрана. */
-function kAim(c) {
-  return (live(c) && c.el.classList.contains('flow')) ? P.zoom / 100 : 1;
+/* Докуда колонка может вырасти. Подпись к картинке набрана дескриптором
+   целиком — служебный слой не растёт, значит и колонка не растёт. */
+function kMax(c) {
+  var e = c.el;
+  return (e.classList.contains('flow') && !e.classList.contains('cap-col'))
+    ? P.zoom / 100 : 1;
 }
+function kAim(c) { return live(c) ? kMax(c) : 1; }
 var growRaf = 0;
 function startGrow() {
   var now = performance.now(), any = false;
@@ -799,10 +822,21 @@ function rested() {
 }
 /* Колонку под курсором ищем попаданием точки, а не запоминаем по наведению:
    лента едет под неподвижным курсором, и запомненное окно тут же врёт. */
+/* Колонка под курсором. Ищется не попаданием в саму колонку, а по оси
+   ленты: между колонками лежит межколонник, над ним нет ни одной колонки,
+   и курсор там проваливался в пустоту — колонка гасла на полпути к соседу.
+   Межколонник делится пополам, каждая половина принадлежит своей колонке;
+   пустых мест над лентой не остаётся, а сам межколонник не трогаем. */
 function colAt() {
   if (mx == null || mobile) return null;
-  var el = document.elementFromPoint(mx, my);
-  return el && el.closest ? el.closest('.col') : null;
+  var hit = document.elementFromPoint(mx, my);
+  if (hit && hit.closest && (hit.closest('.st-panel') || hit.closest('.st-gear'))) return null;
+  var x = mx + strip.scrollLeft, half = P.gut / 2;
+  for (var i = 0; i < cols.length; i++) {
+    var e = cols[i].el, l = e.offsetLeft;
+    if (x >= l - half && x <= l + e.offsetWidth + half) return e;
+  }
+  return null;
 }
 function live(c) { return liveCol === c.el; }
 function awake(sc) {
@@ -889,9 +923,11 @@ function gotoHash(h, glide) {
 }
 window.addEventListener('hashchange', function () { gotoHash(null, true); });
 
-function inside(el, x, y) {
-  var r = el.getBoundingClientRect();      // один замер прямоугольника, не в кадре раскладки
-  return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+/* Держим живую колонку, пока курсор в её половине межколонника — тот же
+   ограничитель дребезга, что и в colAt, только по живой геометрии. */
+function inside(el, x) {
+  var r = el.getBoundingClientRect(), half = P.gut / 2;
+  return x >= r.left - half && x <= r.right + half;
 }
 
 /* ── панель ── */
@@ -985,7 +1021,7 @@ function setLive(el) {
   if (!rested()) { setLive(null); lastLook = 0; }
   else if (now - lastLook > 90) {
     lastLook = now;
-    if (!(liveCol && mx != null && inside(liveCol, mx, my))) setLive(colAt());
+    if (!(liveCol && mx != null && inside(liveCol, mx))) setLive(colAt());
   }
   requestAnimationFrame(watch);
 })();
