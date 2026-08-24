@@ -1,4 +1,90 @@
 <!DOCTYPE html>
+<!--
+════════════════════════════════════════════════════════════════════════
+СТЕНД «ГОРИЗОНТАЛЬНЫЙ ЛОНГРИД»
+Статья про алгоритмические сетки разложена горизонтальной
+последовательностью колонок. Кадр-источник: Figma «Основа — архитектура
+экранов», 95:4. Материал — gorizont-data.js, картинки — gorizont-img/.
+
+ЗАКОН
+
+Несущий — 8. Сцепление.
+  Смотрит: на соседа (где кончилась предыдущая колонка).
+  Реагирует: ступеньками — шагом «колонка + межколонник».
+  Ограничитель дрейфа (П7): любая ширина берётся целым пролётом
+      span(N) = N·col + (N−1)·gut  →  340 / 710 / 1080 / 1450…
+  поэтому после широкого блока цепочка возвращается ровно на шаг и никуда
+  не уезжает. Кратность колонке — не украшение, а страж сцепления.
+
+Картинка.
+  Смотрит: на макет (сколько колонок ей там отведено).
+  Реагирует: щелчком — стоит целым пролётом, ширина всегда кратна колонке.
+  Высоту берёт на себя прокрутка: колонка с картинкой это окно, и если
+  картинка в высоту экрана не влезает, окно крутится по вертикали — та же
+  механика, что у стопки из нескольких картинок. Одна на все картинки:
+  ширину решает пролёт, высоту решает прокрутка. Сбоку от окна — датчик
+  хода, он же показывает, что колонке есть куда крутиться.
+  Ручка «Пролёт картинки → по высоте экрана» включает другой закон —
+  2. Пересчёт (смотрит на окно, реагирует ступеньками) на непривычной оси:
+  не «сколько колонок влезет в ширину», а «какой пролёт влезет по высоте»;
+  пролёт отступает на ступень, пока картинка не влезет целиком.
+  По умолчанию выключен: макет главнее.
+
+Абзац — 5. Порции ◌ (КАНДИДАТ, стенд первый прецедент).
+  Смотрит: на содержимое (сколько набралось текста) в текущем окне.
+  Реагирует: ступеньками — каждая экранная высота текста добавляет ещё
+  одну колонку (многоколонник CSS, ширина колонки та же).
+  Единица порции — высота окна.
+
+Титул — 3. Доли и Коридор.
+  Смотрит: на окно.
+  Реагирует: плавно. Колонка титула стоит между двумя буферами по 340,
+  её ширина = окно − 2·(колонка + межколонник), поэтому тройка
+  «буфер + титул + буфер» ровно заполняет экран, а титул всегда по центру.
+  Кегль титула течёт в коридоре 34…60 от этой ширины.
+
+Мобайл — 1. Перелом, единственный и качественный.
+  Смотрит: на окно. Реагирует: щелчком — лента разворачивается в
+  вертикаль. Перелома в @media нет, порог — ручка панели.
+
+ПРИЁМЫ СО СКЛАДА («Лонгрид — алгоритмические приёмы»)
+  15. Инерция догона — лента догоняет цель колеса с экспоненциальным
+      отставанием; ручки «Колесо, %» (сила) и «Инерция, %» (динамика).
+  19. Воздух одной природы — в мобайле вертикальный зазор между колонками
+      равен фактическому межколоннику: вертикальный ритм выведен из
+      горизонтального закона.
+  20. Второй номинал — мобайл не уменьшенный десктоп: колонка резиновая,
+      картинка во всю ширину и за экран не вылезает, буферы становятся
+      пропусками трёх ступеней по тому, что стоит рядом (перед разделом /
+      между группами / у картинки).
+
+ЧИСЛА (П2). Объявленный модуль один — колонка. --u = col / 340; все кегли,
+интерлиньяжи и отбивки макета множатся на него, поэтому ручка «Колонка»
+тянет за собой весь набор и мера строки в знаках не плывёт. Кегль титула —
+коридор. Пиксели остались в границах коридоров, в волосяных линиях датчиков
+хода и в служебной геометрии панели.
+
+ЗАМЕР (П3). Координаты колонок считаются из пролётов и снимаются один раз
+за раскладку (массив stops) — в прокрутке геометрия не читается. Единственный
+замер — высота набора в колонке: сколько порций займёт абзац, знает только
+браузер, вычислить это до отрисовки нечем. Замер идёт раз на раскладку, не
+в кадре.
+
+ДВИЖЕНИЕ (П5). Две динамики, обе с ручками:
+  колесо → лента с экспоненциальным догоном («Колесо, %» + «Инерция, %»);
+  клавиши, переход по адресу фрагмента и притяжение к колонке → проезд по
+  кривой («Проезд, мс» + слот изинга «Кривая проезда» с редактором безье).
+  У проезда есть начало и конец, поэтому кривая уместна; у догона их нет —
+  там работает отставание.
+Автономной анимации нет: лента стоит, пока её не двинут, — стоп-кадр ?stop=
+не нужен, снимок берётся в любой момент.
+
+АДРЕСА. Индекс колонки — адрес фрагмента: «01 – 05» → #01-05, картинки →
+#img-07, подписи → #cap-07. Клик по индексу копирует ссылку. Любую ручку
+панели можно задать в адресе: ?col=300&figLaw=1&dbg=1. ?panel=1 открывает
+панель, ?reset=1 сбрасывает сохранённые настройки.
+════════════════════════════════════════════════════════════════════════
+-->
 <html lang="ru">
 <head>
 <meta charset="UTF-8" />
@@ -18,6 +104,7 @@
      Пролёт в N колонок = N·col + (N−1)·gut — считается в JS (span()). */
   :root {
     --col: 340px; --gut: 30px; --pad: 30px; --avail: 100vh;
+    --u: 1;              /* модуль набора = колонка / 340 (ставится в JS) */
     --ink: #8D8989;      /* текст, индексы */
     --ink2: #A4A4A4;     /* подписи, номера внутри картинок */
     --black: #000;
@@ -50,28 +137,32 @@
   /* ── набор ── */
   .idx {
     font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: 11px; line-height: 20px; letter-spacing: -0.01em;
-    color: var(--ink); text-align: center;
-    margin-bottom: 10px; white-space: pre;
+    font-size: calc(11px * var(--u)); line-height: calc(20px * var(--u));
+    letter-spacing: -0.01em; color: var(--ink); text-align: center;
+    margin-bottom: calc(10px * var(--u)); white-space: pre;
   }
   .idx[data-id] { cursor: pointer; }
   .idx[data-id]:hover { color: var(--black); }
-  .idx.sub { color: var(--ink2); margin-bottom: 18px; }
-  .main { font-size: 14px; line-height: 20px; letter-spacing: -0.01em; }
-  .lead { font-size: 20px; line-height: 30px; letter-spacing: -0.01em; }
+  .idx.sub { color: var(--ink2); margin-bottom: calc(18px * var(--u)); }
+  .main { font-size: calc(14px * var(--u)); line-height: calc(20px * var(--u));
+          letter-spacing: -0.01em; }
+  .lead { font-size: calc(20px * var(--u)); line-height: calc(30px * var(--u));
+          letter-spacing: -0.01em; }
   .cap  { font-family: "JetBrains Mono", ui-monospace, monospace;
-          font-size: 11px; line-height: 20px; letter-spacing: -0.01em; color: var(--ink2); }
+          font-size: calc(11px * var(--u)); line-height: calc(20px * var(--u));
+          letter-spacing: -0.01em; color: var(--ink2); }
   .by   { font-family: "JetBrains Mono", ui-monospace, monospace;
-          font-size: 11px; line-height: 20px; letter-spacing: -0.01em;
-          text-align: center; margin-top: 20px; }
-  .thumb { display: block; width: 50px; height: 50px; margin-top: 20px; }
+          font-size: calc(11px * var(--u)); line-height: calc(20px * var(--u));
+          letter-spacing: -0.01em; text-align: center; margin-top: calc(20px * var(--u)); }
+  .thumb { display: block; width: calc(50px * var(--u)); height: calc(50px * var(--u));
+           margin-top: calc(20px * var(--u)); }
 
-  .col.lead-col .idx, .col.head-col .idx { margin-bottom: 11px; }
-  .col.cap-col .idx { margin-bottom: 10px; }
+  .col.lead-col .idx, .col.head-col .idx { margin-bottom: calc(11px * var(--u)); }
+  .col.cap-col .idx { margin-bottom: calc(10px * var(--u)); }
 
   /* ── титул ── */
   .col.title { text-align: center; }
-  .col.title .idx { margin-bottom: 43px; }
+  .col.title .idx { margin-bottom: calc(43px * var(--u)); }
   .col.title h1 {
     font-family: "Even Mono", ui-monospace, monospace; font-weight: 400;
     color: var(--black); letter-spacing: -0.05em; line-height: 1.1667;
@@ -79,14 +170,26 @@
   }
 
   /* ── картинки ── */
-  .col.fig .idx, .col.figs .idx { margin-bottom: 17px; }
-  .col.fig img { display: block; width: 100%; height: auto;
-                 max-height: var(--room, none); object-fit: contain; object-position: left top; }
-  /* стопка: окно колонки со своей вертикальной прокруткой */
-  .scroller { height: var(--room, auto); overflow-y: auto; overflow-x: hidden;
+  .col.fig .idx, .col.figs .idx { margin-bottom: calc(17px * var(--u)); }
+  .col.fig img { display: block; width: 100%; height: auto; }
+  /* окно колонки со своей вертикальной прокруткой */
+  .win { position: relative; height: var(--room, auto); }
+  .scroller { height: 100%; overflow-y: auto; overflow-x: hidden;
               scrollbar-width: none; overscroll-behavior: contain; }
   .scroller::-webkit-scrollbar { display: none; }
-  .scroller figure + figure, .scroller img + img { margin-top: 54px; }
+  /* Ход колонки: та же волосяная линия, что у ленты внизу, только вбок.
+     Показывается сама, когда колонке есть куда крутиться.
+     Координаты выведены: линия живёт в системе окна (.win) и стоит
+     посередине межколонника справа от него — right = −gut/2, по высоте
+     во всё окно. Бегунок внутри линии: высота = доля видимого от общего,
+     верх = доля прокрученного — обе доли, не замеры. */
+  /* система координат — окно .win; вбок на половину межколонника, по высоте во всё окно */
+  .vrail { position: absolute; top: 0; bottom: 0; right: calc(var(--gut) / -2);
+           width: 1px; background: #EFEFEF; display: none; }
+  .vrail.on { display: block; }
+  /* бегунок: высота = доля видимого от общего, верх = доля прокрученного (обе доли, не замеры) */
+  .vrail b { position: absolute; left: 0; width: 100%; background: var(--ink); }
+  .scroller figure + figure, .scroller img + img { margin-top: calc(54px * var(--u)); }
   .scroller img { display: block; width: 100%; height: auto; }
 
   /* ── ход ленты ── */
@@ -113,8 +216,9 @@
   /* буфер сам и есть пропуск — его высота работает без надбавок */
   body.mob .col.buffer { height: var(--gap-h) !important; margin-top: 0 !important; }
   body.mob .col.buffer + .col { margin-top: 0 !important; }
-  body.mob .col.fig img { max-height: none; }
+  body.mob .win { height: auto !important; }
   body.mob .scroller { height: auto !important; overflow: visible; }
+  body.mob .vrail { display: none !important; }
   body.mob .scroller figure + figure, body.mob .scroller img + img { margin-top: var(--gut); }
   body.mob #rail { display: none; }
 </style>
@@ -127,33 +231,8 @@
 <script src="/gorizont-data.js"></script>
 <script src="/panel.js"></script>
 <script>
-/* ═══════════════════════════════════════════════════════════════════
-   Стенд «Горизонтальный лонгрид» — статья про алгоритмические сетки
-   разложена горизонтальной последовательностью колонок.
-
-   ЗАКОН ЛЕНТЫ
-   1. Базовая колонка — col (340). Межколонник — gut (30).
-      Всё, что шире одной колонки, занимает целый пролёт:
-          span(N) = N·col + (N−1)·gut   →  340 / 710 / 1080 / 1450…
-      Поэтому любая граница колонки ложится на общий шаг col+gut.
-   2. Высота ленты — окно минус поля. Колонки выровнены по верху.
-   3. Абзац, который не влез по высоте, перетекает в соседнюю колонку
-      (многоколонник CSS, ширина колонки та же — пролёт растёт на 1).
-   4. Пролёт картинки выбирается по высоте экрана: берётся самый широкий
-      пролёт, при котором картинка целиком помещается в высоту, но не шире,
-      чем нарисовано в макете. На высоком экране — как в макете, на низком
-      картинка отступает на пролёт назад. Выключается ручкой в панели.
-   5. Стопка картинок (несколько в одной колонке) — окно со своей
-      вертикальной прокруткой. Пролёт по тому же закону, только считается
-      по одной картинке стопки: целая картинка всегда влезает в высоту.
-   6. Титул стоит между двумя буферами по 340: его ширина = окно − 2·(col+gut),
-      поэтому тройка «буфер + титул + буфер» ровно заполняет экран.
-   7. Уже порога мобайла лента разворачивается в вертикаль, а буферы
-      становятся пропусками трёх ступеней — по тому, что стоит рядом.
-
-   Любую ручку панели можно задать прямо в адресе: ?col=300&figLaw=0&dbg=1.
-   ?panel=1 открывает панель, ?reset=1 сбрасывает сохранённые настройки.
-   ═══════════════════════════════════════════════════════════════════ */
+/* Закон стенда — в шапке файла (комментарий над <html>).
+   Ниже — параметры, раскладка и ход. */
 
 var DEFAULTS = {
   col: 340,        // базовая колонка
@@ -162,7 +241,10 @@ var DEFAULTS = {
   wheel: 100,      // ход колеса, %
   lag: 82,         // инерция, %
   snap: 0,         // притяжение к краю колонки
-  figLaw: 1,       // пролёт картинки: 1 — по высоте экрана, 0 — как в макете
+  ride: 620,       // проезд к фрагменту и по клавишам, мс
+  rideEase: 'плавный',
+  rideBez: [0.65, 0, 0.35, 1],
+  figLaw: 0,       // пролёт картинки: 0 — как в макете, 1 — ступенькой по высоте экрана
   gapBig: 120,     // мобайл: пропуск перед разделом
   gapMid: 72,      // мобайл: пропуск между группами
   gapSml: 40,      // мобайл: пропуск у картинки
@@ -214,7 +296,8 @@ function gapLevel(i) {
 }
 
 /* ── сборка колонок ── */
-var cols = [];   // {el, d, i, kind}
+var cols = [];   // {el, d, i}
+var wins = [];   // окна с прокруткой — им перерисовывать датчик хода
 
 function el(tag, cls, txt) {
   var n = document.createElement(tag);
@@ -238,6 +321,24 @@ function img(src, alt, w, h) {
   return n;
 }
 
+/* окно с прокруткой + датчик хода сбоку */
+function win(sc) {
+  var w = el('div', 'win'), r = el('i', 'vrail'), b = el('b');
+  r.appendChild(b); w.appendChild(sc); w.appendChild(r);
+  function draw() {
+    var over = sc.scrollHeight - sc.clientHeight;
+    r.classList.toggle('on', over > 2 && !mobile);
+    if (over <= 2) return;
+    var part = sc.clientHeight / sc.scrollHeight;
+    b.style.height = (part * 100).toFixed(2) + '%';
+    b.style.top = (sc.scrollTop / sc.scrollHeight * 100).toFixed(2) + '%';
+  }
+  sc.addEventListener('scroll', draw);
+  w.draw = draw;
+  wins.push(w);
+  return w;
+}
+
 function build() {
   DATA.forEach(function (d, i) {
     var c, id = anchorOf(d);
@@ -245,6 +346,9 @@ function build() {
       case 'buffer':
         c = el('div', 'col buffer');
         c.dataset.gap = gapLevel(i);
+        // буферы по бокам титула — те самые, что держат его по центру экрана
+        if ((DATA[i - 1] && DATA[i - 1].t === 'title') ||
+            (DATA[i + 1] && DATA[i + 1].t === 'title')) c.classList.add('tbuf');
         break;
 
       case 'title':
@@ -276,7 +380,9 @@ function build() {
       case 'fig':
         c = el('div', 'col fig');
         c.appendChild(idxLine(d.n, id));
-        c.appendChild(img(d.src, 'илл. ' + d.n, d.w, d.h));
+        var one = el('div', 'scroller');
+        one.appendChild(img(d.src, 'илл. ' + d.n, d.w, d.h));
+        c.appendChild(win(one));
         break;
 
       case 'figs':
@@ -295,7 +401,7 @@ function build() {
             sc.appendChild(img(it.src, 'илл. ' + d.n, it.w, it.h));
           }
         });
-        c.appendChild(sc);
+        c.appendChild(win(sc));
         break;
 
       default:
@@ -317,6 +423,8 @@ function layout() {
   root.classList.toggle('mob', mobile);
   document.body.classList.toggle('dbg', flag(P.dbg));
   document.body.classList.toggle('dbgbuf', flag(P.dbgbuf));
+  var u = P.col / 340;                     // модуль набора: колонка макета
+  root.style.setProperty('--u', u.toFixed(4));
   root.style.setProperty('--col', P.col + 'px');
   root.style.setProperty('--gut', P.gut + 'px');
   root.style.setProperty('--pad', P.pad + 'px');
@@ -324,39 +432,52 @@ function layout() {
   if (mobile) return layoutMob(vw);
 
   var avail = Math.max(200, vh - 2 * P.pad);
+  var lab = Math.round(37 * u);            // строка индекса 20 + отбивка 17, в модуле
   root.style.setProperty('--avail', avail + 'px');
+
+  /* Титул и его буферы. Тройка «буфер + титул + буфер» обязана ровно
+     заполнять экран — тогда титул всегда по центру. Пока титул шире
+     колонки, буферы стоят колонкой, а слабину берёт титул; когда экран
+     жмёт и титул упирается в колонку, слабину отдают буферы. Ужимается
+     то, что пусто, а не то, что читают. */
+  var titleW = Math.max(P.col, vw - 2 * (P.col + P.gut));
+  var tbufW = Math.max(0, Math.round((vw - titleW - 2 * P.gut) / 2));
 
   cols.forEach(function (c) {
     var d = c.d, e = c.el;
     e.style.height = '';
     e.style.setProperty('--room', '');
-    if (d.t === 'buffer') { e.style.width = P.col + 'px'; return; }
+    if (d.t === 'buffer') {
+      e.style.width = (e.classList.contains('tbuf') ? tbufW : P.col) + 'px';
+      return;
+    }
 
     if (d.t === 'title') {
-      var w = Math.max(P.col, vw - 2 * (P.col + P.gut));
+      var w = titleW;
       e.style.width = w + 'px';
-      e.style.setProperty('--ttl', Math.max(34, Math.min(60, w / 1531 * 60)).toFixed(1) + 'px');
+      // коридор кегля титула: границы — решение глаза, тоже в модуле
+      e.style.setProperty('--ttl', Math.max(34 * u, Math.min(60 * u, w / 1531 * 60)).toFixed(1) + 'px');
       return;
     }
     if (d.t === 'fig') {
-      var room = Math.max(60, avail - 37);              // строка индекса 20 + отбивка 17
+      var room = Math.max(60, avail - lab);
+      // по умолчанию пролёт из макета; ручкой — ступенька по высоте экрана
       var n = flag(P.figLaw) ? Math.min(d.span, spanFits(room * d.w / d.h)) : d.span;
       e.style.width = span(n) + 'px';
       e.style.setProperty('--room', room + 'px');
       return;
     }
     if (d.t === 'figs') {
-      // тот же закон: пролёт такой, чтобы ОДНА картинка стопки влезала в высоту целиком
-      var lab = d.label === 'outside' ? 37 : 38;      // строка номера + отбивка
-      var box = Math.max(60, avail - lab);
+      var box = Math.max(60, avail - (d.label === 'outside' ? lab : 0));
       var it = d.items[0];
       var m = flag(P.figLaw) ? Math.min(d.span, spanFits(box * it.w / it.h)) : d.span;
       e.style.width = span(m) + 'px';
-      e.style.setProperty('--room', (d.label === 'outside' ? avail - 37 : avail) + 'px');
+      e.style.setProperty('--room', box + 'px');
       return;
     }
     fit(e);                                             // текстовые колонки
   });
+  wins.forEach(function (w) { w.draw(); });
   stops = cols.filter(function (c) { return c.el.id; }).map(function (c) {
     return { id: c.el.id, l: c.el.offsetLeft, r: c.el.offsetLeft + c.el.offsetWidth };
   });
@@ -375,6 +496,7 @@ function fit(e) {
 
 function layoutMob(vw) {
   root.style.setProperty('--avail', 'auto');
+  wins.forEach(function (w) { w.draw(); });
   cols.forEach(function (c) {
     var d = c.d, e = c.el;
     e.style.width = '';
@@ -388,24 +510,72 @@ function layoutMob(vw) {
     e.style.setProperty('--room', '');
     if (d.t === 'title') {
       var w = vw - 40;
-      e.style.setProperty('--ttl', Math.max(22, Math.min(60, w / 1531 * 60)).toFixed(1) + 'px');
+      var u = P.col / 340;
+      e.style.setProperty('--ttl', Math.max(22 * u, Math.min(60 * u, w / 1531 * 60)).toFixed(1) + 'px');
     }
   });
 }
 
-/* ── ход ленты: колесо → горизонталь, с инерцией ── */
-var cur = 0, tgt = 0, raf = 0;
+/* ── ход ленты ───────────────────────────────────────────────────────
+   Две динамики. Колесо ведёт ленту догоном: цель прыгает, лента идёт за
+   ней с экспоненциальным отставанием (приём 15, у догона нет начала и
+   конца — там работает отставание, кривая неуместна). Клавиши, переход
+   по адресу фрагмента и притяжение к колонке — проезд: у него есть
+   начало и конец, поэтому он едет по кривой из слота панели. */
+var EASES = {
+  'линейный': function (t) { return t; },
+  'разгон': function (t) { return t * t * t; },
+  'торможение': function (t) { return 1 - Math.pow(1 - t, 3); },
+  'плавный': function (t) { return t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; },
+  'квадрат': function (t) { return t * t; }
+};
+var BEZ_APPROX = {
+  'линейный': [0.25, 0.25, 0.75, 0.75],
+  'разгон': [0.32, 0, 0.67, 0],
+  'торможение': [0.33, 1, 0.68, 1],
+  'плавный': [0.65, 0, 0.35, 1],
+  'квадрат': [0.45, 0, 0.75, 0.3]
+};
+function cubicBezierY(b, t) {
+  var x1 = b[0], y1 = b[1], x2 = b[2], y2 = b[3], sT = t;
+  for (var i = 0; i < 8; i++) {
+    var x = 3 * (1 - sT) * (1 - sT) * sT * x1 + 3 * (1 - sT) * sT * sT * x2 + sT * sT * sT;
+    var dx = 3 * (1 - sT) * (1 - sT) * x1 + 6 * (1 - sT) * sT * (x2 - x1) + 3 * sT * sT * (1 - x2);
+    if (Math.abs(dx) < 1e-6) break;
+    sT -= (x - t) / dx;
+    if (sT < 0) sT = 0; if (sT > 1) sT = 1;
+  }
+  return 3 * (1 - sT) * (1 - sT) * sT * y1 + 3 * (1 - sT) * sT * sT * y2 + sT * sT * sT;
+}
+function evalEase(name, bez, t) {
+  if (t <= 0) return 0;
+  if (t >= 1) return 1;
+  if (name === 'bezier') return cubicBezierY(bez, t);
+  return (EASES[name] || EASES['плавный'])(t);
+}
+
+var cur = 0, tgt = 0, raf = 0, ride = null;
 
 function tick() {
-  var k = 1 - P.lag / 100;
-  cur += (tgt - cur) * (k <= 0 ? 1 : k);
-  if (Math.abs(tgt - cur) < 0.5) cur = tgt;
+  if (ride) {
+    var p = P.ride > 0 ? (performance.now() - ride.t0) / P.ride : 1;
+    if (p >= 1) { cur = tgt = ride.to; ride = null; }
+    else cur = ride.from + (ride.to - ride.from) * evalEase(P.rideEase, P.rideBez, p);
+  } else {
+    var k = 1 - P.lag / 100;
+    cur += (tgt - cur) * (k <= 0 ? 1 : k);
+    if (Math.abs(tgt - cur) < 0.5) cur = tgt;
+  }
   strip.scrollLeft = cur;
-  raf = (cur !== tgt) ? requestAnimationFrame(tick) : (flag(P.snap) && snap(), 0);
+  if (ride || cur !== tgt) { raf = requestAnimationFrame(tick); return; }
+  raf = 0;
+  if (flag(P.snap)) snap();
 }
 function run() { if (!raf) raf = requestAnimationFrame(tick); }
 function maxScroll() { return Math.max(0, strip.scrollWidth - strip.clientWidth); }
-function push(dx) { tgt = Math.max(0, Math.min(maxScroll(), tgt + dx)); run(); }
+function hold(x) { return Math.max(0, Math.min(maxScroll(), x)); }
+function push(dx) { ride = null; tgt = hold(tgt + dx); run(); }   // колесо перебивает проезд
+function rideTo(x) { x = hold(x); ride = { from: cur, to: x, t0: performance.now() }; tgt = x; run(); }
 
 strip.addEventListener('wheel', function (e) {
   if (mobile) return;
@@ -431,16 +601,16 @@ function snap() {
     var d = Math.abs(st.l - cur);
     if (d < bd) { bd = d; best = st.l; }
   });
-  if (best != null && bd > 1 && bd < P.col) { tgt = Math.max(0, Math.min(maxScroll(), best)); run(); }
+  if (best != null && bd > 1 && bd < P.col) rideTo(best);
 }
 
 window.addEventListener('keydown', function (e) {
   if (mobile || (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName))) return;
   var step = window.innerWidth * 0.9;
-  if (e.key === 'ArrowRight' || e.key === 'PageDown') { push(step); e.preventDefault(); }
-  else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { push(-step); e.preventDefault(); }
-  else if (e.key === 'Home') { tgt = 0; run(); e.preventDefault(); }
-  else if (e.key === 'End') { tgt = maxScroll(); run(); e.preventDefault(); }
+  if (e.key === 'ArrowRight' || e.key === 'PageDown') { rideTo(cur + step); e.preventDefault(); }
+  else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { rideTo(cur - step); e.preventDefault(); }
+  else if (e.key === 'Home') { rideTo(0); e.preventDefault(); }
+  else if (e.key === 'End') { rideTo(maxScroll()); e.preventDefault(); }
 });
 
 /* ── ход + адрес фрагмента ── */
@@ -473,31 +643,37 @@ strip.addEventListener('click', function (e) {
 });
 
 var startHash = location.hash.slice(1);   // адрес, с которым открыли страницу
-function gotoHash(h) {
+function gotoHash(h, glide) {
   if (h == null) h = location.hash.slice(1);
   if (!h) return;
   var t = document.getElementById(h);
   if (!t) return;
-  if (mobile) t.scrollIntoView();
-  else { cur = tgt = Math.max(0, Math.min(maxScroll(), t.offsetLeft)); strip.scrollLeft = cur; measure(); }
+  if (mobile) { t.scrollIntoView({ behavior: glide ? 'smooth' : 'auto' }); return; }
+  if (glide) { rideTo(t.offsetLeft); return; }
+  cur = tgt = hold(t.offsetLeft); strip.scrollLeft = cur; measure();
 }
-window.addEventListener('hashchange', gotoHash);
+window.addEventListener('hashchange', function () { gotoHash(null, true); });
 
 /* ── панель ── */
 StendPanel.build({
   storageKey: 'gorizont-params',
   params: P,
   defaults: DEFAULTS,
+  eases: EASES,
+  evalEase: evalEase,
+  bezApprox: BEZ_APPROX,
   defs: [
     ['h', 'Сетка'],
     ['col', 'Колонка, px', 200, 560, 5],
     ['gut', 'Межколонник, px', 0, 90, 1],
     ['pad', 'Поле сверху и снизу, px', 0, 120, 1],
-    ['figLaw', 'Пролёт картинки', 'select', [[1, 'по высоте экрана'], [0, 'как в макете']]],
+    ['figLaw', 'Пролёт картинки', 'select', [[0, 'как в макете'], [1, 'по высоте экрана']]],
     ['h', 'Ход'],
     ['wheel', 'Колесо, %', 20, 300, 5],
     ['lag', 'Инерция, %', 0, 96, 1],
     ['snap', 'Притяжение к колонке', 'select', [[0, 'нет'], [1, 'есть']]],
+    ['ride', 'Проезд к фрагменту, мс', 0, 2000, 10],
+    ['rideEase', 'Кривая проезда', 'ease'],
     ['h', 'Мобайл'],
     ['mob', 'Порог, px', 420, 1100, 10],
     ['gapBig', 'Пропуск перед разделом, px', 0, 300, 4],
@@ -510,8 +686,10 @@ StendPanel.build({
   desc: {
     col: 'Базовая ширина колонки. Всё широкое считается пролётами: N·колонка + (N−1)·межколонник.',
     gut: 'Расстояние между колонками. Входит в пролёт широких блоков.',
-    figLaw: 'По высоте экрана — картинка берёт самый широкий пролёт, при котором целиком влезает в высоту, но не шире, чем в макете. Как в макете — пролёт фиксирован, лишнее обрезается по высоте.',
+    figLaw: 'Как в макете — ширина картинки кратна колонке и не зависит от экрана, лишнее по высоте уходит в прокрутку колонки. По высоте экрана — пролёт отступает на ступень, пока картинка не влезет в высоту целиком.',
     lag: 'Чем больше, тем дольше лента догоняет колесо.',
+    ride: 'Сколько едет лента, когда её зовут клавишей, адресом фрагмента или притяжением. 0 — сразу.',
+    rideEase: 'Кривая этого проезда. «Своя (безье)» открывает редактор.',
     snap: 'После остановки лента подтягивается к ближайшему краю колонки.',
     mob: 'Уже этой ширины лента разворачивается в вертикаль.',
     gapBig: 'Ступень пропуска перед титулом и началом раздела.',
