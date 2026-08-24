@@ -146,7 +146,7 @@
      --pad  поле сверху и снизу (30)   --avail высота ленты
      Пролёт в N колонок = N·col + (N−1)·gut — считается в JS (span()). */
   :root {
-    --col: 340px; --gut: 30px; --pad: 30px; --avail: 100vh;
+    --col: 340px; --gut: 30px; --gutmin: 10px; --pad: 30px; --avail: 100vh;
     --ub: 1;             /* модуль набора = колонка / 340 (ставится в JS) */
     /* Цвет один на весь макет: набор, индексы, подписи, титул и линии схем.
        Разница веса идёт толщиной штриха и кеглем, а не оттенком.
@@ -168,7 +168,7 @@
   /* ── лента ── */
   #strip {
     position: fixed; inset: 0;
-    display: flex; align-items: flex-start; gap: var(--gut);
+    display: flex; align-items: flex-start; gap: 0;
     padding: var(--pad) 0;
     overflow-x: auto; overflow-y: hidden;
     scrollbar-width: none;
@@ -252,7 +252,7 @@
      во всё окно. Бегунок внутри линии: высота = доля видимого от общего,
      верх = доля прокрученного — обе доли, не замеры. */
   /* система координат — окно .win; вбок на половину межколонника, по высоте во всё окно */
-  .vrail { position: absolute; top: 0; bottom: 0; right: calc(var(--gut) / -2);
+  .vrail { position: absolute; top: 0; bottom: 0; right: calc(var(--gutmin) / -2);
            width: 1px; background: var(--hair); display: none; }
   .vrail.on { display: block; }
   /* бегунок: высота = доля видимого от общего, верх = доля прокрученного (обе доли, не замеры) */
@@ -281,7 +281,7 @@
   body.mob #strip { position: static; display: block; overflow: visible;
                     height: auto; padding: 0 20px var(--pad); }
   body.mob .col { width: auto !important; height: auto !important;
-                  column-width: auto !important; }
+                  column-width: auto !important; margin-right: 0 !important; }
   /* межколонник, поставленный на попа: обычная отбивка между колонками */
   body.mob .col + .col { margin-top: var(--gut); }
   /* буфер сам и есть пропуск — его высота работает без надбавок */
@@ -316,14 +316,14 @@
 
 var DEFAULTS = {
   col: 340,        // базовая колонка
-  gut: 30,         // межколонник
+  gut: 10,         // просвет между колонками в минимуме, px
   pad: 30,         // поле сверху и снизу
   wheel: 100,      // ход колеса, %
   lag: 82,         // инерция, %
   snap: false,     // притяжение к краю колонки
   wake: 420,       // пауза, после которой колонка под курсором оживает, мс
   zoom: 120,       // насколько крупнее колонка в середине поля, % (100 — не растёт)
-  reach: 0.3,      // ширина поля роста, в колонках от края колонки
+  reach: 0.8,      // ширина поля роста, в колонках от края колонки
   zoomEase: 'плавный',   // форма спада поля
   zoomBez: [0.65, 0, 0.35, 1],
   zoomLag: 55,     // инерция поля, % — насколько лениво ширина догоняет закон
@@ -366,8 +366,21 @@ var mobile = false;
 function flag(v) { return v !== 0 && v !== '0' && v !== false && v !== ''; }
 
 /* ── пролёт ── */
-function span(n) { return n * P.col + (n - 1) * P.gut; }
-function spanFits(w) { return Math.max(1, Math.floor((w + P.gut) / (P.col + P.gut))); }
+/* МЕЖКОЛОННИК = ЗАПАС ПОД РОСТ + ПРОСВЕТ.
+   У каждой колонки справа лежит её собственный запас ровно той величины,
+   на которую она может вырасти: (zoom−1)·колонка. Рост входит в этот запас
+   и соседа не двигает — просвет между колонками ужимается с полного до
+   минимального и никогда меньше. Лента при росте стоит намертво: ни одна
+   колонка не меняет своего левого края, ни одна цепочка не едет.
+   Просвет-минимум — ручка; сам межколонник из неё выводится и потому
+   растёт вместе с силой поля: сильнее рост — шире запас. */
+var GUT = 30, ZAPAS = 0;
+function gutSet() {
+  ZAPAS = Math.max(0, Math.round((P.zoom / 100 - 1) * P.col));
+  GUT = ZAPAS + P.gut;
+}
+function span(n) { return n * P.col + (n - 1) * GUT; }
+function spanFits(w) { return Math.max(1, Math.floor((w + GUT) / (P.col + GUT))); }
 
 /* ── адрес фрагмента ── */
 function anchorOf(d) {
@@ -558,7 +571,9 @@ function layout() {
   var u = P.col / 340;                     // модуль набора: колонка макета
   root.style.setProperty('--ub', u.toFixed(4));
   root.style.setProperty('--col', P.col + 'px');
-  root.style.setProperty('--gut', P.gut + 'px');
+  gutSet();
+  root.style.setProperty('--gut', GUT + 'px');
+  root.style.setProperty('--gutmin', P.gut + 'px');
   root.style.setProperty('--pad', P.pad + 'px');
   ['bg', 'ink'].forEach(function (k) {
     root.style.setProperty('--' + k, P[k]);
@@ -577,9 +592,9 @@ function layout() {
      то, что пусто, а не то, что читают. */
   ctx = {
     u: u, avail: avail, lab: lab,
-    titleW: Math.max(P.col, vw - 2 * (P.col + P.gut))
+    titleW: Math.max(P.col, vw - 2 * (P.col + GUT))
   };
-  ctx.tbufW = Math.max(0, Math.round((vw - ctx.titleW - 2 * P.gut) / 2));
+  ctx.tbufW = Math.max(0, Math.round((vw - ctx.titleW - 2 * GUT) / 2));
 
   cols.forEach(function (c) { if (c.el.classList.contains('flow')) gauge(c); });
   cols.forEach(place);
@@ -600,7 +615,10 @@ function place(c) {
   e.style.setProperty('--k', 1);
   e.style.height = '';
   e.style.setProperty('--room', '');
-  var stavit = function (w) { c.w1 = c.wz = Math.round(w); e.style.width = c.w1 + 'px'; };
+  var stavit = function (w) {
+    c.w1 = c.wz = Math.round(w);
+    e.style.width = c.w1 + 'px'; e.style.marginRight = GUT + 'px';
+  };
 
   if (d.t === 'buffer') {
     stavit(e.classList.contains('tbuf') ? ctx.tbufW : P.col);
@@ -633,7 +651,7 @@ function place(c) {
   // ширину каждый кадр ставит поле — своей доли колонка не хранит.
   c.w1 = widthAt(spanFor(c, 1), 1);
   c.wz = c.grows ? widthAt(spanFor(c, kMax(c)), kMax(c)) : c.w1;
-  e.style.width = c.w1 + 'px';
+  e.style.width = c.w1 + 'px'; e.style.marginRight = GUT + 'px';
 }
 
 /* Координаты колонок не замеряются: поле копит их вперёд по цепочке и
@@ -683,7 +701,7 @@ function spanFor(c, k) {
   var h = (k === 1 ? c.h1 : c.hz) || 1;
   return Math.max(1, Math.min(8, Math.ceil(h / Math.max(1, ctx.avail))));
 }
-function widthAt(n, k) { return Math.round(n * P.col * k + (n - 1) * P.gut * k); }
+function widthAt(n, k) { return Math.round(n * P.col * k + (n - 1) * GUT * k); }
 /* ПОЛЕ РОСТА (закон 9. Силовое поле: смотрит на соседа, реагирует плавно).
    Разобрано с norgram.co (2017): там раскрытие колонки — не состояние,
    включаемое событием, а функция положения. Вся лента живёт одним числом
@@ -708,7 +726,14 @@ function widthAt(n, k) { return Math.round(n * P.col * k + (n - 1) * P.gut * k);
    Позиции копятся вперёд, как у norgram (xPos += ширина): доля колонки
    считается от её ЛЕВОГО края, а левый край зависит только от колонок
    до неё — поэтому обратной связи нет и поле не идёт вразнос. */
-function kMax(c) { return c.grows ? P.zoom / 100 : 1; }
+/* Докуда колонка может вырасти: не дальше своего запаса. Узкая колонка
+   выбирает его целиком и растёт на полную силу поля; широкая (абзац,
+   перетёкший в два пролёта) — на ту же величину в пикселах, а значит
+   в долях меньше. Ни та, ни другая за свой запас не выходит. */
+function kMax(c) {
+  if (!c.grows || !c.w1) return 1;
+  return Math.min(P.zoom / 100, (c.w1 + ZAPAS) / c.w1);
+}
 
 function lensX() {                      // линза в координатах ленты
   if (mobile || mx == null) return null;
@@ -720,9 +745,8 @@ function dolya(d, reach) {              // спад доли от расстоя
 }
 function polе() {
   if (!ctx) return;
-  var lens = lensX(), reach = Math.max(1, P.reach * (P.col + P.gut));
+  var lens = lensX(), reach = Math.max(1, P.reach * (P.col + GUT));
   var lag = 1 - P.zoomLag / 100, acc = 0, dvizh = false;
-  var kz = P.zoom / 100 - 1;
   for (var i = 0; i < cols.length; i++) {
     var c = cols[i], e = c.el;
     var cel = 0;
@@ -737,11 +761,16 @@ function polе() {
       dvizh = true;
     }
     var w = Math.round(c.w1 + (c.wz - c.w1) * c.r);
-    if (w !== c.wNow) { e.style.width = w + 'px'; c.wNow = w; }
-    var k = 1 + kz * c.r;
+    if (w !== c.wNow) {
+      e.style.width = w + 'px';
+      // зазор справа отдаёт ровно прирост и никогда не уходит ниже просвета
+      e.style.marginRight = Math.max(P.gut, GUT - (w - c.w1)) + 'px';
+      c.wNow = w;
+    }
+    var k = 1 + (kMax(c) - 1) * c.r;
     if (Math.abs(k - c.kNow) > 0.002) { e.style.setProperty('--k', k.toFixed(4)); c.kNow = k; }
-    c.l = acc; c.rr = acc + w;
-    acc += w + P.gut;
+    c.l = acc; c.rr = acc + c.w1;      // покойная мера: зоны наведения не едут
+    acc += c.w1 + GUT;                 // шаг ленты постоянен
   }
   stops = [];
   for (i = 0; i < cols.length; i++) if (cols[i].el.id)
@@ -869,7 +898,7 @@ function colAt() {
   if (mx == null || mobile) return null;
   var hit = document.elementFromPoint(mx, my);
   if (hit && hit.closest && (hit.closest('.st-panel') || hit.closest('.st-gear'))) return null;
-  var x = mx + strip.scrollLeft, half = P.gut / 2;
+  var x = mx + strip.scrollLeft, half = GUT / 2;
   for (var i = 0; i < cols.length; i++) {
     if (x >= cols[i].l - half && x <= cols[i].rr + half) return cols[i].el;
   }
@@ -963,7 +992,7 @@ window.addEventListener('hashchange', function () { gotoHash(null, true); });
 /* Держим живую колонку, пока курсор в её половине межколонника — тот же
    ограничитель дребезга, что и в colAt, только по живой геометрии. */
 function inside(el, x) {
-  var sx = x + strip.scrollLeft, half = P.gut / 2;
+  var sx = x + strip.scrollLeft, half = GUT / 2;
   for (var i = 0; i < cols.length; i++) if (cols[i].el === el)
     return sx >= cols[i].l - half && sx <= cols[i].rr + half;
   return false;
@@ -980,7 +1009,7 @@ StendPanel.build({
   defs: [
     ['h', 'Сетка'],
     ['col', 'Колонка, px', 200, 560, 5],
-    ['gut', 'Межколонник, px', 0, 90, 1],
+    ['gut', 'Просвет минимум, px', 0, 60, 1],
     ['pad', 'Поле сверху и снизу, px', 0, 120, 1],
     ['ttl', 'Кегль титула, px', 'koridor', 20, 90, 1],
     ['h', 'Картинка'],
@@ -1022,7 +1051,7 @@ StendPanel.build({
   ],
   desc: {
     col: 'Базовая ширина колонки. Всё широкое считается пролётами: N·колонка + (N−1)·межколонник. Она же модуль набора — кегли и отбивки идут от неё.',
-    gut: 'Расстояние между колонками. Входит в пролёт широких блоков, а его половина с каждой стороны отдана колонке под наведение.',
+    gut: 'Сколько остаётся между колонками, когда одна из них выросла на полную. Сам межколонник больше: он равен этому просвету плюс запас под рост, поэтому рост входит в запас и соседа не двигает.',
     ttl: 'Кегль титула течёт от ширины его колонки внутри этих границ. Обе — решение глаза, принятое заранее.',
     figFit: 'Что делать, когда картинка в высоту экрана не влезает. «Уже» — ширина сходит с шага колонки, зато картинка видна целиком. «Пролёт» — кратность держится, картинка целая, но мельче. «Ход» — ширина как в макете, лишнее уходит в вертикальную прокрутку колонки.',
     wake: 'Сколько лента должна простоять, чтобы колонка под курсором забрала себе колесо и крутилась по вертикали. Пока едем — колонки с картинками пролетают мимо. Роста это не касается: он идёт всегда.',
