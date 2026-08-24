@@ -3,6 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- ─────────────────────────────────────────────────────────────────
+     Диагональная полоса — лента набора едет по оси от угла к углу.
+
+     Смотрит: на окно (длина и наклон оси считаются от его сторон),
+     на курсор (кластер сот идёт догоном) и на протяжку (лента везётся
+     драгом и колесом).
+     Реагирует: плавно — ход ленты и догон сот идут кривыми-изингами;
+     щелчком — смена варианта композиции и цветового профиля.
+     Законы: коридор (кегль и кернинг текут между границами clamp),
+     доля (шаг ряда и модуль строки берутся от стороны окна),
+     догон (сота тянется за курсором с ограничителем связности).
+     Приёмы: «вёрстка по осям» (текст на траектории), сотовое меню из
+     стенда «Hi Five», курсор-прицел цветом профиля.
+
+     Адрес: ?lang=ru|en — язык ленты, ?panel — панель раскрыта сразу,
+     ?reset=1 — сброс сохранённых ручек.
+     ───────────────────────────────────────────────────────────────── -->
 <title>Диагональная полоса — стенд</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -45,7 +62,11 @@
     font-family:'Pragmatica Next VF','Roboto Flex','Helvetica Neue',Helvetica,Arial,sans-serif;
     -webkit-font-smoothing:antialiased;
     user-select:none; -webkit-user-select:none;
-    cursor:grab;
+    /* курсор-прицел: полотно кликабельно целиком (клик раскрывает соты),
+       поэтому курсор и есть подсказка. Рисунок плюса собирается в JS
+       цветами профиля и приезжает переменной --cur; crosshair — запас
+       до первого кадра и на случай, если data-URI курсор не принят */
+    cursor:var(--cur, crosshair);
   }
   body.dragging{ cursor:grabbing; }
   /* --trk — живой кернинг: шкала от покоя к разгону и обратно;
@@ -259,12 +280,12 @@
   }
   .hex-cell.close .hex-fill{ background:var(--txc, #141414); }
   .hex-cell.close .mark{ opacity:0; }
-  #hexDot{
-    position:fixed; left:137px; bottom:47px; z-index:30;
-    width:22px; height:22px; border-radius:50%;
-    background:var(--txc, #141414);
-    cursor:pointer; border:none; padding:0;
-  }
+  /* кнопка «Меню» — четвёртая в ряду угловых кнопок, шаг ряда 44px
+     (12 → 56 → 100 → 144); открывает сотовое меню вариантов, которое
+     раньше открывалось цветным кружком */
+  .menu-btn{ left:144px; }
+  .menu-btn svg{ width:18px; height:18px; }
+  .menu-btn.is-open svg{ opacity:.45; }
 </style>
 </head>
 <body>
@@ -471,8 +492,8 @@
     kegl: 22,      // кегль, px (стандартизация вариантов 2026-08-07)
     digSize: 14,   // кегль цифровых меток «(N)», px
     fontRef: 1200, // опорная ширина экрана: при ней кегли точные, уже — меньше
-    wght: 570,     // толщина: ось wght (зафиксирована навсегда)
-    wdth: 87,      // ширина шрифта: ось wdth (зафиксирована навсегда)
+    wght: 570,     // без ручки: ось wght зафиксирована навсегда
+    wdth: 87,      // без ручки: ось wdth зафиксирована навсегда
     btm: 100,      // кегль у нижней кромки, % (вверху всегда 100%)
     width: 470,    // ширина строки: сколько фраз склеивается в строку
     leading: 1.26, // интерлиньяж, в долях кегля
@@ -501,24 +522,24 @@
     // 2026-08-07 — с его третьей редакции инвариант «умолчания =
     // контуры A» закрыт): текст — трёхвершинная ломаная, номера —
     // двухточечная дуга с размашистыми усиками за правой кромкой
-    textPts: [[0, 0.35], [0.85, 0.755], [1, -0.215]],
+    textPts: [[0, 0.35], [0.85, 0.755], [1, -0.215]],   // без ручки: холст-редактор оси
     // усики вершин [сдвиг по высоте, сдвиг по ширине] — направление
     // касательной вниз по потоку; null — авто (гладкая кривая как раньше)
-    textH: [[0.67, -0.77], [0.05, 0.13], [0.055, -0.9]],
+    textH: [[0.67, -0.77], [0.05, 0.13], [0.055, -0.9]], // без ручки: усики того же холста
     textSharp: 1,
     textFlow: 0,          // ход между точками: 0 ровно, + липнет к вершинам
-    textColor: '#7a7a7a',  // цвет текстовой оси у ВЕРХНЕЙ кромки
-    textColor2: '#7a7a7a', // и у НИЖНЕЙ — разные дают вертикальный градиент
-    numColor: '#7a7a7a',   // цвет оси номеров у верхней кромки
-    numColor2: '#7a7a7a',  // и у нижней
+    textColor: '#7a7a7a',  // без ручки: орган «Заливка» текстовой оси (верхняя кромка)
+    textColor2: '#7a7a7a', // без ручки: тот же орган, нижняя кромка (пара даёт градиент)
+    numColor: '#7a7a7a',   // без ручки: орган «Заливка» оси номеров
+    numColor2: '#7a7a7a',  // без ручки: тот же орган, нижняя кромка
     // заливка/градиент: флаг на ось + позиции двух стопов (0 верх, 1 низ);
     // стопы двигают соотношение цветов, как в графических редакторах
-    textGrad: false, textPos1: 0, textPos2: 1,
-    numGrad: false, numPos1: 0, numPos2: 1,
-    bgColor: '#ffffff',   // цвет фона
-    bgImage: '',          // фон-картинка ('' — без картинки)
-    numPts: [[0, 1.15], [1, 1.235]],
-    numH: [[0.595, -1.385], [0.165, 1.475]],
+    textGrad: false, textPos1: 0, textPos2: 1,   // без ручки: флаг и стопы живут в органе заливки
+    numGrad: false, numPos1: 0, numPos2: 1,      // без ручки: то же для оси номеров
+    bgColor: '#ffffff',   // без ручки: орган «Полоса → Фон»
+    bgImage: '',          // без ручки: картинка фона грузится тем же органом
+    numPts: [[0, 1.15], [1, 1.235]],   // без ручки: холст-редактор оси номеров
+    numH: [[0.595, -1.385], [0.165, 1.475]], // без ручки: усики того же холста
     numSharp: 0,
     numFlow: 0,    // ход между точками оси номеров
     numSize: 18,   // кегль заголовков оси номеров, px; 0 — как основной кегль
@@ -529,12 +550,12 @@
     // своя ось плашек текстового кластера: по умолчанию выключена —
     // плашки едут по текстовой оси, как раньше
     rectAxisOwn: 0,                // 0 — по текстовой оси, 1 — по своей
-    rectPts: [[0, 0.5], [1, 0.5]], // своя ось: колонна по центру
-    rectH: [null, null],
+    rectPts: [[0, 0.5], [1, 0.5]], // без ручки: холст-редактор оси плашек
+    rectH: [null, null],           // без ручки: усики того же холста
     rectSharp: 1,
     rectFlow: 0,
-    textStops: null,    // многостопный градиент текста (2–5 стопов) или null
-    numStops: null,     // то же для оси номеров
+    textStops: null,    // без ручки: стопы градиента лепятся в органе заливки
+    numStops: null,     // без ручки: то же для оси номеров
     compFade: 700, // переход между вариантами, мс (0 — мгновенно)
     compEase: 'плавный',         // темп перехода: изинг хода
     compBez: [0.65, 0, 0.35, 1], // своя безье темпа перехода
@@ -551,10 +572,10 @@
     hexCrack: 8,   // голос сот: сколько звуков в одной серии
     hexVol: 0.6,   // голос сот: громкость
     hlOn: '0',          // выделения ключевых слов: '0' нет, '1' цветом
-    hlColor: '#ffffff', // цвет выделенных слов
+    hlColor: '#ffffff', // без ручки: орган «Полоса → Цвет выделений»
     comp: 'a',     // вариант композиции осей
     prof: 'own',   // цветовой профиль ('own' — своя лепка цветов)
-    v: 24,         // версия пресета (для одноразовых миграций сохранёнок)
+    v: 24,         // служебное: версия пресета для одноразовых миграций
   };
   // мобильная версия — перефиксирована Сергеем 2026-08-06 и ПРИОРИТЕТНА:
   // на тач-устройствах и узких экранах всегда только эта композиция,
@@ -1101,17 +1122,26 @@
     PROFILES.forEach(function (v) { if (!(tk in v[2])) v[2][tk] = DEFAULTS[tk]; });
   });
 
-  // рулетка вариантов: гость без сохранёнки при каждом заходе
-  // получает случайную ПАРУ композиция × профиль; лепку с сохранёнкой
-  // не трогаем, на мобильных всегда фиксированная мобильная версия
-  if (!hadSaved && !IS_MOBILE) {
+  // 2026-08-24, слово Сергея: композиция берётся жребием при КАЖДОМ
+  // заходе (не только у гостя без сохранёнки) — страница не показывает
+  // всем один вариант A. Цвет жребию больше не подчиняется: умолчание —
+  // профиль Orange, он же становится точкой сброса панели. Своя лепка
+  // цветов (профиль «свой») переживает заход, именованный выбор — тоже.
+  // На мобильных фиксированная мобильная версия, жребия нет.
+  (function () {
+    var op = null;
+    PROFILES.forEach(function (p) { if (p[0] === 'orange') op = p; });
+    if (op) { Object.assign(DEFAULTS, op[2]); DEFAULTS.prof = 'orange'; }
+    if (IS_MOBILE) return;
     var rv = VARIANTS[Math.floor(Math.random() * VARIANTS.length)];
     Object.assign(P, rv[2]);
     P.comp = rv[0];
-    var rp = PROFILES[Math.floor(Math.random() * PROFILES.length)];
-    Object.assign(P, rp[2]);
-    P.prof = rp[0];
-  }
+    if (hadSaved && P.prof === 'own') return;   // лепку цветов не трогаем
+    var keep = null;
+    if (hadSaved) PROFILES.forEach(function (p) { if (p[0] === P.prof) keep = p; });
+    var use = keep || op;
+    if (use) { Object.assign(P, use[2]); P.prof = use[0]; }
+  })();
 
   var pan = StendPanel.build({
     storageKey: 'diagonal-params',
@@ -1123,11 +1153,10 @@
     // варианты Сергея (A, B, C…) — только композиция; цвета — в
     // четырёх профилях (строка «Профиль»); на мобильных фиксированная
     // композиция, обе строки не строятся
-    defs: (IS_MOBILE ? [] : [
+    defs: [
       ['h', 'Композиция'],
       ['comp', 'Вариант', 'preset', [['own', '— своя —', {}]].concat(VARIANTS)],
       ['prof', 'Профиль', 'preset', [['own', '— свой —', {}]].concat(PROFILES)],
-    ]).concat([
       ['h', 'Шрифт'],
       ['kegl', 'Кегль', 8, 40, 1],
       ['fontRef', 'Опорная ширина', 600, 2600, 20],
@@ -1184,7 +1213,9 @@
       ['trackDist', 'Кернинг: дистанция', 50, 2000, 10],
       ['trackRes', 'Кернинг: атака', 0.01, 0.5, 0.01],
       ['trackRel', 'Кернинг: возврат', 0.01, 0.5, 0.01],
-    ]),
+    // на мобильных первые три строки отпадают: композиция и профиль там
+    // зафиксированы мобильной версией и ручками не выбираются
+    ].filter(function (d, i) { return !IS_MOBILE || i > 2; }),
     desc: {
       comp: 'Варианты композиции: контуры осей, правила плашек и набор полосы. Цветов не трогает — они живут в профиле. Выбрал — лепи дальше руками; «своя» ничего не меняет.',
       prof: 'Цветовые профили: цвета осей и фона, градиенты, цвет выделений. Композиции не трогает — внутри любого варианта можно сменить профиль, и наоборот. «Свой» ничего не меняет.',
@@ -1401,6 +1432,23 @@
   })();
 
   var hexMenuOpen = function () { return false; }; // читает драг ленты
+
+  // ── курсор-прицел: плюс в цветах профиля ──
+  // Смотрит: на профиль (цвет текста и фона). Реагирует: щелчком, при
+  // смене профиля. Обводка цветом фона держит плюс читаемым на своём же
+  // фоне; горячая точка — центр перекрестья.
+  var curKey = '';                       // без ручки: служебная геометрия
+  function setPlusCursor(ink, bg) {
+    var k = ink + '|' + bg;
+    if (k === curKey) return;
+    curKey = k;
+    var d = 'M11 3.6v14.8M3.6 11h14.8';
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22">' +
+      '<path d="' + d + '" stroke="' + bg + '" stroke-width="3.6" stroke-linecap="round" opacity=".92"/>' +
+      '<path d="' + d + '" stroke="' + ink + '" stroke-width="1.4" stroke-linecap="round"/></svg>';
+    document.body.style.setProperty('--cur',
+      'url("data:image/svg+xml,' + encodeURIComponent(svg) + '") 11 11, crosshair');
+  }
 
   // ── сотовое меню вариантов — перенос механики стенда «Hi Five»:
   // точка-кнопка в углу; клик раскрывает шесть гекс-ячеек — по ячейке
@@ -1920,15 +1968,22 @@
       });
     }
 
-    var hexDot = document.createElement('button');
-    hexDot.id = 'hexDot';
-    hexDot.title = 'Варианты композиции';
-    document.body.appendChild(hexDot);
+    // кнопка «Меню» в ряду угловых, следом за «Цветом» (2026-08-24):
+    // цветной кружок убран, раскрытие переехало сюда. Соты встают не
+    // под курсором, а над кнопкой — точка раскрытия читается заранее
+    var menuBtn = document.createElement('button');
+    menuBtn.className = 'st-gear menu-btn';
+    menuBtn.title = 'Варианты композиции';
+    menuBtn.innerHTML =
+      '<svg viewBox="0 0 18 18" fill="none" stroke="#4a4a4a" stroke-width="1.6" stroke-linecap="round">' +
+      '<line x1="3" y1="5" x2="15" y2="5"/><line x1="3" y1="9" x2="15" y2="9"/>' +
+      '<line x1="3" y1="13" x2="15" y2="13"/></svg>';
+    document.body.appendChild(menuBtn);
 
     function openMenu() {
       syncHexGeom();
       hexMode = 'menu';
-      hexDot.style.display = 'none';
+      menuBtn.classList.add('is-open');
       var seed = targetCell(lastX, lastY);
       lastKey = hkey(seed[0], seed[1]);
       relocate(seed[0], seed[1]);
@@ -1947,14 +2002,19 @@
       hexMode = 'dot';
       hcells.forEach(function (c, i) { ghost(c, x, y, i); });
       hels.forEach(function (el) { el.cell.style.display = 'none'; });
-      hexDot.style.display = '';
-      popNode(hexDot);
+      menuBtn.classList.remove('is-open');
+      popNode(menuBtn);
       hclick(0.05);
     }
 
-    hexDot.addEventListener('click', function (e) {
+    // ряд угловых кнопок объявлен в CSS: край 12, шаг 44, сторона 36;
+    // меню — четвёртая кнопка, поэтому центр считается, а не замеряется
+    var BTN_EDGE = 12, BTN_STEP = 44, BTN_SIDE = 36, BTN_I = 3;
+    menuBtn.addEventListener('click', function (e) {
       e.stopPropagation();
-      lastX = e.clientX; lastY = e.clientY;
+      lastX = BTN_EDGE + BTN_STEP * BTN_I + BTN_SIDE / 2;
+      lastY = window.innerHeight - BTN_EDGE - BTN_SIDE / 2;
+      if (hexMode === 'menu') { closeMenu(lastX, lastY); return; }
       openMenu();
     });
     window.addEventListener('pointermove', function (e) {
@@ -2007,7 +2067,6 @@
       });
     });
     window.addEventListener('click', function (e) {
-      if (e.target === hexDot) return; // у точки свой обработчик
       if (e.target.closest && e.target.closest('.st-panel, .st-gear, .prof-menu')) return;
       if (hexMode === 'menu') {
         // знак — не вариант: клик по нему просто закрывает меню
@@ -3142,6 +3201,7 @@
       // соты меню и точка-кнопка живут вне ленты — переменные на body
       document.body.style.setProperty('--txc', P.textColor);
       document.body.style.setProperty('--bgc', P.bgColor);
+      setPlusCursor(P.textColor, P.bgColor);
       document.body.style.backgroundColor = P.bgColor;
       document.body.style.backgroundImage = P.bgImage ? 'url(' + P.bgImage + ')' : 'none';
       // градиент оси: включается флагом; стопов 2–5 (textStops/numStops;
