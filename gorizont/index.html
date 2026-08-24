@@ -207,6 +207,10 @@
     letter-spacing: var(--dsc-tr); color: var(--ink); text-align: center;
     margin-bottom: calc(10px * var(--u)); white-space: pre;
   }
+  /* Индекс стоит по покойной мере колонки, а не по текущей: колонка растёт
+     вправо, а её метка остаётся на месте. Иначе индекс уезжал бы на половину
+     прироста — движение там, где ничего не происходит. */
+  .col.flow > .idx { width: var(--idxw); }
   .idx[data-id] { cursor: pointer; }
   /* индекс кликают ради ссылки — подсказка подчёркиванием, а не цветом:
      цвет в макете один, менять его на наведении нечем */
@@ -590,6 +594,7 @@ function layout() {
   gutSet();
   root.style.setProperty('--gut', GUT + 'px');
   root.style.setProperty('--gutmin', P.gut + 'px');
+  root.style.setProperty('--idxw', P.col + 'px');
   [['ttl', null, P.ttlLead, P.ttlTrack],
    ['lead', P.leadSize, P.leadLead, P.leadTrack],
    ['main', P.mainSize, P.mainLead, P.mainTrack],
