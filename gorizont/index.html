@@ -63,6 +63,12 @@
       пропусками трёх ступеней по тому, что стоит рядом (перед разделом /
       между группами / у картинки).
 
+ЦВЕТ. Один на весь макет — чёрный с синим подтоном. Им набран текст,
+индексы, подписи, титул и им же прочерчены линии схем: схемы вставлены
+разметкой и берут цвет от набора, а не носят свой. Разница веса идёт
+толщиной штриха и кеглем, а не оттенком. Волосяные линии датчиков хода
+выведены из того же цвета подмешиванием к фону.
+
 ЧИСЛА (П2). Объявленный модуль один — колонка. --u = col / 340; все кегли,
 интерлиньяжи и отбивки макета множатся на него, поэтому ручка «Колонка»
 тянет за собой весь набор и мера строки в знаках не плывёт. Кегль титула —
@@ -124,11 +130,12 @@
   :root {
     --col: 340px; --gut: 30px; --pad: 30px; --avail: 100vh;
     --u: 1;              /* модуль набора = колонка / 340 (ставится в JS) */
-    --ink: #8D8989;      /* текст, индексы */
-    --ink2: #A4A4A4;     /* подписи, номера внутри картинок */
-    --black: #000;       /* титул */
+    /* Цвет один на весь макет: набор, индексы, подписи, титул и линии схем.
+       Разница веса идёт толщиной штриха и кеглем, а не оттенком.
+       Волосяные линии датчиков выведены из него же — подмешаны к фону. */
+    --ink: #0A0F1A;      /* чёрный с синим подтоном — единственный цвет */
     --bg: #fff;
-    --hair: #EFEFEF;     /* волосяная линия датчиков хода */
+    --hair: color-mix(in srgb, var(--ink) 14%, var(--bg));
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -158,19 +165,19 @@
   .idx {
     font-family: "JetBrains Mono", ui-monospace, monospace;
     font-size: calc(11px * var(--u)); line-height: calc(20px * var(--u));
-    letter-spacing: -0.01em; color: var(--ink); text-align: center;
+    letter-spacing: -0.01em; color: var(--ink); opacity: .62; text-align: center;
     margin-bottom: calc(10px * var(--u)); white-space: pre;
   }
   .idx[data-id] { cursor: pointer; }
-  .idx[data-id]:hover { color: var(--black); }
-  .idx.sub { color: var(--ink2); margin-bottom: calc(18px * var(--u)); }
+  .idx[data-id]:hover { opacity: 1; }   /* тот же цвет, полная плотность */
+  .idx.sub { color: var(--ink); margin-bottom: calc(18px * var(--u)); }
   .main { font-size: calc(14px * var(--u)); line-height: calc(20px * var(--u));
           letter-spacing: -0.01em; }
   .lead { font-size: calc(20px * var(--u)); line-height: calc(30px * var(--u));
           letter-spacing: -0.01em; }
   .cap  { font-family: "JetBrains Mono", ui-monospace, monospace;
           font-size: calc(11px * var(--u)); line-height: calc(20px * var(--u));
-          letter-spacing: -0.01em; color: var(--ink2); }
+          letter-spacing: -0.01em; color: var(--ink); }
   .by   { font-family: "JetBrains Mono", ui-monospace, monospace;
           font-size: calc(11px * var(--u)); line-height: calc(20px * var(--u));
           letter-spacing: -0.01em; text-align: center; margin-top: calc(20px * var(--u)); }
@@ -187,13 +194,16 @@
   .col.title .idx { margin-bottom: calc(43px * var(--u)); }
   .col.title h1 {
     font-family: "Even Mono", ui-monospace, monospace; font-weight: 400;
-    color: var(--black); letter-spacing: -0.05em; line-height: 1.1667;
+    letter-spacing: -0.05em; line-height: 1.1667;
     font-size: var(--ttl, 60px); white-space: pre-line;
   }
 
   /* ── картинки ── */
   .col.fig .idx, .col.figs .idx { margin-bottom: calc(17px * var(--u)); }
   .col.fig img { display: block; width: 100%; height: auto; }
+  .draw { display: block; width: 100%; aspect-ratio: var(--ar); }
+  .draw svg { display: block; width: 100%; height: 100%; }
+  .scroller .draw + .draw { margin-top: calc(54px * var(--u)); }
   /* окно колонки со своей вертикальной прокруткой */
   .win { position: relative; height: var(--room, auto); }
   .scroller { height: 100%; overflow-y: auto; overflow-x: hidden;
@@ -244,7 +254,8 @@
   body.mob .win { height: auto !important; }
   body.mob .scroller { height: auto !important; overflow: visible; }
   body.mob .vrail { display: none !important; }
-  body.mob .scroller figure + figure, body.mob .scroller img + img { margin-top: var(--gut); }
+  body.mob .scroller figure + figure, body.mob .scroller img + img,
+  body.mob .scroller .draw + .draw { margin-top: var(--gut); }
   body.mob #rail { display: none; }
 </style>
 </head>
@@ -275,12 +286,9 @@ var DEFAULTS = {
   gapMid: 72,      // мобайл: пропуск между группами
   gapSml: 40,      // мобайл: пропуск у картинки
   mob: 700,        // порог мобайла
-  palette: 'maket', // палитра пресет-списком
+  palette: 'sinchern', // палитра пресет-списком
   bg: '#ffffff',
-  ink: '#8d8989',
-  ink2: '#a4a4a4',
-  black: '#000000',
-  hair: '#efefef',
+  ink: '#0a0f1a',
   dbg: 0,          // показать границы колонок
   dbgbuf: 0        // показать буферы
 };
@@ -342,6 +350,35 @@ function idxLine(text, id) {
   if (id) { n.dataset.id = id; n.title = 'скопировать ссылку на фрагмент'; }
   return n;
 }
+/* Схема — векторная, её линии объявлены currentColor: вставляем разметкой,
+   чтобы цвет пришёл от набора, а не был зашит в файл. Место под схему
+   держит пропорция, снятая из данных, — лента не дёргается при загрузке. */
+var drawn = {};
+function draw(src, w, h) {
+  var box = el('span', 'draw');
+  box.style.setProperty('--ar', w + ' / ' + h);
+  if (drawn[src] !== undefined) { box.innerHTML = drawn[src]; return box; }
+  drawn[src] = null;
+  fetch('/gorizont-img/' + src).then(function (r) { return r.text(); }).then(function (t) {
+    drawn[src] = t;
+    [].forEach.call(document.querySelectorAll('.draw[data-src="' + src + '"]'), function (n) {
+      n.innerHTML = t;
+    });
+    relayout();
+  });
+  box.dataset.src = src;
+  return box;
+}
+var reflow = 0;
+function relayout() {
+  if (reflow) return;
+  reflow = requestAnimationFrame(function () { reflow = 0; layout(); measure(); });
+}
+
+function pic(src, alt, w, h) {
+  return /\.svg$/.test(src) ? draw(src, w, h) : img(src, alt, w, h);
+}
+
 function img(src, alt, w, h) {
   var n = document.createElement('img');
   n.src = '/gorizont-img/' + src;
@@ -413,7 +450,7 @@ function build() {
         c = el('div', 'col fig');
         c.appendChild(idxLine(d.n, id));
         var one = el('div', 'scroller');
-        one.appendChild(img(d.src, 'илл. ' + d.n, d.w, d.h));
+        one.appendChild(pic(d.src, 'илл. ' + d.n, d.w, d.h));
         c.appendChild(win(one));
         break;
 
@@ -427,10 +464,10 @@ function build() {
             f.appendChild(idxLine(it.n).cloneNode(false));
             f.lastChild.className = 'idx sub';
             f.lastChild.textContent = it.n;
-            f.appendChild(img(it.src, 'илл. ' + it.n, it.w, it.h));
+            f.appendChild(pic(it.src, 'илл. ' + it.n, it.w, it.h));
             sc.appendChild(f);
           } else {
-            sc.appendChild(img(it.src, 'илл. ' + d.n, it.w, it.h));
+            sc.appendChild(pic(it.src, 'илл. ' + d.n, it.w, it.h));
           }
         });
         c.appendChild(win(sc));
@@ -463,7 +500,7 @@ function layout() {
   root.style.setProperty('--col', P.col + 'px');
   root.style.setProperty('--gut', P.gut + 'px');
   root.style.setProperty('--pad', P.pad + 'px');
-  ['bg', 'ink', 'ink2', 'black', 'hair'].forEach(function (k) {
+  ['bg', 'ink'].forEach(function (k) {
     root.style.setProperty('--' + k, P[k]);
   });
 
@@ -753,16 +790,13 @@ StendPanel.build({
     ]],
     ['h', 'Цвет'],
     ['palette', 'Палитра', 'preset', [
-      ['maket', 'Как в макете', { bg: '#ffffff', ink: '#8d8989', ink2: '#a4a4a4', black: '#000000', hair: '#efefef' }],
-      ['black', 'Чёрное на белом', { bg: '#ffffff', ink: '#111111', ink2: '#777777', black: '#000000', hair: '#e2e2e2' }],
-      ['night', 'Ночь', { bg: '#101014', ink: '#b9b5b4', ink2: '#7e7b7a', black: '#f0f0f2', hair: '#2a2a30' }],
+      ['sinchern', 'Синь-чёрный на белом', { bg: '#ffffff', ink: '#0a0f1a' }],
+      ['chern', 'Чистый чёрный', { bg: '#ffffff', ink: '#000000' }],
+      ['noch', 'Ночь', { bg: '#0a0f1a', ink: '#e6e9f0' }],
       ['own', 'Свои цвета', {}]
     ]],
     ['bg', 'Фон', 'color'],
-    ['ink', 'Текст', 'color'],
-    ['ink2', 'Подписи', 'color'],
-    ['black', 'Титул', 'color'],
-    ['hair', 'Линия хода', 'color'],
+    ['ink', 'Цвет макета', 'color'],
     ['h', 'Ход'],
     ['wheel', 'Колесо, %', 20, 300, 5],
     ['lag', 'Инерция, %', 0, 96, 1],
@@ -780,7 +814,7 @@ StendPanel.build({
     ['dbgbuf', 'Буферы', 'select', [[0, 'скрыть'], [1, 'показать']]]
   ],
   desc: {
-    palette: 'Готовые наборы цвета. «Свои цвета» — крутить пипетками ниже.',
+    palette: 'Цвет в макете один: им набран текст, индексы, подписи, титул и линии схем. Волосяные линии датчиков подмешаны к фону из него же.',
     col: 'Базовая ширина колонки. Всё широкое считается пролётами: N·колонка + (N−1)·межколонник.',
     gut: 'Расстояние между колонками. Входит в пролёт широких блоков.',
     figFit: 'Что делать, когда картинка в высоту экрана не влезает. Уже кратности — ширина сходит с шага колонки, зато картинка видна целиком. На пролёт назад — кратность держится, картинка целая, но мельче. Прокрутка — ширина как в макете, лишнее уходит в вертикальный ход колонки.',
@@ -809,7 +843,7 @@ function setLive(w) {
 (function watch() {
   var s = [P.col, P.gut, P.pad, P.mob, P.figFit, P.dbg, P.dbgbuf,
            P.gapBig, P.gapMid, P.gapSml,
-           P.bg, P.ink, P.ink2, P.black, P.hair].join(',');
+           P.bg, P.ink].join(',');
   if (s !== sig) { sig = s; layout(); }
   var now = performance.now();
   if (!rested()) { setLive(null); lastLook = 0; }
