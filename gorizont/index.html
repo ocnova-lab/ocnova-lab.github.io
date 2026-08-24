@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Горизонтальный лонгрид</title>
+<link rel="stylesheet" href="/panel.css" />
+<style>
+  @font-face { font-family: "Even Mono"; font-weight: 400; font-style: normal;
+    src: url("/fonts/EvenMono-Regular.woff2") format("woff2"),
+         url("/fonts/EvenMono-Regular.woff") format("woff"); font-display: swap; }
+  @font-face { font-family: "JetBrains Mono"; font-weight: 400; font-style: normal;
+    src: url("/fonts/JetBrainsMono-Regular.woff2") format("woff2"); font-display: swap; }
+
+  /* ── единицы макета ───────────────────────────────────────────────
+     --col  базовая колонка (340)      --gut  межколонник (30)
+     --pad  поле сверху и снизу (30)   --avail высота ленты
+     Пролёт в N колонок = N·col + (N−1)·gut — считается в JS (span()). */
+  :root {
+    --col: 340px; --gut: 30px; --pad: 30px; --avail: 100vh;
+    --ink: #8D8989;      /* текст, индексы */
+    --ink2: #A4A4A4;     /* подписи, номера внутри картинок */
+    --black: #000;
+    --bg: #fff;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: "Even Mono", ui-monospace, monospace;
+    overflow: hidden; overscroll-behavior: none;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── лента ── */
+  #strip {
+    position: fixed; inset: 0;
+    display: flex; align-items: flex-start; gap: var(--gut);
+    padding: var(--pad) 0;
+    overflow-x: auto; overflow-y: hidden;
+    scrollbar-width: none;
+  }
+  #strip::-webkit-scrollbar { display: none; }
+
+  .col { flex: 0 0 auto; height: var(--avail); width: var(--col); }
+  /* колонки с текстом: не влез по высоте — перетекает в соседнюю */
+  .col.flow { column-width: var(--col); column-gap: var(--gut); column-fill: auto; }
+
+  /* ── набор ── */
+  .idx {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 11px; line-height: 20px; letter-spacing: -0.01em;
+    color: var(--ink); text-align: center;
+    margin-bottom: 10px; white-space: pre;
+  }
+  .idx[data-id] { cursor: pointer; }
+  .idx[data-id]:hover { color: var(--black); }
+  .idx.sub { color: var(--ink2); margin-bottom: 18px; }
+  .main { font-size: 14px; line-height: 20px; letter-spacing: -0.01em; }
+  .lead { font-size: 20px; line-height: 30px; letter-spacing: -0.01em; }
+  .cap  { font-family: "JetBrains Mono", ui-monospace, monospace;
+          font-size: 11px; line-height: 20px; letter-spacing: -0.01em; color: var(--ink2); }
+  .by   { font-family: "JetBrains Mono", ui-monospace, monospace;
+          font-size: 11px; line-height: 20px; letter-spacing: -0.01em;
+          text-align: center; margin-top: 20px; }
+  .thumb { display: block; width: 50px; height: 50px; margin-top: 20px; }
+
+  .col.lead-col .idx, .col.head-col .idx { margin-bottom: 11px; }
+  .col.cap-col .idx { margin-bottom: 10px; }
+
+  /* ── титул ── */
+  .col.title { text-align: center; }
+  .col.title .idx { margin-bottom: 43px; }
+  .col.title h1 {
+    font-family: "Even Mono", ui-monospace, monospace; font-weight: 400;
+    color: var(--black); letter-spacing: -0.05em; line-height: 1.1667;
+    font-size: var(--ttl, 60px); white-space: pre-line;
+  }
+
+  /* ── картинки ── */
+  .col.fig .idx, .col.figs .idx { margin-bottom: 17px; }
+  .col.fig img { display: block; width: 100%; height: auto;
+                 max-height: var(--room, none); object-fit: contain; object-position: left top; }
+  /* стопка: окно колонки со своей вертикальной прокруткой */
+  .scroller { height: var(--room, auto); overflow-y: auto; overflow-x: hidden;
+              scrollbar-width: none; overscroll-behavior: contain; }
+  .scroller::-webkit-scrollbar { display: none; }
+  .scroller figure + figure, .scroller img + img { margin-top: 54px; }
+  .scroller img { display: block; width: 100%; height: auto; }
+
+  /* ── ход ленты ── */
+  #rail { position: fixed; left: 0; right: 0; bottom: 0; height: 1px; background: #EFEFEF; }
+  #rail i { display: block; height: 100%; width: 0; background: var(--ink); }
+  #toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
+           font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px;
+           color: #fff; background: #1a1a1a; padding: 6px 12px; border-radius: 20px;
+           opacity: 0; pointer-events: none; transition: opacity .2s; }
+  #toast.on { opacity: 1; }
+
+  /* ── отладка ── */
+  body.dbg .col { outline: 1px dashed rgba(39,73,176,.35); outline-offset: 0; }
+  body.dbgbuf .col.buffer { background: #D9D9D9; height: 200px; }
+
+  /* ── мобайл: те же колонки, только друг под другом ── */
+  html.mob, body.mob { height: auto; overflow: visible; }   /* в мобайле крутится сам документ */
+  body.mob #strip { position: static; display: block; overflow: visible;
+                    height: auto; padding: 0 20px var(--pad); }
+  body.mob .col { width: auto !important; height: auto !important;
+                  column-width: auto !important; }
+  /* межколонник, поставленный на попа: обычная отбивка между колонками */
+  body.mob .col + .col { margin-top: var(--gut); }
+  /* буфер сам и есть пропуск — его высота работает без надбавок */
+  body.mob .col.buffer { height: var(--gap-h) !important; margin-top: 0 !important; }
+  body.mob .col.buffer + .col { margin-top: 0 !important; }
+  body.mob .col.fig img { max-height: none; }
+  body.mob .scroller { height: auto !important; overflow: visible; }
+  body.mob .scroller figure + figure, body.mob .scroller img + img { margin-top: var(--gut); }
+  body.mob #rail { display: none; }
+</style>
+</head>
+<body>
+<div id="strip" lang="en"></div>
+<div id="rail"><i></i></div>
+<div id="toast">ссылка скопирована</div>
+
+<script src="/gorizont-data.js"></script>
+<script src="/panel.js"></script>
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   Стенд «Горизонтальный лонгрид» — статья про алгоритмические сетки
+   разложена горизонтальной последовательностью колонок.
+
+   ЗАКОН ЛЕНТЫ
+   1. Базовая колонка — col (340). Межколонник — gut (30).
+      Всё, что шире одной колонки, занимает целый пролёт:
+          span(N) = N·col + (N−1)·gut   →  340 / 710 / 1080 / 1450…
+      Поэтому любая граница колонки ложится на общий шаг col+gut.
+   2. Высота ленты — окно минус поля. Колонки выровнены по верху.
+   3. Абзац, который не влез по высоте, перетекает в соседнюю колонку
+      (многоколонник CSS, ширина колонки та же — пролёт растёт на 1).
+   4. Пролёт картинки выбирается по высоте экрана: берётся самый широкий
+      пролёт, при котором картинка целиком помещается в высоту, но не шире,
+      чем нарисовано в макете. На высоком экране — как в макете, на низком
+      картинка отступает на пролёт назад. Выключается ручкой в панели.
+   5. Стопка картинок (несколько в одной колонке) — окно со своей
+      вертикальной прокруткой. Пролёт по тому же закону, только считается
+      по одной картинке стопки: целая картинка всегда влезает в высоту.
+   6. Титул стоит между двумя буферами по 340: его ширина = окно − 2·(col+gut),
+      поэтому тройка «буфер + титул + буфер» ровно заполняет экран.
+   7. Уже порога мобайла лента разворачивается в вертикаль, а буферы
+      становятся пропусками трёх ступеней — по тому, что стоит рядом.
+
+   Любую ручку панели можно задать прямо в адресе: ?col=300&figLaw=0&dbg=1.
+   ?panel=1 открывает панель, ?reset=1 сбрасывает сохранённые настройки.
+   ═══════════════════════════════════════════════════════════════════ */
+
+var DEFAULTS = {
+  col: 340,        // базовая колонка
+  gut: 30,         // межколонник
+  pad: 30,         // поле сверху и снизу
+  wheel: 100,      // ход колеса, %
+  lag: 82,         // инерция, %
+  snap: 0,         // притяжение к краю колонки
+  figLaw: 1,       // пролёт картинки: 1 — по высоте экрана, 0 — как в макете
+  gapBig: 120,     // мобайл: пропуск перед разделом
+  gapMid: 72,      // мобайл: пропуск между группами
+  gapSml: 40,      // мобайл: пропуск у картинки
+  mob: 700,        // порог мобайла
+  dbg: 0,          // показать границы колонок
+  dbgbuf: 0        // показать буферы
+};
+var P = Object.assign({}, DEFAULTS);
+try { Object.assign(P, JSON.parse(localStorage.getItem('gorizont-params') || '{}')); } catch (e) {}
+// параметры из адреса поверх сохранённых: ?col=300&figLaw=0&dbg=1
+new URLSearchParams(location.search).forEach(function (v, k) {
+  if (k in DEFAULTS) P[k] = isNaN(parseFloat(v)) ? v : parseFloat(v);
+});
+
+var DATA  = window.GORIZONT || [];
+var strip = document.getElementById('strip');
+var rail  = document.querySelector('#rail i');
+var toast = document.getElementById('toast');
+var root  = document.documentElement;
+var mobile = false;
+
+/* селекты панели возвращают строку — приводим переключатели к «да/нет» */
+function flag(v) { return v !== 0 && v !== '0' && v !== false && v !== ''; }
+
+/* ── пролёт ── */
+function span(n) { return n * P.col + (n - 1) * P.gut; }
+function spanFits(w) { return Math.max(1, Math.floor((w + P.gut) / (P.col + P.gut))); }
+
+/* ── адрес фрагмента ── */
+function anchorOf(d) {
+  if (d.t === 'title') return 'title';
+  if (d.t === 'fig' || d.t === 'figs') return 'img-' + d.n;
+  if (d.t === 'cap') return 'cap-' + d.to;
+  if (d.n) return d.n.replace(/\s*–\s*/, '-').replace(/\s+/g, '');   // «01 – 05» → 01-05
+  return null;
+}
+
+/* ── ступень пропуска для буфера (мобайл) ── */
+function gapLevel(i) {
+  var prev = null, next = null, k;
+  for (k = i - 1; k >= 0; k--) if (DATA[k].t !== 'buffer') { prev = DATA[k]; break; }
+  for (k = i + 1; k < DATA.length; k++) if (DATA[k].t !== 'buffer') { next = DATA[k]; break; }
+  if (!prev) return 'big';
+  if (next && next.t === 'title') return 'big';
+  if (next && next.n && /–\s*00$/.test(next.n)) return 'big';       // начало раздела
+  var atFig = (next && (next.t === 'fig' || next.t === 'figs')) ||
+              (prev && (prev.t === 'cap' || prev.t === 'fig' || prev.t === 'figs'));
+  return atFig ? 'sml' : 'mid';
+}
+
+/* ── сборка колонок ── */
+var cols = [];   // {el, d, i, kind}
+
+function el(tag, cls, txt) {
+  var n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (txt != null) n.textContent = txt;
+  return n;
+}
+function idxLine(text, id) {
+  var n = el('div', 'idx', text);
+  if (id) { n.dataset.id = id; n.title = 'скопировать ссылку на фрагмент'; }
+  return n;
+}
+function img(src, alt, w, h) {
+  var n = document.createElement('img');
+  n.src = '/gorizont-img/' + src;
+  n.alt = alt || '';
+  // натуральные размеры проставлены заранее: место под картинку занято
+  // до загрузки, лента не дёргается и ссылка на фрагмент попадает точно
+  if (w) { n.width = w; n.height = h; }
+  n.draggable = false;
+  return n;
+}
+
+function build() {
+  DATA.forEach(function (d, i) {
+    var c, id = anchorOf(d);
+    switch (d.t) {
+      case 'buffer':
+        c = el('div', 'col buffer');
+        c.dataset.gap = gapLevel(i);
+        break;
+
+      case 'title':
+        c = el('div', 'col title');
+        c.appendChild(idxLine(d.date, id));
+        c.appendChild(el('h1', null, d.text));
+        break;
+
+      case 'lead':
+        c = el('div', 'col flow lead-col');
+        c.appendChild(idxLine(d.n, id));
+        c.appendChild(el('p', 'lead', d.text));
+        c.appendChild(el('div', 'by', d.by));
+        break;
+
+      case 'head':
+        c = el('div', 'col flow head-col');
+        c.appendChild(idxLine(d.n, id));
+        c.appendChild(el('p', 'lead', d.text));
+        break;
+
+      case 'cap':
+        c = el('div', 'col flow cap-col');
+        c.appendChild(idxLine(d.arrow, id));
+        c.appendChild(el('p', 'cap', d.text));
+        if (d.thumb) c.appendChild(Object.assign(img(d.thumb, '', 50, 50), { className: 'thumb' }));
+        break;
+
+      case 'fig':
+        c = el('div', 'col fig');
+        c.appendChild(idxLine(d.n, id));
+        c.appendChild(img(d.src, 'илл. ' + d.n, d.w, d.h));
+        break;
+
+      case 'figs':
+        c = el('div', 'col figs');
+        if (d.label === 'outside') c.appendChild(idxLine(d.n, id));
+        var sc = el('div', 'scroller');
+        d.items.forEach(function (it) {
+          if (it.n) {
+            var f = el('figure');
+            f.appendChild(idxLine(it.n).cloneNode(false));
+            f.lastChild.className = 'idx sub';
+            f.lastChild.textContent = it.n;
+            f.appendChild(img(it.src, 'илл. ' + it.n, it.w, it.h));
+            sc.appendChild(f);
+          } else {
+            sc.appendChild(img(it.src, 'илл. ' + d.n, it.w, it.h));
+          }
+        });
+        c.appendChild(sc);
+        break;
+
+      default:
+        c = el('div', 'col flow');
+        c.appendChild(idxLine(d.n, id));
+        c.appendChild(el('p', 'main', d.text));
+    }
+    if (id) c.id = id;
+    strip.appendChild(c);
+    cols.push({ el: c, d: d, i: i });
+  });
+}
+
+/* ── раскладка ── */
+function layout() {
+  var vw = window.innerWidth, vh = window.innerHeight;
+  mobile = vw < P.mob;
+  document.body.classList.toggle('mob', mobile);
+  root.classList.toggle('mob', mobile);
+  document.body.classList.toggle('dbg', flag(P.dbg));
+  document.body.classList.toggle('dbgbuf', flag(P.dbgbuf));
+  root.style.setProperty('--col', P.col + 'px');
+  root.style.setProperty('--gut', P.gut + 'px');
+  root.style.setProperty('--pad', P.pad + 'px');
+
+  if (mobile) return layoutMob(vw);
+
+  var avail = Math.max(200, vh - 2 * P.pad);
+  root.style.setProperty('--avail', avail + 'px');
+
+  cols.forEach(function (c) {
+    var d = c.d, e = c.el;
+    e.style.height = '';
+    e.style.setProperty('--room', '');
+    if (d.t === 'buffer') { e.style.width = P.col + 'px'; return; }
+
+    if (d.t === 'title') {
+      var w = Math.max(P.col, vw - 2 * (P.col + P.gut));
+      e.style.width = w + 'px';
+      e.style.setProperty('--ttl', Math.max(34, Math.min(60, w / 1531 * 60)).toFixed(1) + 'px');
+      return;
+    }
+    if (d.t === 'fig') {
+      var room = Math.max(60, avail - 37);              // строка индекса 20 + отбивка 17
+      var n = flag(P.figLaw) ? Math.min(d.span, spanFits(room * d.w / d.h)) : d.span;
+      e.style.width = span(n) + 'px';
+      e.style.setProperty('--room', room + 'px');
+      return;
+    }
+    if (d.t === 'figs') {
+      // тот же закон: пролёт такой, чтобы ОДНА картинка стопки влезала в высоту целиком
+      var lab = d.label === 'outside' ? 37 : 38;      // строка номера + отбивка
+      var box = Math.max(60, avail - lab);
+      var it = d.items[0];
+      var m = flag(P.figLaw) ? Math.min(d.span, spanFits(box * it.w / it.h)) : d.span;
+      e.style.width = span(m) + 'px';
+      e.style.setProperty('--room', (d.label === 'outside' ? avail - 37 : avail) + 'px');
+      return;
+    }
+    fit(e);                                             // текстовые колонки
+  });
+  stops = cols.filter(function (c) { return c.el.id; }).map(function (c) {
+    return { id: c.el.id, l: c.el.offsetLeft, r: c.el.offsetLeft + c.el.offsetWidth };
+  });
+  measure();
+}
+
+/* абзац не влез по высоте — добираем пролёт, пока не влезет */
+function fit(e) {
+  e.style.width = P.col + 'px';
+  var n = Math.max(1, Math.ceil((e.scrollWidth + P.gut) / (P.col + P.gut)));
+  e.style.width = span(Math.min(n, 8)) + 'px';
+  for (var g = 0; g < 8 && e.scrollWidth > e.clientWidth + 1 && n < 8; g++) {
+    n++; e.style.width = span(n) + 'px';
+  }
+}
+
+function layoutMob(vw) {
+  root.style.setProperty('--avail', 'auto');
+  cols.forEach(function (c) {
+    var d = c.d, e = c.el;
+    e.style.width = '';
+    if (d.t === 'buffer') {
+      var h = ({ big: P.gapBig, mid: P.gapMid, sml: P.gapSml })[e.dataset.gap];
+      e.style.height = h + 'px';
+      e.style.setProperty('--gap-h', h + 'px');
+      return;
+    }
+    e.style.height = '';
+    e.style.setProperty('--room', '');
+    if (d.t === 'title') {
+      var w = vw - 40;
+      e.style.setProperty('--ttl', Math.max(22, Math.min(60, w / 1531 * 60)).toFixed(1) + 'px');
+    }
+  });
+}
+
+/* ── ход ленты: колесо → горизонталь, с инерцией ── */
+var cur = 0, tgt = 0, raf = 0;
+
+function tick() {
+  var k = 1 - P.lag / 100;
+  cur += (tgt - cur) * (k <= 0 ? 1 : k);
+  if (Math.abs(tgt - cur) < 0.5) cur = tgt;
+  strip.scrollLeft = cur;
+  raf = (cur !== tgt) ? requestAnimationFrame(tick) : (flag(P.snap) && snap(), 0);
+}
+function run() { if (!raf) raf = requestAnimationFrame(tick); }
+function maxScroll() { return Math.max(0, strip.scrollWidth - strip.clientWidth); }
+function push(dx) { tgt = Math.max(0, Math.min(maxScroll(), tgt + dx)); run(); }
+
+strip.addEventListener('wheel', function (e) {
+  if (mobile) return;
+  if (e.target.closest && e.target.closest('.st-panel')) return;   // панель скроллится сама
+  var sc = e.target.closest && e.target.closest('.scroller');
+  if (sc && Math.abs(e.deltaY) >= Math.abs(e.deltaX)) {
+    var top = sc.scrollTop <= 0, bot = sc.scrollTop >= sc.scrollHeight - sc.clientHeight - 1;
+    if ((e.deltaY < 0 && !top) || (e.deltaY > 0 && !bot)) return;  // вертикаль внутри стопки
+  }
+  e.preventDefault();
+  var d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+  push(d * P.wheel / 100);
+}, { passive: false });
+
+strip.addEventListener('scroll', function () {
+  if (Math.abs(strip.scrollLeft - cur) > 2) { cur = tgt = strip.scrollLeft; }
+  measure();
+});
+
+function snap() {
+  var best = null, bd = 1e9;
+  stops.forEach(function (st) {
+    var d = Math.abs(st.l - cur);
+    if (d < bd) { bd = d; best = st.l; }
+  });
+  if (best != null && bd > 1 && bd < P.col) { tgt = Math.max(0, Math.min(maxScroll(), best)); run(); }
+}
+
+window.addEventListener('keydown', function (e) {
+  if (mobile || (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName))) return;
+  var step = window.innerWidth * 0.9;
+  if (e.key === 'ArrowRight' || e.key === 'PageDown') { push(step); e.preventDefault(); }
+  else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { push(-step); e.preventDefault(); }
+  else if (e.key === 'Home') { tgt = 0; run(); e.preventDefault(); }
+  else if (e.key === 'End') { tgt = maxScroll(); run(); e.preventDefault(); }
+});
+
+/* ── ход + адрес фрагмента ── */
+var lastHash = '', stops = [];   // stops — координаты колонок, снятые при раскладке
+function measure() {
+  if (mobile) return;
+  var m = maxScroll();
+  rail.style.width = (m ? (strip.scrollLeft / m * 100) : 0).toFixed(2) + '%';
+  var x = strip.scrollLeft + 1;
+  for (var k = 0; k < stops.length; k++) {
+    if (stops[k].r > x) {
+      if (stops[k].id !== lastHash) {
+        lastHash = stops[k].id;
+        history.replaceState(null, '', '#' + stops[k].id);
+      }
+      return;
+    }
+  }
+}
+
+/* ── ссылка на фрагмент по клику в индекс ── */
+strip.addEventListener('click', function (e) {
+  var n = e.target.closest && e.target.closest('.idx[data-id]');
+  if (!n) return;
+  var url = location.origin + location.pathname + '#' + n.dataset.id;
+  (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(show, function () {
+    prompt('Ссылка на фрагмент:', url);
+  });
+  function show() { toast.classList.add('on'); setTimeout(function () { toast.classList.remove('on'); }, 1200); }
+});
+
+var startHash = location.hash.slice(1);   // адрес, с которым открыли страницу
+function gotoHash(h) {
+  if (h == null) h = location.hash.slice(1);
+  if (!h) return;
+  var t = document.getElementById(h);
+  if (!t) return;
+  if (mobile) t.scrollIntoView();
+  else { cur = tgt = Math.max(0, Math.min(maxScroll(), t.offsetLeft)); strip.scrollLeft = cur; measure(); }
+}
+window.addEventListener('hashchange', gotoHash);
+
+/* ── панель ── */
+StendPanel.build({
+  storageKey: 'gorizont-params',
+  params: P,
+  defaults: DEFAULTS,
+  defs: [
+    ['h', 'Сетка'],
+    ['col', 'Колонка, px', 200, 560, 5],
+    ['gut', 'Межколонник, px', 0, 90, 1],
+    ['pad', 'Поле сверху и снизу, px', 0, 120, 1],
+    ['figLaw', 'Пролёт картинки', 'select', [[1, 'по высоте экрана'], [0, 'как в макете']]],
+    ['h', 'Ход'],
+    ['wheel', 'Колесо, %', 20, 300, 5],
+    ['lag', 'Инерция, %', 0, 96, 1],
+    ['snap', 'Притяжение к колонке', 'select', [[0, 'нет'], [1, 'есть']]],
+    ['h', 'Мобайл'],
+    ['mob', 'Порог, px', 420, 1100, 10],
+    ['gapBig', 'Пропуск перед разделом, px', 0, 300, 4],
+    ['gapMid', 'Пропуск между группами, px', 0, 300, 4],
+    ['gapSml', 'Пропуск у картинки, px', 0, 300, 4],
+    ['h', 'Разметка'],
+    ['dbg', 'Границы колонок', 'select', [[0, 'скрыть'], [1, 'показать']]],
+    ['dbgbuf', 'Буферы', 'select', [[0, 'скрыть'], [1, 'показать']]]
+  ],
+  desc: {
+    col: 'Базовая ширина колонки. Всё широкое считается пролётами: N·колонка + (N−1)·межколонник.',
+    gut: 'Расстояние между колонками. Входит в пролёт широких блоков.',
+    figLaw: 'По высоте экрана — картинка берёт самый широкий пролёт, при котором целиком влезает в высоту, но не шире, чем в макете. Как в макете — пролёт фиксирован, лишнее обрезается по высоте.',
+    lag: 'Чем больше, тем дольше лента догоняет колесо.',
+    snap: 'После остановки лента подтягивается к ближайшему краю колонки.',
+    mob: 'Уже этой ширины лента разворачивается в вертикаль.',
+    gapBig: 'Ступень пропуска перед титулом и началом раздела.',
+    gapMid: 'Ступень пропуска между смысловыми группами.',
+    gapSml: 'Ступень пропуска рядом с картинкой и её подписью.',
+    dbg: 'Пунктир по границе каждой колонки — видно, как ложится пролёт.',
+    dbgbuf: 'Заливка пустых колонок-буферов, как в макете.'
+  }
+});
+
+/* панель меняет параметры молча — следим за ними и перекладываем */
+var sig = '';
+(function watch() {
+  var s = [P.col, P.gut, P.pad, P.mob, P.figLaw, P.dbg, P.dbgbuf,
+           P.gapBig, P.gapMid, P.gapSml].join(',');
+  if (s !== sig) { sig = s; layout(); }
+  requestAnimationFrame(watch);
+})();
+
+/* ── пуск ── */
+build();
+layout();
+gotoHash(startHash);
+measure();
+var rz = 0;
+window.addEventListener('resize', function () {
+  if (rz) return;                       // тянут за угол окна — считаем раз в кадр
+  rz = requestAnimationFrame(function () { rz = 0; layout(); measure(); });
+});
+window.addEventListener('load', function () { layout(); gotoHash(startHash); measure(); });
+document.fonts && document.fonts.ready.then(function () { layout(); measure(); });
+</script>
+</body>
+</html>
