@@ -301,6 +301,7 @@
 <script src="/panel-lib/palitra.js"></script>
 <script src="/panel-lib/otkat.js"></script>
 <script src="/panel-lib/datchik.js"></script>
+<script src="/panel-lib/maska.js"></script>
 <script>
 /* Закон стенда — в шапке файла (комментарий над <html>).
    Ниже — параметры, раскладка и ход. */
@@ -317,6 +318,10 @@ var DEFAULTS = {
   naborFront: 25,  // фронт перебора, % длины строки
   naborTick: 70,   // перещёлк знака, мс
   naborLatch: false, // защёлка: набранное не рассыпается обратно
+  maskaPath: 700,  // врезка: за сколько пикселов хода строки выезжают из-под маски, 0 — выключено
+  maskaSdvig: 45,  // сдвиг строк, % пути — насколько строки расходятся во времени
+  maskaEase: 'торможение',
+  maskaBez: [0.33, 1, 0.68, 1],
   ride: 390,       // проезд к фрагменту и по клавишам, мс
   rideEase: 'плавный',
   rideBez: [0.65, 0, 0.35, 1],
@@ -613,6 +618,7 @@ function layout() {
   cols.forEach(place);
   cols.forEach(function (c) { if (c.el.classList.contains('flow')) guard(c); });  // страховка на фрагментацию
   wins.forEach(function (w) { w.draw(); });
+  maskaRezat();                                  // строки врезки — после ширин
   raskhod();
 }
 
@@ -788,6 +794,33 @@ function flapText(target, seed, p, tick, win) {
   }
   return out;
 }
+/* ВЫЕЗД ВРЕЗКИ ИЗ-ПОД МАСКИ (модуль /panel-lib/maska.js, снят с
+   kononenkogroup.com). Тело статьи перенабирается, врезка выезжает: два
+   разных появления по одному закону — доля считается от того, насколько
+   колонка вошла с правого края. Строки режутся заново после каждой
+   перекладки: разбивка зависит от ширины, а её знает только браузер. */
+function maskaRezat() {
+  for (var i = 0; i < cols.length; i++) {
+    var c = cols[i], e = c.el.querySelector('p.lead');
+    if (!e) { c.maska = null; continue; }
+    c.maska = (mobile || !P.maskaPath) ? (StendMaska.snyat(e), null) : StendMaska.rezat(e);
+  }
+}
+function maska() {
+  if (mobile || !P.maskaPath) return;
+  var vw = window.innerWidth, sl = strip.scrollLeft;
+  for (var i = 0; i < cols.length; i++) {
+    var c = cols[i];
+    if (!c.maska) continue;
+    var p = TIHO ? 1 : (vw - (c.l - sl)) / P.maskaPath;
+    p = p < 0 ? 0 : p > 1 ? 1 : p;
+    StendMaska.pokazat(c.maska, p, {
+      sdvig: P.maskaSdvig / 100,
+      izing: function (q) { return evalEase(P.maskaEase, P.maskaBez, q); }
+    });
+  }
+}
+
 function nabor() {
   if (TIHO) {                       // «меньше движения»: текст стоит набранным
     for (var t = 0; t < cols.length; t++) {
@@ -1040,6 +1073,9 @@ StendPanel.build({
     ['naborFront', 'Фронт перебора, %', 0, 100, 1],
     ['naborTick', 'Перещёлк знака, мс', 20, 300, 5],
     ['naborLatch', '', 'toggle', ['Защёлкивать набранное', 'Отпускать набранное назад']],
+    ['maskaPath', 'Врезка: путь выезда, px', 0, 2000, 20],
+    ['maskaSdvig', 'Врезка: сдвиг строк, %', 0, 95, 1],
+    ['maskaEase', 'Врезка: кривая выезда', 'ease'],
     ['h', 'Ход'],
     ['wheel', 'Колесо, %', 20, 300, 5],
     ['wake', 'Колесо колонке после паузы, мс', 0, 1500, 10],
@@ -1079,6 +1115,9 @@ StendPanel.build({
     naborFront: 'Ширина фронта, на котором буквы перещёлкиваются случайными знаками, в долях длины строки. 0 — буквы просто проявляются без перебора.',
     naborTick: 'Как часто перещёлкивается знак на фронте. Перебор замирает, когда лента встала.',
     naborLatch: 'Набранное больше не рассыпается при ходе назад.',
+    maskaPath: 'Врезка появляется иначе, чем тело: строки выезжают снизу из-под собственной маски. За сколько пикселов хода они успевают выехать. 0 — выключено.',
+    maskaSdvig: 'Какая часть пути уходит на расхождение строк. 0 — все выезжают разом и читаются как сдвиг блока; больше — строка за строкой.',
+    maskaEase: 'Кривая выезда строки. «Своя (безье)» открывает редактор.',
     wheel: 'Сколько ленты проходит за один щелчок колеса.',
     lag: 'Чем больше, тем дольше лента догоняет колесо.',
     ride: 'Сколько едет лента, когда её зовут клавишей, адресом фрагмента или притяжением. 0 — сразу.',
@@ -1108,11 +1147,12 @@ function setLive(el) {
   var s = [P.col, P.gut, P.pad, P.mob, P.figFit, P.dbg, P.dbgbuf,
            P.ttlLead, P.ttlTrack, P.leadSize, P.leadLead, P.leadTrack,
            P.mainSize, P.mainLead, P.mainTrack, P.dscSize, P.dscLead, P.dscTrack,
-           P.naborPath,
+           P.naborPath, P.maskaPath,
            P.gapBig, P.gapMid, P.gapSml,
            P.bg, P.ink, String(P.ttl)].join(',');
   if (s !== sig) { sig = s; layout(); }
   nabor();
+  maska();
   var now = performance.now();
   if (!rested()) { setLive(null); lastLook = 0; }
   else if (now - lastLook > 90) {
