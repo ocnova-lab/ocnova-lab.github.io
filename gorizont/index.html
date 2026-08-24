@@ -107,8 +107,9 @@
     --u: 1;              /* модуль набора = колонка / 340 (ставится в JS) */
     --ink: #8D8989;      /* текст, индексы */
     --ink2: #A4A4A4;     /* подписи, номера внутри картинок */
-    --black: #000;
+    --black: #000;       /* титул */
     --bg: #fff;
+    --hair: #EFEFEF;     /* волосяная линия датчиков хода */
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -185,7 +186,7 @@
      верх = доля прокрученного — обе доли, не замеры. */
   /* система координат — окно .win; вбок на половину межколонника, по высоте во всё окно */
   .vrail { position: absolute; top: 0; bottom: 0; right: calc(var(--gut) / -2);
-           width: 1px; background: #EFEFEF; display: none; }
+           width: 1px; background: var(--hair); display: none; }
   .vrail.on { display: block; }
   /* бегунок: высота = доля видимого от общего, верх = доля прокрученного (обе доли, не замеры) */
   .vrail b { position: absolute; left: 0; width: 100%; background: var(--ink); }
@@ -193,7 +194,7 @@
   .scroller img { display: block; width: 100%; height: auto; }
 
   /* ── ход ленты ── */
-  #rail { position: fixed; left: 0; right: 0; bottom: 0; height: 1px; background: #EFEFEF; }
+  #rail { position: fixed; left: 0; right: 0; bottom: 0; height: 1px; background: var(--hair); }
   #rail i { display: block; height: 100%; width: 0; background: var(--ink); }
   #toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
            font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px;
@@ -249,6 +250,12 @@ var DEFAULTS = {
   gapMid: 72,      // мобайл: пропуск между группами
   gapSml: 40,      // мобайл: пропуск у картинки
   mob: 700,        // порог мобайла
+  palette: 'maket', // палитра пресет-списком
+  bg: '#ffffff',
+  ink: '#8d8989',
+  ink2: '#a4a4a4',
+  black: '#000000',
+  hair: '#efefef',
   dbg: 0,          // показать границы колонок
   dbgbuf: 0        // показать буферы
 };
@@ -428,6 +435,9 @@ function layout() {
   root.style.setProperty('--col', P.col + 'px');
   root.style.setProperty('--gut', P.gut + 'px');
   root.style.setProperty('--pad', P.pad + 'px');
+  ['bg', 'ink', 'ink2', 'black', 'hair'].forEach(function (k) {
+    root.style.setProperty('--' + k, P[k]);
+  });
 
   if (mobile) return layoutMob(vw);
 
@@ -668,6 +678,18 @@ StendPanel.build({
     ['gut', 'Межколонник, px', 0, 90, 1],
     ['pad', 'Поле сверху и снизу, px', 0, 120, 1],
     ['figLaw', 'Пролёт картинки', 'select', [[0, 'как в макете'], [1, 'по высоте экрана']]],
+    ['h', 'Цвет'],
+    ['palette', 'Палитра', 'preset', [
+      ['maket', 'Как в макете', { bg: '#ffffff', ink: '#8d8989', ink2: '#a4a4a4', black: '#000000', hair: '#efefef' }],
+      ['black', 'Чёрное на белом', { bg: '#ffffff', ink: '#111111', ink2: '#777777', black: '#000000', hair: '#e2e2e2' }],
+      ['night', 'Ночь', { bg: '#101014', ink: '#b9b5b4', ink2: '#7e7b7a', black: '#f0f0f2', hair: '#2a2a30' }],
+      ['own', 'Свои цвета', {}]
+    ]],
+    ['bg', 'Фон', 'color'],
+    ['ink', 'Текст', 'color'],
+    ['ink2', 'Подписи', 'color'],
+    ['black', 'Титул', 'color'],
+    ['hair', 'Линия хода', 'color'],
     ['h', 'Ход'],
     ['wheel', 'Колесо, %', 20, 300, 5],
     ['lag', 'Инерция, %', 0, 96, 1],
@@ -684,6 +706,7 @@ StendPanel.build({
     ['dbgbuf', 'Буферы', 'select', [[0, 'скрыть'], [1, 'показать']]]
   ],
   desc: {
+    palette: 'Готовые наборы цвета. «Свои цвета» — крутить пипетками ниже.',
     col: 'Базовая ширина колонки. Всё широкое считается пролётами: N·колонка + (N−1)·межколонник.',
     gut: 'Расстояние между колонками. Входит в пролёт широких блоков.',
     figLaw: 'Как в макете — ширина картинки кратна колонке и не зависит от экрана, лишнее по высоте уходит в прокрутку колонки. По высоте экрана — пролёт отступает на ступень, пока картинка не влезет в высоту целиком.',
@@ -704,7 +727,8 @@ StendPanel.build({
 var sig = '';
 (function watch() {
   var s = [P.col, P.gut, P.pad, P.mob, P.figLaw, P.dbg, P.dbgbuf,
-           P.gapBig, P.gapMid, P.gapSml].join(',');
+           P.gapBig, P.gapMid, P.gapSml,
+           P.bg, P.ink, P.ink2, P.black, P.hair].join(',');
   if (s !== sig) { sig = s; layout(); }
   requestAnimationFrame(watch);
 })();
