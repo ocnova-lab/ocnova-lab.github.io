@@ -1237,5 +1237,20 @@ window.addEventListener('resize', function () {
 window.addEventListener('load', function () { layout(); gotoHash(startHash); measure(); });
 document.fonts && document.fonts.ready.then(function () { layout(); measure(); });
 </script>
+
+<script>
+/* проверка перенабора: ставим ленту так, чтобы колонка стояла в зоне набора */
+setTimeout(function(){
+  var t=document.getElementById('01-04'), c=null;
+  for(var i=0;i<cols.length;i++) if(cols[i].el===t) c=cols[i];
+  var сдвиг=parseFloat((/[?&]sh=(-?[\d.]+)/.exec(location.search)||[])[1]||'0');
+  cur=tgt=strip.scrollLeft=Math.max(0, c.l - window.innerWidth + сдвиг);
+  for(var n=0;n<6;n++){ polе(); nabor(); }
+  var p=t.querySelector('p.main');
+  document.title='DBG '+JSON.stringify({сдвиг:сдвиг, доля:c.pn.toFixed(2),
+    высотаКолонки:t.offsetHeight, строк:Math.round(p.offsetHeight/20.02),
+    видно:p.textContent.slice(0,60)});
+},1500);
+</script>
 </body>
 </html>

@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Аналоговая погоня</title>
+<link rel="stylesheet" href="/panel.css" />
+<style>
+  @font-face { font-family: "Even Mono"; font-weight: 400; font-style: normal;
+    src: url("/fonts/EvenMono-Regular.woff2") format("woff2"),
+         url("/fonts/EvenMono-Regular.woff") format("woff"); font-display: swap; }
+  @font-face { font-family: "Editorial New"; font-weight: 200; font-style: normal;
+    src: url("/fonts/EditorialNew-Thin.woff") format("woff"); font-display: swap; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg, #0e0e11); color: var(--ink, #ececef);
+    overflow: hidden; overscroll-behavior: none; cursor: grab;
+    font-family: "Editorial New", Georgia, serif;
+  }
+  body.tyanem { cursor: grabbing; }
+  #lenta { position: fixed; inset: 0; will-change: transform; }
+  .stroka {
+    display: flex; align-items: baseline; gap: 2.2ch;
+    /* поле слева коридором: пока места хватает, лента уходит правее панели,
+       на узком экране отступ стекает к нулю — панель там нижним листом */
+    padding-left: clamp(16px, calc(100vw - 660px), 348px);
+    padding-right: clamp(16px, 5vw, 90px);
+    font-size: clamp(20px, var(--kegl, 4.4) * 1vw, 92px);
+    line-height: 1.28; letter-spacing: -0.015em;
+  }
+  .stroka i {
+    font-family: "Even Mono", ui-monospace, monospace; font-style: normal;
+    font-size: clamp(9px, 1.05vw, 15px); opacity: .38; letter-spacing: .06em;
+    flex: 0 0 4ch;
+  }
+  #datchik {
+    position: fixed; right: 12px; top: 12px; z-index: 10;
+    font: 10px/1.5 "Even Mono", ui-monospace, monospace;
+    color: var(--ink, #ececef); opacity: .4; text-align: right;
+    white-space: pre; pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="lenta"></div>
+<div id="datchik"></div>
+
+<script src="/panel.js"></script>
+<script src="/panel-lib/skroll.js"></script>
+<script src="/panel-lib/datchik.js"></script>
+<script src="/panel-lib/toggle.js"></script>
+<script>
+/* ─────────────────────────────────────────────────────────────────
+   Аналоговая погоня — образец плавного скролла для библиотеки.
+
+   Смотрит: на скролл (колесо, палец, клавиши). Реагирует: плавно.
+   Закон протяжки (15 в матрице): состояние привязано к позиции хода,
+   лента догоняет цель непрерывно, а не шагами.
+   Приём: аналоговая погоня — ввод двигает ЦЕЛЬ, лента тянется за ней;
+   живой ввод отменяет доводку, доводка перехватывает управление.
+
+   Механика — /panel-lib/skroll.js (снято с Lenis и Locomotive Scroll v5).
+   Лента зациклена: пределов нет, потому и «кольцо».
+   Параметры адреса: ?stop=мс — стоп-кадр, ?panel=1 — панель открыта.
+   ───────────────────────────────────────────────────────────────── */
+
+var TEKST = [
+  'Плавный скролл', 'начинается не с формулы,', 'а с того, что ввод', 'перестают считать',
+  'готовым числом.', 'Колесо шлёт пиксели,', 'строки или экраны —', 'браузер решает сам.',
+  'Строка это шестнадцать', 'с половиной пикселей,', 'экран — вся высота.', 'Стенд, считающий строки',
+  'пикселями, едет', 'в десятки раз медленнее', 'и выглядит сломанным', 'ровно у той половины',
+  'читателей, что сидит', 'на Файрфоксе.', 'Второе — затухание.', 'Наивная строчка',
+  'x += (цель - x) * 0.1', 'зависит от частоты кадров:', 'на ста двадцати герцах', 'лента догоняет вдвое резвее,',
+  'чем на шестидесяти.', 'Верная форма считает время:', 'exp(-λ·dt).', 'Тогда движение одинаково',
+  'на любом экране.', 'Третье — два режима.', 'Погоня тянется за рукой', 'бесконечно,',
+  'проезд доводит до точки', 'за названное время', 'по названной кривой.', 'Живой ввод отменяет проезд —',
+  'иначе лента спорит', 'с человеком.',
+];
+
+var EASES = {
+  'линейный': [0, 0, 1, 1], 'плавный': [0.65, 0, 0.35, 1],
+  'мягкий выход': [0.23, 1, 0.32, 1], 'разгон': [0.5, 0, 0.75, 0],
+};
+function bez(b, t) { var u = 1 - t; return 3 * u * u * t * b[1] + 3 * u * t * t * b[3] + t * t * t; }
+function evalEase(name, b, t) { return bez(b || EASES[name] || EASES['плавный'], t); }
+
+var DEFAULTS = Object.assign({
+  kegl: 4.4, bg: '#0e0e11', ink: '#ececef', pokaz: true,
+}, StendSkroll.ZNACHENIYA);
+var P = Object.assign({}, DEFAULTS);
+try { Object.assign(P, JSON.parse(localStorage.getItem('skroll-params') || '{}')); } catch (e) {}
+
+var lenta = document.getElementById('lenta');
+var dat = document.getElementById('datchik');
+function sobrat() {
+  lenta.innerHTML = TEKST.concat(TEKST).map(function (s, i) {
+    return '<div class="stroka"><i>' + String(i % TEKST.length + 1).padStart(3, '0') +
+           '</i><span>' + s + '</span></div>';
+  }).join('');
+}
+sobrat();
+
+var period = 0;
+function obmer() { period = lenta.scrollHeight / 2; }
+addEventListener('resize', obmer);
+
+var S = StendSkroll.pusk({
+  params: P, koltso: true,
+  na: function (poz, skorost) {
+    if (!period) obmer();
+    var y = -((poz % period) + period) % period;      // зацикленная лента
+    lenta.style.transform = 'translate3d(0,' + y.toFixed(2) + 'px,0)';
+    if (P.pokaz) {
+      dat.textContent = 'позиция ' + Math.round(poz) + '\nскорость ' +
+        Math.round(skorost) + ' px/с\nцель ' + Math.round(S.cel());
+    } else dat.textContent = '';
+  },
+  izing: function (t) { return evalEase(P.proezdEase, P.proezdBez, t); },
+});
+
+addEventListener('pointerdown', function (e) { if (e.pointerType !== 'mouse') document.body.classList.add('tyanem'); });
+addEventListener('pointerup', function () { document.body.classList.remove('tyanem'); });
+
+function prilozhit() {
+  document.body.style.setProperty('--bg', P.bg);
+  document.body.style.setProperty('--ink', P.ink);
+  document.body.style.setProperty('--kegl', P.kegl);
+  obmer();
+}
+
+StendPanel.build({
+  storageKey: 'skroll-params', params: P, defaults: DEFAULTS,
+  eases: EASES, evalEase: evalEase, bezApprox: EASES,
+  defs: StendSkroll.RUCHKI.concat([
+    ['h', 'Набор'],
+    ['kegl', 'Кегль, % ширины', 2, 9, 0.1],
+    ['bg', 'Фон', 'color'],
+    ['ink', 'Текст', 'color'],
+    ['h', 'Датчик'],
+    ['pokaz', '', 'toggle', ['Показать датчик', 'Скрыть датчик']],
+    ['tempo', 'Скорость ленты', 'datchik', {
+      val: function () { return S.skorost(); }, vysota: 40,
+    }],
+  ]),
+  desc: {
+    koleso: 'сколько ленты на один щелчок колеса; ввод уже переведён в пиксели',
+    palec: 'множитель для пальца — на тач-экране путь короче, чем ход ленты',
+    inercia: 'насколько лента отстаёт от цели; 0 — прилипает, 97 — вязкая',
+    brosok: 'палец отпущен на ходу — лента продолжает по последней скорости',
+    proezd: 'доводка до точки: нажми Home или End',
+    tempo: 'скорость ленты во времени — видно, как затухает погоня',
+  },
+  onChange: prilozhit,
+});
+prilozhit();
+
+/* ?stop=мс — стоп-кадр для headless-съёмки */
+(function () {
+  var m = location.search.match(/[?&]stop=(\d+)/);
+  if (!m) return;
+  S.postavit(+m[1]);
+  setTimeout(function () { S.stoyat(); }, 60);
+})();
+</script>
+</body>
+</html>
