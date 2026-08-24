@@ -147,6 +147,11 @@
      Пролёт в N колонок = N·col + (N−1)·gut — считается в JS (span()). */
   :root {
     --col: 340px; --gut: 30px; --gutmin: 10px; --pad: 30px; --avail: 100vh;
+    /* набор: кегль в пикселах при базовой колонке, строка и трекинг — в долях кегля */
+    --ttl-lh: 1.17; --ttl-tr: -0.05em;
+    --lead-fs: 20px; --lead-lh: 1.5;  --lead-tr: -0.01em;
+    --main-fs: 14px; --main-lh: 1.43; --main-tr: -0.01em;
+    --dsc-fs: 11px;  --dsc-lh: 1.82;  --dsc-tr: -0.01em;
     --ub: 1;             /* модуль набора = колонка / 340 (ставится в JS) */
     /* Цвет один на весь макет: набор, индексы, подписи, титул и линии схем.
        Разница веса идёт толщиной штриха и кеглем, а не оттенком.
@@ -198,8 +203,8 @@
     font-family: "JetBrains Mono", ui-monospace, monospace;
     /* дескриптор — служебный слой: от --ub, а не от --u, поэтому рост
        живой колонки его не касается. Растёт то, что читают. */
-    font-size: calc(11px * var(--ub)); line-height: calc(20px * var(--ub));
-    letter-spacing: -0.01em; color: var(--ink); text-align: center;
+    font-size: calc(var(--dsc-fs) * var(--ub)); line-height: var(--dsc-lh);
+    letter-spacing: var(--dsc-tr); color: var(--ink); text-align: center;
     margin-bottom: calc(10px * var(--u)); white-space: pre;
   }
   .idx[data-id] { cursor: pointer; }
@@ -207,16 +212,16 @@
      цвет в макете один, менять его на наведении нечем */
   .idx[data-id]:hover { text-decoration: underline dotted; text-underline-offset: 4px; }
   .idx.sub { color: var(--ink); margin-bottom: calc(18px * var(--u)); }
-  .main { font-size: calc(14px * var(--u)); line-height: calc(20px * var(--u));
-          letter-spacing: -0.01em; }
-  .lead { font-size: calc(20px * var(--u)); line-height: calc(30px * var(--u));
-          letter-spacing: -0.01em; }
+  .main { font-size: calc(var(--main-fs) * var(--u)); line-height: var(--main-lh);
+          letter-spacing: var(--main-tr); }
+  .lead { font-size: calc(var(--lead-fs) * var(--u)); line-height: var(--lead-lh);
+          letter-spacing: var(--lead-tr); }
   .cap  { font-family: "JetBrains Mono", ui-monospace, monospace;
-          font-size: calc(11px * var(--ub)); line-height: calc(20px * var(--ub));
-          letter-spacing: -0.01em; color: var(--ink); }
+          font-size: calc(var(--dsc-fs) * var(--ub)); line-height: var(--dsc-lh);
+          letter-spacing: var(--dsc-tr); color: var(--ink); }
   .by   { font-family: "JetBrains Mono", ui-monospace, monospace;
-          font-size: calc(11px * var(--ub)); line-height: calc(20px * var(--ub));
-          letter-spacing: -0.01em; text-align: center; margin-top: calc(20px * var(--u)); }
+          font-size: calc(var(--dsc-fs) * var(--ub)); line-height: var(--dsc-lh);
+          letter-spacing: var(--dsc-tr); text-align: center; margin-top: calc(20px * var(--u)); }
   .thumb { display: block; width: calc(50px * var(--ub)); height: calc(50px * var(--ub));
            margin-top: calc(20px * var(--u)); }
 
@@ -230,7 +235,7 @@
   .col.title .idx { margin-bottom: calc(43px * var(--u)); }
   .col.title h1 {
     font-family: "Even Mono", ui-monospace, monospace; font-weight: 400;
-    letter-spacing: -0.05em; line-height: 1.1667;
+    letter-spacing: var(--ttl-tr); line-height: var(--ttl-lh);
     font-size: var(--ttl, 60px); white-space: pre-line;
   }
 
@@ -335,6 +340,17 @@ var DEFAULTS = {
   gapMid: 72,      // мобайл: пропуск между группами
   gapSml: 40,      // мобайл: пропуск у картинки
   ttl: [34, 60],   // коридор кегля титула, px
+  ttlLead: 117,    // интерлиньяж титула, % кегля
+  ttlTrack: -5,    // трекинг титула, % кегля
+  leadSize: 20,    // врезка и заголовок раздела
+  leadLead: 150,
+  leadTrack: -1,
+  mainSize: 14,    // основной текст
+  mainLead: 143,
+  mainTrack: -1,
+  dscSize: 11,     // дескриптор: индексы, подписи, строка автора
+  dscLead: 182,
+  dscTrack: -1,
   mob: 700,        // порог мобайла
   palette: 'osnova', // палитра пресет-списком
   bg: '#ffffff',
@@ -574,6 +590,14 @@ function layout() {
   gutSet();
   root.style.setProperty('--gut', GUT + 'px');
   root.style.setProperty('--gutmin', P.gut + 'px');
+  [['ttl', null, P.ttlLead, P.ttlTrack],
+   ['lead', P.leadSize, P.leadLead, P.leadTrack],
+   ['main', P.mainSize, P.mainLead, P.mainTrack],
+   ['dsc', P.dscSize, P.dscLead, P.dscTrack]].forEach(function (n) {
+    if (n[1] != null) root.style.setProperty('--' + n[0] + '-fs', n[1] + 'px');
+    root.style.setProperty('--' + n[0] + '-lh', (n[2] / 100).toFixed(4));
+    root.style.setProperty('--' + n[0] + '-tr', (n[3] / 100).toFixed(4) + 'em');
+  });
   root.style.setProperty('--pad', P.pad + 'px');
   ['bg', 'ink'].forEach(function (k) {
     root.style.setProperty('--' + k, P[k]);
@@ -582,7 +606,8 @@ function layout() {
   if (mobile) return layoutMob(vw);
 
   var avail = Math.max(200, vh - 2 * P.pad);
-  var lab = Math.round(37 * u);            // строка индекса 20 + отбивка 17, в модуле
+  // строка индекса по фактическому набору + отбивка 17, всё в модуле
+  var lab = Math.round((P.dscSize * P.dscLead / 100 + 17) * u);
   root.style.setProperty('--avail', avail + 'px');
 
   /* Титул и его буферы. Тройка «буфер + титул + буфер» обязана ровно
@@ -642,7 +667,8 @@ function place(c) {
     // картинке: у стопки с номером на каждой её долю ещё режет строка номера
     var box = Math.max(60, ctx.avail - (d.label === 'outside' ? ctx.lab : 0));
     var it = d.items[0];
-    var one = Math.max(60, box - (d.label === 'each' ? Math.round(38 * ctx.u) : 0));
+    var one = Math.max(60, box - (d.label === 'each'
+      ? Math.round((P.dscSize * P.dscLead / 100 + 18) * ctx.u) : 0));
     stavit(figW(d.span, it.w, it.h, one));
     e.style.setProperty('--room', box + 'px');
     return;
@@ -1007,11 +1033,23 @@ StendPanel.build({
   evalEase: evalEase,
   bezApprox: BEZ_APPROX,
   defs: [
+    ['h', 'Набор'],
+    ['ttl', 'Титул: кегль, px', 'koridor', 20, 90, 1],
+    ['', 'Титул', 'para', [
+      ['ttlLead', 'строка', 80, 200, 1], ['ttlTrack', 'трекинг', -10, 5, 0.1]]],
+    ['', 'Врезка', 'para', [
+      ['leadSize', 'кегль', 12, 40, 0.5], ['leadLead', 'строка', 80, 220, 1],
+      ['leadTrack', 'трекинг', -8, 8, 0.1]]],
+    ['', 'Текст', 'para', [
+      ['mainSize', 'кегль', 8, 28, 0.5], ['mainLead', 'строка', 80, 220, 1],
+      ['mainTrack', 'трекинг', -8, 8, 0.1]]],
+    ['', 'Дескриптор', 'para', [
+      ['dscSize', 'кегль', 7, 20, 0.5], ['dscLead', 'строка', 80, 240, 1],
+      ['dscTrack', 'трекинг', -8, 8, 0.1]]],
     ['h', 'Сетка'],
     ['col', 'Колонка, px', 200, 560, 5],
     ['gut', 'Просвет минимум, px', 0, 60, 1],
     ['pad', 'Поле сверху и снизу, px', 0, 120, 1],
-    ['ttl', 'Кегль титула, px', 'koridor', 20, 90, 1],
     ['h', 'Картинка'],
     ['figFit', 'Выше экрана', 'segment', [
       ['free', 'уже'], ['step', 'пролёт'], ['scroll', 'ход']]],
@@ -1053,6 +1091,10 @@ StendPanel.build({
     col: 'Базовая ширина колонки. Всё широкое считается пролётами: N·колонка + (N−1)·межколонник. Она же модуль набора — кегли и отбивки идут от неё.',
     gut: 'Сколько остаётся между колонками, когда одна из них выросла на полную. Сам межколонник больше: он равен этому просвету плюс запас под рост, поэтому рост входит в запас и соседа не двигает.',
     ttl: 'Кегль титула течёт от ширины его колонки внутри этих границ. Обе — решение глаза, принятое заранее.',
+    ttlLead: 'Титул: интерлиньяж и трекинг. Интерлиньяж в % кегля — держится сам, когда кегль меняется; трекинг тоже в % кегля.',
+    leadSize: 'Врезка и заголовок раздела: кегль в пикселах при базовой колонке 340, интерлиньяж и трекинг в % кегля.',
+    mainSize: 'Основной текст: кегль в пикселах при базовой колонке 340. Все кегли множатся на модуль колонки, поэтому ручка «Колонка» тянет набор за собой.',
+    dscSize: 'Дескриптор — индексы над колонками, подписи к картинкам, строка автора. Он не растёт в поле: служебный слой держит свой кегль.',
     figFit: 'Что делать, когда картинка в высоту экрана не влезает. «Уже» — ширина сходит с шага колонки, зато картинка видна целиком. «Пролёт» — кратность держится, картинка целая, но мельче. «Ход» — ширина как в макете, лишнее уходит в вертикальную прокрутку колонки.',
     wake: 'Сколько лента должна простоять, чтобы колонка под курсором забрала себе колесо и крутилась по вертикали. Пока едем — колонки с картинками пролетают мимо. Роста это не касается: он идёт всегда.',
     zoom: 'Насколько крупнее набор в самой середине поля. Растёт весь набор разом, поэтому мера строки в знаках не меняется. Дескрипторы держат свой кегль. 100 — поле выключено.',
@@ -1086,6 +1128,8 @@ function setLive(el) {
 }
 (function watch() {
   var s = [P.col, P.gut, P.pad, P.mob, P.figFit, P.dbg, P.dbgbuf,
+           P.ttlLead, P.ttlTrack, P.leadSize, P.leadLead, P.leadTrack,
+           P.mainSize, P.mainLead, P.mainTrack, P.dscSize, P.dscLead, P.dscTrack,
            P.gapBig, P.gapMid, P.gapSml,
            P.bg, P.ink, P.zoom, String(P.ttl)].join(',');   // reach/zoomEase/zoomLag поле читает само
   if (s !== sig) { sig = s; layout(); }
