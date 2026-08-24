@@ -872,7 +872,25 @@ function layoutMob(vw) {
 
    Перебор замирает, когда лента встала: движения нет — нет и перещёлкивания.
    Поэтому автономной анимации у стенда по-прежнему нет. */
-var CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#+—/*';
+/* Перебор идёт в регистре и алфавите самой буквы: строчная перещёлкивается
+   строчными, прописная — прописными, цифра — цифрами, знак — знаками.
+   Иначе посреди строчного набора вспыхивает капс — шум, которого в материале
+   нет. Регистр здесь не параметр, а свойство материала, поэтому ручки не имеет. */
+var ALF = {
+  lat: { lo: 'abcdefghijklmnopqrstuvwxyz', up: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' },
+  kir: { lo: 'абвгдежзийклмнопрстуфхцчшщэюя', up: 'АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЭЮЯ' }
+};
+var CIFRY = '0123456789';
+var ZNAKI = '.,;:!?—–-()“”’/*+#';
+function flapChar(ch, n) {
+  var lo = ch.toLowerCase(), up = ch.toUpperCase();
+  if (lo === up) return ch >= '0' && ch <= '9'
+    ? CIFRY[n % 10] : ZNAKI[n % ZNAKI.length];
+  var code = ch.charCodeAt(0);
+  var a = (code >= 0x400 && code <= 0x4FF) ? ALF.kir : ALF.lat;
+  var set = (ch === up) ? a.up : a.lo;
+  return set[n % set.length];
+}
 var NBSP = '\u00A0';
 function jit(seed, i) {
   var x = Math.sin(seed * 37.7 + i * 13.31) * 43758.545;
@@ -886,7 +904,7 @@ function flapText(target, seed, p, tick, win) {
     if (ch === ' ' || ch === '\n' || ch === '\u2028') { out += ch; continue; }
     var t = (i + jit(seed, i) * 2.2) / (L + 2.2);   // порог буквы: слева направо, с дрожью
     if (p >= t) out += ch;
-    else if (p > 0 && t - p < win) out += CHARS[(tick + i * 7 + seed * 3) % CHARS.length];
+    else if (p > 0 && t - p < win) out += flapChar(ch, tick + i * 7 + seed * 3);
     else out += NBSP;
   }
   return out;
