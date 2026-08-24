@@ -1,0 +1,59 @@
+#!/bin/bash
+# Публикация стендов. РАБОЧИЙ адрес — https://стенды.0снова.рф (Vercel):
+# туда едет каждая правка (vercel deploy). Параллельно то же содержимое
+# пушится на https://ocnova-lab.github.io — страховка на день, когда общий
+# лимит Vercel (100 деплоев/сутки на аккаунт) снова кончится.
+# (кириллический домен на GitHub Pages невозможен: не выпускают сертификат)
+set -e
+cd "$(dirname "$0")"
+SITE=.site
+REPO=https://github.com/ocnova-lab/ocnova-lab.github.io.git
+
+# постоянный клон: после первого раза уезжают только изменённые файлы
+if [ ! -d "$SITE/.git" ]; then
+  rm -rf "$SITE"
+  git clone -q "$REPO" "$SITE" 2>/dev/null || {
+    mkdir -p "$SITE"; git -C "$SITE" init -q -b main;
+    git -C "$SITE" remote add origin "$REPO";
+  }
+else
+  git -C "$SITE" remote set-url origin "$REPO"
+fi
+# Гитхаб иногда коммитит в репозиторий сам (правка домена в настройках) —
+# подтягиваем его коммиты, чтобы пуш не упирался
+git -C "$SITE" pull -q --rebase origin main 2>/dev/null || true
+
+# содержимое: рабочая папка как есть, служебное не публикуем
+rsync -a --delete \
+  --exclude '.git' --exclude '.site' --exclude 'publish.sh' \
+  --exclude 'vercel.json' --exclude '.vercel' --exclude '.DS_Store' \
+  ./ "$SITE/"
+
+# чистые адреса: X.html → X/index.html (кроме корневого index.html)
+cd "$SITE"
+for f in *.html; do
+  [ "$f" = "index.html" ] && continue
+  n="${f%.html}"
+  rm -rf "$n"
+  mkdir -p "$n"
+  mv "$f" "$n/index.html"
+done
+
+# отключение Джекилла; кастом-домена нет — сайт живёт на корне организации
+rm -f CNAME
+touch .nojekyll
+
+git add -A
+if git diff --cached --quiet; then
+  echo "страховка: изменений нет"
+else
+  git commit -qm "publish $(date '+%Y-%m-%d %H:%M')"
+  git push -q -u origin main
+  echo "страховка обновлена: https://ocnova-lab.github.io"
+fi
+cd ..
+
+# основной рабочий адрес
+vercel deploy --prod --yes >/dev/null 2>&1 \
+  && echo "опубликовано: https://стенды.0снова.рф" \
+  || echo "!! Vercel не принял (лимит?) — работаем через ocnova-lab.github.io"
