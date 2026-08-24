@@ -309,6 +309,7 @@
 <script src="/panel-lib/para.js"></script>
 <script src="/panel-lib/palitra.js"></script>
 <script src="/panel-lib/otkat.js"></script>
+<script src="/panel-lib/datchik.js"></script>
 <script>
 /* Закон стенда — в шапке файла (комментарий над <html>).
    Ниже — параметры, раскладка и ход. */
@@ -321,10 +322,11 @@ var DEFAULTS = {
   lag: 82,         // инерция, %
   snap: false,     // притяжение к краю колонки
   wake: 420,       // пауза, после которой колонка под курсором оживает, мс
-  zoom: 120,       // насколько крупнее живая колонка, % (100 — не растёт)
-  zoomMs: 260,     // сколько длится рост
-  zoomEase: 'плавный',
+  zoom: 120,       // насколько крупнее колонка в середине поля, % (100 — не растёт)
+  reach: 0.8,      // ширина поля роста, в колонках от края колонки
+  zoomEase: 'плавный',   // форма спада поля
   zoomBez: [0.65, 0, 0.35, 1],
+  zoomLag: 55,     // инерция поля, % — насколько лениво ширина догоняет закон
   ride: 620,       // проезд к фрагменту и по клавишам, мс
   rideEase: 'плавный',
   rideBez: [0.65, 0, 0.35, 1],
@@ -537,7 +539,11 @@ function build() {
     if (d.n && /–\s*00$/.test(d.n)) c.classList.add('open');
     if (id) c.id = id;
     strip.appendChild(c);
-    cols.push({ el: c, d: d, i: i });
+    cols.push({
+      el: c, d: d, i: i, r: 0, wNow: -1, kNow: -1, l: 0, rr: 0,
+      // растёт только колонка с набором; подпись набрана дескриптором целиком
+      grows: c.classList.contains('flow') && !c.classList.contains('cap-col')
+    });
   });
 }
 
@@ -576,8 +582,8 @@ function layout() {
   ctx.tbufW = Math.max(0, Math.round((vw - ctx.titleW - 2 * P.gut) / 2));
 
   cols.forEach(function (c) { if (c.el.classList.contains('flow')) gauge(c); });
-  cols.forEach(function (c) { c.k = c.kt = kAim(c); });   // перекладка ставит масштаб сразу
   cols.forEach(place);
+  polе();                                  // поле ставит фактические ширины
   wins.forEach(function (w) { w.draw(); });
   snapshot();
 }
@@ -589,25 +595,27 @@ var ctx = null;
    встают за ней по цепочке. */
 function place(c) {
   if (!ctx) return;
-  var d = c.d, e = c.el, k = c.k == null ? 1 : c.k;
-  e.style.setProperty('--k', k);
+  var d = c.d, e = c.el;
+  c.wNow = -1; c.kNow = -1;
+  e.style.setProperty('--k', 1);
   e.style.height = '';
   e.style.setProperty('--room', '');
+  var stavit = function (w) { c.w1 = c.wz = Math.round(w); e.style.width = c.w1 + 'px'; };
+
   if (d.t === 'buffer') {
-    e.style.width = (e.classList.contains('tbuf') ? ctx.tbufW : P.col) + 'px';
+    stavit(e.classList.contains('tbuf') ? ctx.tbufW : P.col);
     return;
   }
   if (d.t === 'title') {
-    var w = ctx.titleW;
-    e.style.width = w + 'px';
+    stavit(ctx.titleW);
     // коридор кегля титула: границы — решение глаза, они же ручка-коридор
     e.style.setProperty('--ttl',
-      Math.max(P.ttl[0] * ctx.u, Math.min(P.ttl[1] * ctx.u, w / 1531 * 60)).toFixed(1) + 'px');
+      Math.max(P.ttl[0] * ctx.u, Math.min(P.ttl[1] * ctx.u, ctx.titleW / 1531 * 60)).toFixed(1) + 'px');
     return;
   }
   if (d.t === 'fig') {
     var room = Math.max(60, ctx.avail - ctx.lab);
-    e.style.width = figW(d.span, d.w, d.h, room) + 'px';
+    stavit(figW(d.span, d.w, d.h, room));
     e.style.setProperty('--room', room + 'px');
     return;
   }
@@ -617,20 +625,20 @@ function place(c) {
     var box = Math.max(60, ctx.avail - (d.label === 'outside' ? ctx.lab : 0));
     var it = d.items[0];
     var one = Math.max(60, box - (d.label === 'each' ? Math.round(38 * ctx.u) : 0));
-    e.style.width = figW(d.span, it.w, it.h, one) + 'px';
+    stavit(figW(d.span, it.w, it.h, one));
     e.style.setProperty('--room', box + 'px');
     return;
   }
-  fit(c, k);                                      // текстовые колонки
+  // Две меры текстовой колонки: в покое и в полном росте. Между ними её
+  // ширину каждый кадр ставит поле — своей доли колонка не хранит.
+  c.w1 = widthAt(spanFor(c, 1), 1);
+  c.wz = c.grows ? widthAt(spanFor(c, kMax(c)), kMax(c)) : c.w1;
+  e.style.width = c.w1 + 'px';
 }
 
-/* Координаты колонок снимаются раз за перекладку — в прокрутке не читаются */
-function snapshot() {
-  stops = cols.filter(function (c) { return c.el.id; }).map(function (c) {
-    return { id: c.el.id, l: c.el.offsetLeft, r: c.el.offsetLeft + c.el.offsetWidth };
-  });
-  measure();
-}
+/* Координаты колонок не замеряются: поле копит их вперёд по цепочке и
+   само кладёт в stops. Здесь остаётся только пересчёт хода и адреса. */
+function snapshot() { measure(); }
 
 /* Ширина картинки. Пролёт из макета — потолок, ниже него решает высота:
    картинка обязана помещаться в экран целиком, ради этого ей разрешено
@@ -676,60 +684,72 @@ function spanFor(c, k) {
   return Math.max(1, Math.min(8, Math.ceil(h / Math.max(1, ctx.avail))));
 }
 function widthAt(n, k) { return Math.round(n * P.col * k + (n - 1) * P.gut * k); }
-function fit(c, k) { c.el.style.width = widthAt(spanFor(c, k), k) + 'px'; }
-/* Рост живой колонки. Своим ходом, а не переходом CSS: масштаб и ширина
-   пишутся в одном кадре, поэтому раскладка никогда не считается от двух
-   разных значений. Кривая — из того же слота панели, что и у проезда.
-   Растёт только колонка с набором: картинка и так занимает максимум по
-   высоте, увеличивать её значит выводить её из экрана. */
-/* Докуда колонка может вырасти. Подпись к картинке набрана дескриптором
-   целиком — служебный слой не растёт, значит и колонка не растёт. */
-function kMax(c) {
-  var e = c.el;
-  return (e.classList.contains('flow') && !e.classList.contains('cap-col'))
-    ? P.zoom / 100 : 1;
+/* ПОЛЕ РОСТА (закон 9. Силовое поле: смотрит на соседа, реагирует плавно).
+   Разобрано с norgram.co (2017): там раскрытие колонки — не состояние,
+   включаемое событием, а функция положения. Вся лента живёт одним числом
+   «где мы», каждая колонка вырезает из него свою долю и пересчитывает из
+   неё всё. Ноль классов состояния, ноль задержек: рост существует ровно
+   столько, сколько идёт движение.
+
+   Здесь то же самое, только число даёт не скролл, а курсор: у ленты есть
+   линза — точка на оси, вокруг которой набор крупнее. Доля колонки —
+   спад от расстояния до линзы по кривой из панели. Ширина колонки не
+   хранится: каждый кадр она заново выводится из доли.
+
+   Позиции копятся вперёд, как у norgram (xPos += ширина): доля колонки
+   считается от её ЛЕВОГО края, а левый край зависит только от колонок
+   до неё — поэтому обратной связи нет и поле не идёт вразнос. */
+function kMax(c) { return c.grows ? P.zoom / 100 : 1; }
+
+function lensX() {                      // линза в координатах ленты
+  if (mobile || mx == null) return null;
+  return mx + strip.scrollLeft;
 }
-function kAim(c) { return live(c) ? kMax(c) : 1; }
-var growRaf = 0;
-function startGrow() {
-  var now = performance.now(), any = false;
-  cols.forEach(function (c) {
-    var aim = kAim(c);
-    if (aim === c.kt) return;
-    c.k0 = c.k; c.kt = aim; c.t0 = now;
-    c.w0 = c.el.offsetWidth;
-    c.w1 = c.el.classList.contains('flow') ? widthAt(spanFor(c, aim), aim) : c.w0;
-    any = true;
-  });
-  if (any && !growRaf) growRaf = requestAnimationFrame(growTick);
+function dolya(d, reach) {              // спад доли от расстояния
+  if (d >= reach) return 0;
+  return evalEase(P.zoomEase, P.zoomBez, 1 - d / reach);
 }
-function growTick() {
-  var now = performance.now(), busy = false;
-  cols.forEach(function (c) {
-    if (c.k === c.kt) return;
-    var p = P.zoomMs > 0 ? (now - c.t0) / P.zoomMs : 1;
-    var e = c.el, done = p >= 1;
-    var t = done ? 1 : evalEase(P.zoomEase, P.zoomBez, p);
-    c.k = done ? c.kt : c.k0 + (c.kt - c.k0) * t;
-    e.style.setProperty('--k', c.k.toFixed(4));
-    if (e.classList.contains('flow')) {
-      e.style.width = (done ? c.w1 : Math.round(c.w0 + (c.w1 - c.w0) * t)) + 'px';
+function polе() {
+  if (!ctx) return;
+  var lens = lensX(), reach = Math.max(1, P.reach * (P.col + P.gut));
+  var lag = 1 - P.zoomLag / 100, acc = 0, dvizh = false;
+  var kz = P.zoom / 100 - 1;
+  for (var i = 0; i < cols.length; i++) {
+    var c = cols[i], e = c.el;
+    var cel = 0;
+    if (lens != null && c.grows) {
+      // расстояние до колонки в её ПОКОЙНОЙ мере — от неё же и растём
+      var d = lens < acc ? acc - lens : (lens > acc + c.w1 ? lens - acc - c.w1 : 0);
+      cel = dolya(d, reach);
     }
-    if (!done) busy = true;
-  });
-  if (busy) { growRaf = requestAnimationFrame(growTick); return; }
-  growRaf = 0;
-  cols.forEach(function (c) { if (c.el.classList.contains('flow')) guard(c); });
-  snapshot();
+    if (Math.abs(cel - c.r) > 0.0005) {
+      c.r += (cel - c.r) * (lag <= 0 ? 1 : lag);
+      if (Math.abs(cel - c.r) < 0.002) c.r = cel;
+      dvizh = true;
+    }
+    var w = Math.round(c.w1 + (c.wz - c.w1) * c.r);
+    if (w !== c.wNow) { e.style.width = w + 'px'; c.wNow = w; }
+    var k = 1 + kz * c.r;
+    if (Math.abs(k - c.kNow) > 0.002) { e.style.setProperty('--k', k.toFixed(4)); c.kNow = k; }
+    c.l = acc; c.rr = acc + w;
+    acc += w + P.gut;
+  }
+  stops = [];
+  for (i = 0; i < cols.length; i++) if (cols[i].el.id)
+    stops.push({ id: cols[i].el.id, l: cols[i].l, r: cols[i].rr });
+  if (!dvizh && polеTiho !== true) { polеTiho = true; cols.forEach(function (c) { if (c.grows) guard(c); }); }
+  if (dvizh) polеTiho = false;
+  return dvizh;
 }
+var polеTiho = true;
 
 /* Страховка на фрагментацию: строка не рвётся пополам, поэтому колонок
    изредка нужно на одну больше расчёта. Проверяем, когда рост доехал. */
 function guard(c) {
-  var e = c.el, k = live(c) && e.classList.contains('flow') ? P.zoom / 100 : 1;
-  var n = spanFor(c, k), g = 0;
+  var e = c.el, k = 1 + (P.zoom / 100 - 1) * c.r;
+  var n = spanFor(c, c.r > 0.5 ? kMax(c) : 1), g = 0;
   while (e.scrollWidth > e.clientWidth + 1 && n < 8 && g++ < 8) {
-    n++; e.style.width = widthAt(n, k) + 'px';
+    n++; e.style.width = widthAt(n, k) + 'px'; c.wNow = -1;
   }
 }
 
@@ -842,8 +862,7 @@ function colAt() {
   if (hit && hit.closest && (hit.closest('.st-panel') || hit.closest('.st-gear'))) return null;
   var x = mx + strip.scrollLeft, half = P.gut / 2;
   for (var i = 0; i < cols.length; i++) {
-    var e = cols[i].el, l = e.offsetLeft;
-    if (x >= l - half && x <= l + e.offsetWidth + half) return e;
+    if (x >= cols[i].l - half && x <= cols[i].rr + half) return cols[i].el;
   }
   return null;
 }
@@ -935,8 +954,10 @@ window.addEventListener('hashchange', function () { gotoHash(null, true); });
 /* Держим живую колонку, пока курсор в её половине межколонника — тот же
    ограничитель дребезга, что и в colAt, только по живой геометрии. */
 function inside(el, x) {
-  var r = el.getBoundingClientRect(), half = P.gut / 2;
-  return x >= r.left - half && x <= r.right + half;
+  var sx = x + strip.scrollLeft, half = P.gut / 2;
+  for (var i = 0; i < cols.length; i++) if (cols[i].el === el)
+    return sx >= cols[i].l - half && sx <= cols[i].rr + half;
+  return false;
 }
 
 /* ── панель ── */
@@ -956,13 +977,18 @@ StendPanel.build({
     ['h', 'Картинка'],
     ['figFit', 'Выше экрана', 'segment', [
       ['free', 'уже'], ['step', 'пролёт'], ['scroll', 'ход']]],
-    ['h', 'Живая колонка'],
-    ['wake', 'Оживает после паузы, мс', 0, 1500, 10],
-    ['zoom', 'Крупнее, %', 100, 180, 1],
-    ['zoomMs', 'Рост, мс', 0, 1200, 10],
-    ['zoomEase', 'Кривая роста', 'ease'],
+    ['h', 'Поле роста'],
+    ['zoom', 'В середине крупнее, %', 100, 180, 1],
+    ['reach', 'Ширина поля, колонок', 0.2, 5, 0.1],
+    ['zoomEase', 'Спад поля', 'ease'],
+    ['zoomLag', 'Инерция поля, %', 0, 92, 1],
+    ['', 'Профиль поля', 'datchik', {
+      fn: function (x) { return 100 + (P.zoom - 100) * dolya(x * P.reach, P.reach); },
+      x: [0, 1], vysota: 52
+    }],
     ['h', 'Ход'],
     ['wheel', 'Колесо, %', 20, 300, 5],
+    ['wake', 'Колесо колонке после паузы, мс', 0, 1500, 10],
     ['lag', 'Инерция, %', 0, 96, 1],
     ['ride', 'Проезд к фрагменту, мс', 0, 2000, 10],
     ['rideEase', 'Кривая проезда', 'ease'],
@@ -990,10 +1016,11 @@ StendPanel.build({
     gut: 'Расстояние между колонками. Входит в пролёт широких блоков, а его половина с каждой стороны отдана колонке под наведение.',
     ttl: 'Кегль титула течёт от ширины его колонки внутри этих границ. Обе — решение глаза, принятое заранее.',
     figFit: 'Что делать, когда картинка в высоту экрана не влезает. «Уже» — ширина сходит с шага колонки, зато картинка видна целиком. «Пролёт» — кратность держится, картинка целая, но мельче. «Ход» — ширина как в макете, лишнее уходит в вертикальную прокрутку колонки.',
-    wake: 'Сколько лента должна простоять, чтобы колонка под курсором ожила: выросла и забрала себе колесо. Пока едем — колонки пролетают мимо. 0 — оживает сразу.',
-    zoom: 'Насколько крупнее становится живая колонка. Растёт весь набор разом, поэтому мера строки в знаках не меняется. Дескрипторы держат свой кегль. 100 — не растёт.',
-    zoomMs: 'Сколько длится рост и возврат.',
-    zoomEase: 'Кривая роста. «Своя (безье)» открывает редактор.',
+    wake: 'Сколько лента должна простоять, чтобы колонка под курсором забрала себе колесо и крутилась по вертикали. Пока едем — колонки с картинками пролетают мимо. Роста это не касается: он идёт всегда.',
+    zoom: 'Насколько крупнее набор в самой середине поля. Растёт весь набор разом, поэтому мера строки в знаках не меняется. Дескрипторы держат свой кегль. 100 — поле выключено.',
+    reach: 'Докуда достаёт поле, считая от края колонки в ширинах колонки. Чем шире, тем больше соседей подрастает заодно и тем мягче переход.',
+    zoomEase: 'Форма спада: как доля падает от середины поля к его краю. «Своя (безье)» открывает редактор.',
+    zoomLag: 'Насколько лениво ширина догоняет закон. 0 — колонка стоит ровно там, где велит поле.',
     wheel: 'Сколько ленты проходит за один щелчок колеса.',
     lag: 'Чем больше, тем дольше лента догоняет колесо.',
     ride: 'Сколько едет лента, когда её зовут клавишей, адресом фрагмента или притяжением. 0 — сразу.',
@@ -1018,13 +1045,13 @@ function setLive(el) {
   if (was) was.classList.remove('live');
   liveCol = el;
   if (liveCol) liveCol.classList.add('live');
-  startGrow();
 }
 (function watch() {
   var s = [P.col, P.gut, P.pad, P.mob, P.figFit, P.dbg, P.dbgbuf,
            P.gapBig, P.gapMid, P.gapSml,
-           P.bg, P.ink, P.zoom, String(P.ttl)].join(',');
+           P.bg, P.ink, P.zoom, String(P.ttl)].join(',');   // reach/zoomEase/zoomLag поле читает само
   if (s !== sig) { sig = s; layout(); }
+  polе();
   var now = performance.now();
   if (!rested()) { setLive(null); lastLook = 0; }
   else if (now - lastLook > 90) {
