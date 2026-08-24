@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<!--
+СЛУЖЕБНАЯ СТРАНИЦА: проба перевода колеса в пиксели для стенда «Горизонтальный лонгрид».
+Смотрит: ни на что. Реагирует: не реагирует. Закон: не применяется — это
+измерительный стенд, а не композиция. Нужна потому, что headless всегда шлёт
+deltaMode 0 и обычным снимком починку не увидеть. Старое поведение меряется на
+том же стенде, без второй копии: код без перевода считал число строк пикселями,
+значит его ответ на «3 строки» — это ответ починенного стенда на «3 пикселя».
+-->
+<html lang="ru"><head><meta charset="UTF-8" /><title>Проба: перевод колеса в пиксели</title>
+<style>
+  @font-face { font-family:"Even Mono"; src:url("/fonts/EvenMono-Regular.woff2") format("woff2"); }
+  body { margin:0; padding:32px; background:#fff; color:#0a0f1a;
+         font:14px/1.5 "Even Mono", ui-monospace, monospace; }
+  h1 { font-size:clamp(16px, 2vw, 20px); font-weight:400; margin:0 0 4px; }
+  p.sub { color:#878c97; margin:0 0 22px; }
+  table { border-collapse:collapse; }
+  th, td { text-align:left; padding:7px 18px 7px 0; border-bottom:1px solid #e6e8ec;
+           font-variant-numeric:tabular-nums; }
+  th { color:#878c97; font-weight:400; font-size:12px; }
+  .ok { color:#0a7d32; } .bad { color:#c02626; }
+  /* подопытный стенд нужен живым, но не на виду: уводим за левый край окна */
+  iframe { width:1200px; height:600px; border:0; position:absolute; left:-9999px; top:0; }
+</style></head><body>
+<h1>Перевод колеса в пиксели</h1>
+<p class="sub">Одно движение, присланное двумя режимами: 50 px (deltaMode 0) и 3 строки (deltaMode 1).
+Строка = 100/6 ≈ 16,67 px, значит 3 строки — это те же 50 px. Сдвиги обязаны совпасть.</p>
+<div id="out">считаю…</div>
+<iframe id="stend" src="/gorizont.html"></iframe>
+<script>
+function tolknut(win, deltaY, deltaMode) {
+  win.cur = 0; win.tgt = 0;
+  win.document.getElementById('strip').dispatchEvent(new win.WheelEvent('wheel', {
+    deltaY: deltaY, deltaMode: deltaMode, bubbles: true, cancelable: true
+  }));
+  return win.tgt;
+}
+setTimeout(function () {
+  var win = document.getElementById('stend').contentWindow;
+  var ryad = [
+    ['как считал старый код', tolknut(win, 50, 0), tolknut(win, 3, 0)],
+    ['как считает сейчас', tolknut(win, 50, 0), tolknut(win, 3, 1)]
+  ];
+  var html = '<table><tr><th>перевод ввода</th><th>50 px (deltaMode 0)</th>' +
+    '<th>3 строки (deltaMode 1)</th><th>расхождение</th><th></th></tr>';
+  ryad.forEach(function (r) {
+    var a = r[1], b = r[2], ok = Math.abs(a - b) <= 1;
+    html += '<tr><td>' + r[0] + '</td><td>' + a.toFixed(1) + ' px</td><td>' + b.toFixed(1) + ' px</td>' +
+      '<td>' + (ok ? 'нет' : '×' + (a / b).toFixed(1)) + '</td>' +
+      '<td class="' + (ok ? 'ok' : 'bad') + '">' + (ok ? 'совпало' : 'едет медленнее') + '</td></tr>';
+  });
+  document.getElementById('out').innerHTML = html + '</table>';
+}, 2200);
+</script></body></html>
