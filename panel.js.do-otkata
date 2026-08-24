@@ -50,19 +50,6 @@
       try { localStorage.setItem(o.storageKey, JSON.stringify(P)); } catch (e) {}
     }
 
-    // Любая правка ручки проходит здесь: сохранение, уведомление стенда (o.onChange —
-    // нужен DOM-стендам, canvas читает P каждый кадр сам) и событие для органов
-    // вроде отката, которым нужно знать о правке, не зная, кто её сделал.
-    function izmenilos(key) {
-      save();
-      if (typeof o.onChange === 'function') o.onChange(key, P);
-      try {
-        document.dispatchEvent(new CustomEvent('stend:izmenenie', {
-          detail: { key: key, params: P, storageKey: o.storageKey },
-        }));
-      } catch (e) {}
-    }
-
     // ── каркас: шестерёнка, панель, подсказка ──
     var gear = document.createElement('button');
     gear.className = 'st-gear';
@@ -185,7 +172,7 @@
         b[dragPt * 2 + 1] = Math.round(vy * 100) / 100;
         P[bezKey] = b;
         if (P[easeKey] !== 'bezier') { P[easeKey] = 'bezier'; sel.value = 'bezier'; }
-        redraw(); izmenilos(easeKey);
+        redraw(); save();
       }
       cv.addEventListener('pointerdown', function (e) {
         dragPt = handleAt(e);
@@ -255,7 +242,7 @@
           P[d[0]] = prSel.value;
           var chosen = d[3].filter(function (opt) { return opt[0] === prSel.value; })[0];
           if (chosen && chosen[2]) Object.assign(P, chosen[2]);
-          izmenilos(d[0]);
+          save();
           for (var ck in controls) controls[ck]();
         });
         controls[d[0]] = function () { prSel.value = P[d[0]]; };
@@ -268,7 +255,7 @@
         var ci = document.createElement('input');
         ci.type = 'color'; ci.className = 'st-color';
         ci.value = P[d[0]];
-        ci.addEventListener('input', function () { P[d[0]] = ci.value; izmenilos(d[0]); });
+        ci.addEventListener('input', function () { P[d[0]] = ci.value; save(); });
         controls[d[0]] = function () { ci.value = P[d[0]]; };
         row.appendChild(ci);
         host.appendChild(row);
@@ -283,7 +270,7 @@
           sSel.appendChild(oEl);
         });
         sSel.value = P[d[0]];
-        sSel.addEventListener('input', function () { P[d[0]] = sSel.value; izmenilos(d[0]); });
+        sSel.addEventListener('input', function () { P[d[0]] = sSel.value; save(); });
         controls[d[0]] = function () { sSel.value = P[d[0]]; };
         row.appendChild(sSel);
         host.appendChild(row);
@@ -311,7 +298,7 @@
           } else {
             ed.cv.hidden = false; // выбрал «свою» — редактор сразу под рукой
           }
-          ed.redraw(); izmenilos(easeKey);
+          ed.redraw(); save();
         });
         controls[easeKey] = function () { sel.value = P[easeKey]; ed.redraw(); };
         repaints.push(ed.redraw);
@@ -334,10 +321,8 @@
       // орган из библиотеки: [key, подпись, 'имя-типа', ...]
       if (typeof d[2] === 'string' && TIPY[d[2]]) {
         TIPY[d[2]](row, d, P, {
-          save: function () { izmenilos(d[0]); }, host: host, bindTip: bindTip,
-          accent: accent, repaints: repaints, controls: controls,
-          defaults: DEFAULTS, storageKey: o.storageKey,
-          onChange: function () { if (typeof o.onChange === 'function') o.onChange(d[0], P); },
+          save: save, host: host, bindTip: bindTip, accent: accent,
+          repaints: repaints, controls: controls,
         });
         host.appendChild(row);
         return;
@@ -357,12 +342,12 @@
         P[d[0]] = parseFloat(inp.value) / mul;
         val.textContent = fmt(P[d[0]]);
         paintFill(inp);
-        izmenilos(d[0]);
+        save();
       });
       // дабл-клик по слайдеру — откат ЭТОЙ ручки к дефолту
       inp.addEventListener('dblclick', function () {
         P[d[0]] = DEFAULTS[d[0]];
-        controls[d[0]](); izmenilos(d[0]);
+        controls[d[0]](); save();
       });
       // клик по числу — точный ввод с клавиатуры (Enter/уход — принять, Esc — отмена)
       val.addEventListener('click', function () {
@@ -379,7 +364,7 @@
             if (!isNaN(v)) {
               v = Math.max(parseFloat(inp.min), Math.min(parseFloat(inp.max), v));
               P[d[0]] = v / mul;
-              izmenilos(d[0]);
+              save();
             }
           }
           row.replaceChild(val, ked);
@@ -471,12 +456,7 @@
     if (/[?&]panel/.test(location.search)) panel.hidden = false;
     applyTheme(theme);
 
-    return {
-      save: save, panel: panel, applyTheme: applyTheme,
-      params: P, defaults: DEFAULTS, controls: controls,
-      // перерисовать все ручки после внешней правки P (откат, пресет извне)
-      obnovit: function () { for (var k in controls) controls[k](); },
-    };
+    return { save: save, panel: panel, applyTheme: applyTheme };
   }
 
   window.StendPanel = {

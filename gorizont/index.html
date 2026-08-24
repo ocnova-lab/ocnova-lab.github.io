@@ -142,7 +142,6 @@
   :root {
     --col: 340px; --gut: 30px; --pad: 30px; --avail: 100vh;
     --ub: 1;             /* модуль набора = колонка / 340 (ставится в JS) */
-    --zms: 260ms; --zbez: cubic-bezier(.65,0,.35,1);
     /* Цвет один на весь макет: набор, индексы, подписи, титул и линии схем.
        Разница веса идёт толщиной штриха и кеглем, а не оттенком.
        Волосяные линии датчиков выведены из него же — подмешаны к фону. */
@@ -172,15 +171,16 @@
 
   /* --k — собственный масштаб колонки: 1 в покое, больше — когда ожила.
      Через него множится модуль набора, поэтому растёт всё разом: кегли,
-     интерлиньяжи, отбивки и ширина колонки многоколонника. */
-  @property --k { syntax: '<number>'; inherits: true; initial-value: 1; }
+     интерлиньяжи, отбивки и ширина колонки многоколонника.
+     CSS-перехода тут нет намеренно: от --k зависит сама раскладка, и пока
+     переход едет, ширина колонки и её содержимое считаются от разных
+     значений — между колонками открываются дыры. Масштаб и ширину пишет
+     покадровый ход в JS, обе величины всегда из одного кадра. */
   .col {
     flex: 0 0 auto; height: var(--avail); width: var(--col);
     --k: 1;
     --u: calc(var(--ub) * var(--k));
-    transition: width var(--zms) var(--zbez), --k var(--zms) var(--zbez);
   }
-  body.noanim .col { transition: none; }
   /* колонки с текстом: не влез по высоте — перетекает в соседнюю */
   .col.flow { column-width: calc(var(--col) * var(--k));
               column-gap: calc(var(--gut) * var(--k)); column-fill: auto; }
@@ -541,9 +541,6 @@ function layout() {
   ['bg', 'ink'].forEach(function (k) {
     root.style.setProperty('--' + k, P[k]);
   });
-  root.style.setProperty('--zms', P.zoomMs + 'ms');
-  var zb = P.zoomEase === 'bezier' ? P.zoomBez : (BEZ_APPROX[P.zoomEase] || BEZ_APPROX['плавный']);
-  root.style.setProperty('--zbez', 'cubic-bezier(' + zb.join(',') + ')');
 
   if (mobile) return layoutMob(vw);
 
@@ -562,12 +559,11 @@ function layout() {
   };
   ctx.tbufW = Math.max(0, Math.round((vw - ctx.titleW - 2 * P.gut) / 2));
 
-  document.body.classList.add('noanim');   // общая перекладка не анимируется
   cols.forEach(function (c) { if (c.el.classList.contains('flow')) gauge(c); });
+  cols.forEach(function (c) { c.k = c.kt = kAim(c); });   // перекладка ставит масштаб сразу
   cols.forEach(place);
   wins.forEach(function (w) { w.draw(); });
   snapshot();
-  requestAnimationFrame(function () { document.body.classList.remove('noanim'); });
 }
 
 var ctx = null;
@@ -577,10 +573,7 @@ var ctx = null;
    встают за ней по цепочке. */
 function place(c) {
   if (!ctx) return;
-  // растёт только колонка с набором: картинка и так занимает максимум по
-  // высоте, увеличивать её значит выводить её из экрана
-  var d = c.d, e = c.el;
-  var k = (live(c) && e.classList.contains('flow')) ? P.zoom / 100 : 1;
+  var d = c.d, e = c.el, k = c.k == null ? 1 : c.k;
   e.style.setProperty('--k', k);
   e.style.height = '';
   e.style.setProperty('--room', '');
@@ -658,6 +651,47 @@ function spanFor(c, k) {
 }
 function widthAt(n, k) { return Math.round(n * P.col * k + (n - 1) * P.gut * k); }
 function fit(c, k) { c.el.style.width = widthAt(spanFor(c, k), k) + 'px'; }
+/* Рост живой колонки. Своим ходом, а не переходом CSS: масштаб и ширина
+   пишутся в одном кадре, поэтому раскладка никогда не считается от двух
+   разных значений. Кривая — из того же слота панели, что и у проезда.
+   Растёт только колонка с набором: картинка и так занимает максимум по
+   высоте, увеличивать её значит выводить её из экрана. */
+function kAim(c) {
+  return (live(c) && c.el.classList.contains('flow')) ? P.zoom / 100 : 1;
+}
+var growRaf = 0;
+function startGrow() {
+  var now = performance.now(), any = false;
+  cols.forEach(function (c) {
+    var aim = kAim(c);
+    if (aim === c.kt) return;
+    c.k0 = c.k; c.kt = aim; c.t0 = now;
+    c.w0 = c.el.offsetWidth;
+    c.w1 = c.el.classList.contains('flow') ? widthAt(spanFor(c, aim), aim) : c.w0;
+    any = true;
+  });
+  if (any && !growRaf) growRaf = requestAnimationFrame(growTick);
+}
+function growTick() {
+  var now = performance.now(), busy = false;
+  cols.forEach(function (c) {
+    if (c.k === c.kt) return;
+    var p = P.zoomMs > 0 ? (now - c.t0) / P.zoomMs : 1;
+    var e = c.el, done = p >= 1;
+    var t = done ? 1 : evalEase(P.zoomEase, P.zoomBez, p);
+    c.k = done ? c.kt : c.k0 + (c.kt - c.k0) * t;
+    e.style.setProperty('--k', c.k.toFixed(4));
+    if (e.classList.contains('flow')) {
+      e.style.width = (done ? c.w1 : Math.round(c.w0 + (c.w1 - c.w0) * t)) + 'px';
+    }
+    if (!done) busy = true;
+  });
+  if (busy) { growRaf = requestAnimationFrame(growTick); return; }
+  growRaf = 0;
+  cols.forEach(function (c) { if (c.el.classList.contains('flow')) guard(c); });
+  snapshot();
+}
+
 /* Страховка на фрагментацию: строка не рвётся пополам, поэтому колонок
    изредка нужно на одну больше расчёта. Проверяем, когда рост доехал. */
 function guard(c) {
@@ -790,16 +824,6 @@ strip.addEventListener('wheel', function (e) {
 
 document.addEventListener('pointermove', function (e) { mx = e.clientX; my = e.clientY; });
 document.addEventListener('pointerleave', function () { mx = my = null; });
-
-// ширина колонки едет по кривой — страховку и координаты берём, когда доехала
-strip.addEventListener('transitionend', function (e) {
-  var el = e.target;
-  if (!el.classList || !el.classList.contains('col')) return;
-  for (var i = 0; i < cols.length; i++) {
-    if (cols[i].el === el) { if (el.classList.contains('flow')) guard(cols[i]); break; }
-  }
-  snapshot();
-});
 
 strip.addEventListener('scroll', function () {
   if (Math.abs(strip.scrollLeft - cur) > 2) { cur = tgt = strip.scrollLeft; }
@@ -950,13 +974,12 @@ function setLive(el) {
   if (was) was.classList.remove('live');
   liveCol = el;
   if (liveCol) liveCol.classList.add('live');
-  cols.forEach(function (c) { if (c.el === was || c.el === liveCol) place(c); });
-  snapshot();
+  startGrow();
 }
 (function watch() {
   var s = [P.col, P.gut, P.pad, P.mob, P.figFit, P.dbg, P.dbgbuf,
            P.gapBig, P.gapMid, P.gapSml,
-           P.bg, P.ink, P.zoom, P.zoomMs, P.zoomEase, String(P.zoomBez)].join(',');
+           P.bg, P.ink, P.zoom].join(',');
   if (s !== sig) { sig = s; layout(); }
   var now = performance.now();
   if (!rested()) { setLive(null); lastLook = 0; }
