@@ -15,8 +15,11 @@
     background: var(--bg, #101014); color: var(--ink, #f0f0f2);
     font-family: "Even Mono", ui-monospace, monospace;
     display: grid; place-items: center; overflow: hidden;
+    /* коридор вместо перелома: пока места хватает, содержимое уходит правее
+       панели (348 px), на узком экране отступ сам стекает к нулю */
+    padding-left: clamp(0px, calc(100vw - 620px), 348px);
   }
-  main { width: min(92vw, 760px); }
+  main { width: min(92vw, 700px); }
   h1 { font-size: clamp(16px, 2.3vw, 27px); font-weight: 400; letter-spacing: -0.01em;
        margin-bottom: clamp(10px, 1.6vh, 20px); }
   ul { list-style: none; display: grid; gap: clamp(4px, .8vh, 9px); }
@@ -42,6 +45,8 @@
 <script src="/panel-lib/koridor.js"></script>
 <script src="/panel-lib/otkat.js"></script>
 <script src="/panel-lib/datchik.js"></script>
+<script src="/panel-lib/pruzhina.js"></script>
+<script src="/panel-lib/vybor.js"></script>
 <script>
 /* ─────────────────────────────────────────────────────────────────
    Библиотека органов управления — живой каталог ручек панели.
@@ -68,6 +73,8 @@ var ORGANY = [
   ['коридор',   "[key, 'Поле, px', 'koridor', 0, 300, 4]"],
   ['откат',     "[key, 'Правки', 'otkat']"],
   ['датчик',    "[key, 'Профиль', 'datchik', { fn: function (x) { … }, x: [0, 1] }]"],
+  ['пружина',   "[key, 'Пружина', 'pruzhina']  →  [период мс, затухание]"],
+  ['превью',    "[key, 'Композиция', 'vybor', [['A', 'Колонки']], { risovat: … }]"],
 ];
 document.getElementById('spisok').innerHTML = ORGANY.map(function (o) {
   return '<li><b>' + o[0] + '</b><code>' + o[1].replace(/</g, '&lt;') + '</code></li>';
@@ -82,6 +89,7 @@ var DEFAULTS = {
   hodEase: 'плавный', hodBez: EASES['плавный'].slice(),
   yakor: 'c', vid: 'lesenka', setka: true, priemy: ['akcent'],
   pole: [40, 180], sila: 60, ostrota: 2.2,
+  spring: [320, 0.35], kompoziciya: 'A',
 };
 var P = Object.assign({}, DEFAULTS);
 try { Object.assign(P, JSON.parse(localStorage.getItem('panel-lib-params') || '{}')); } catch (e) {}
@@ -128,8 +136,28 @@ StendPanel.build({
     ['profil', 'Профиль эффекта', 'datchik', {
       fn: function (x) { return P.sila * Math.pow(x, P.ostrota); }, x: [0, 1], y: [0, 100],
     }],
-    ['h', 'Панель'],
-    ['pravki', 'Правки', 'otkat'],
+    ['h', 'Отклик'],
+    ['spring', 'Пружина', 'pruzhina'],
+    ['h', 'Выбор с превью'],
+    ['kompoziciya', 'Композиция', 'vybor',
+      [['A', 'Колонки'], ['B', 'Лесенка'], ['C', 'Резинка']], {
+      vysota: 62,
+      risovat: function (ctx, w, h, z, akcent) {
+        // схема сетки: превью рисуется, потому что картинки у композиции нет
+        var m = 8, kol = 5, sh = (w - m * 2) / kol;
+        ctx.fillStyle = 'rgba(255,255,255,.07)';
+        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = akcent;
+        for (var i = 0; i < kol; i++) {
+          var vys = z === 'A' ? h - m * 2
+                  : z === 'B' ? (h - m * 2) * (0.3 + i * 0.17)
+                              : (h - m * 2) * (i % 2 ? 0.45 : 0.95);
+          ctx.fillRect(m + i * sh + 2, h - m - vys, sh - 4, vys);
+        }
+      },
+    }],
+    ['h', 'Правки'],
+    ['pravki', 'Шаг назад', 'otkat'],
   ],
   desc: {
     size: 'кегль набора долей ширины экрана — коридор, а не литерал',
@@ -140,6 +168,8 @@ StendPanel.build({
     priemy: 'композиционные ходы включаются независимо',
     profil: 'форма закона видна, а не воображается',
     pravki: '⌘Z отменяет, ⇧⌘Z возвращает; одно перетаскивание — один шаг',
+    spring: 'период и затухание; панель и стенд считают одну физику',
+    kompoziciya: 'наведи на вариант — покажет, не выбирая',
   },
   onChange: prilozhit,
 });
