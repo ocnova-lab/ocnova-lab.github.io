@@ -140,6 +140,10 @@
          url("/fonts/EvenMono-Regular.woff") format("woff"); font-display: swap; }
   @font-face { font-family: "JetBrains Mono"; font-weight: 400; font-style: normal;
     src: url("/fonts/JetBrainsMono-Regular.woff2") format("woff2"); font-display: swap; }
+  /* титул, врезка и заголовок раздела — Dentegra Display той же студии */
+  @font-face { font-family: "Dent Display"; font-weight: 400; font-style: normal;
+    src: url("/fonts/DentDisplay-Regular.woff2") format("woff2"),
+         url("/fonts/DentDisplay-Regular.woff") format("woff"); font-display: swap; }
 
   /* ── единицы макета ───────────────────────────────────────────────
      --col  базовая колонка (340)      --gut  межколонник (30)
@@ -148,7 +152,7 @@
   :root {
     --col: 340px; --gut: 30px; --gutmin: 10px; --pad: 30px; --avail: 100vh;
     /* набор: кегль в пикселах при базовой колонке, строка и трекинг — в долях кегля */
-    --ttl-lh: 1.17; --ttl-tr: -0.05em;
+    --ttl-lh: 1.17; --ttl-tr: -0.02em;
     --lead-fs: 20px; --lead-lh: 1.5;  --lead-tr: -0.01em;
     --main-fs: 14px; --main-lh: 1.43; --main-tr: -0.01em;
     --dsc-fs: 11px;  --dsc-lh: 1.82;  --dsc-tr: -0.01em;
@@ -218,7 +222,8 @@
   .idx.sub { color: var(--ink); margin-bottom: calc(18px * var(--u)); }
   .main { font-size: calc(var(--main-fs) * var(--u)); line-height: var(--main-lh);
           letter-spacing: var(--main-tr); }
-  .lead { font-size: calc(var(--lead-fs) * var(--u)); line-height: var(--lead-lh);
+  .lead { font-family: "Dent Display", "Even Mono", ui-monospace, monospace;
+          font-size: calc(var(--lead-fs) * var(--u)); line-height: var(--lead-lh);
           letter-spacing: var(--lead-tr); }
   .cap  { font-family: "JetBrains Mono", ui-monospace, monospace;
           font-size: calc(var(--dsc-fs) * var(--ub)); line-height: var(--dsc-lh);
@@ -238,7 +243,7 @@
   .col.title { text-align: center; }
   .col.title .idx { margin-bottom: calc(43px * var(--u)); }
   .col.title h1 {
-    font-family: "Even Mono", ui-monospace, monospace; font-weight: 400;
+    font-family: "Dent Display", "Even Mono", ui-monospace, monospace; font-weight: 400;
     letter-spacing: var(--ttl-tr); line-height: var(--ttl-lh);
     font-size: var(--ttl, 60px); white-space: pre-line;
   }
@@ -345,7 +350,7 @@ var DEFAULTS = {
   gapSml: 40,      // мобайл: пропуск у картинки
   ttl: [34, 60],   // коридор кегля титула, px
   ttlLead: 117,    // интерлиньяж титула, % кегля
-  ttlTrack: -5,    // трекинг титула, % кегля
+  ttlTrack: -2,    // трекинг титула, % кегля
   leadSize: 20,    // врезка и заголовок раздела
   leadLead: 150,
   leadTrack: -1,
