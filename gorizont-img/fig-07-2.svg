@@ -1,6 +1,6 @@
 <svg width="341" height="477" viewBox="0 0 341 477" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect x="0.798984" y="244.373" width="165.09" height="232.301" fill="var(--bg, #fff)" fill-opacity="0.11"/>
-<rect x="174.698" y="122.677" width="165.09" height="353.998" fill="var(--bg, #fff)" fill-opacity="0.11"/>
+<rect x="0.798984" y="244.373" width="165.09" height="232.301" fill="#FF7070" fill-opacity="0.11"/>
+<rect x="174.698" y="122.677" width="165.09" height="353.998" fill="#FF7070" fill-opacity="0.11"/>
 <line x1="0.962616" y1="0.979683" x2="0.962637" y2="476.674" stroke="currentColor" stroke-width="0.979545"/>
 <line x1="340.279" y1="0.979683" x2="340.279" y2="476.674" stroke="currentColor" stroke-width="0.979545"/>
 <line x1="1.12522" y1="0.489815" x2="340.441" y2="0.489815" stroke="currentColor" stroke-width="0.979545"/>

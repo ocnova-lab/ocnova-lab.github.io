@@ -240,6 +240,27 @@
   /* ── картинки ── */
   .col.fig .idx, .col.figs .idx { margin-bottom: calc(17px * var(--u)); }
   .col.fig img { display: block; width: 100%; height: auto; }
+  /* ВАРИАНТЫ СЕТКИ поверх схемы. Оверлей живёт в системе координат самой
+     схемы (общий viewBox), поэтому совпадает с ней при любом масштабе.
+     Заливка — бледно-красный из макета, им же в кадре 07 показаны варианты
+     сеток Брокманна: один цвет на один смысл во всей статье. */
+  .pole { position: relative; display: block; }
+  /* координаты выведены: оверлей растянут по коробке схемы, своих нет */
+  .vary { position: absolute; inset: 0; width: 100%; height: 100%;
+          pointer-events: none; color: #FF7070; }
+  .vary > g { opacity: 0; transition: opacity var(--var-ms, 180ms) linear; }
+  .vary > g.on { opacity: var(--var-sila, .11); }
+  /* линейка зон: шесть равных долей поля, засечка на каждой границе */
+  .lineyka { display: flex; margin-top: calc(17px * var(--u));
+             height: calc(11px * var(--u));
+             border-right: 1px solid currentColor; }
+  .lineyka > span { flex: 1; position: relative; display: flex;
+                    align-items: center; justify-content: center;
+                    border-left: 1px solid currentColor;
+                    font-family: "JetBrains Mono", ui-monospace, monospace;
+                    font-size: calc(var(--dsc-fs) * var(--ub)); line-height: 1; }
+  body.mob .vary { display: none; }
+
   /* Раскрытие картинки идёт МАСКОЙ: содержимое стоит в натуральную величину,
      открывается сверху вниз нижним краем маски. Не сжатие — при сжатии видно
      всё изображение сплющенным, и это читается как «разворачивается», а нужно
@@ -337,6 +358,8 @@ var DEFAULTS = {
   naborDsc: 1,     // перебирать дескрипторы: индексы, подписи, строку автора
   naborFoto: 60,   // сдвиг картинки под подписью, % её высоты
   vybeg: 50,       // выбег стопки после последней картинки, % высоты ленты
+  varSila: 11,     // варианты сетки: сила заливки, % (бледно-красный из макета)
+  varMs: 180,      // варианты сетки: проявление, мс
   fotoPath: 760,   // картинка: путь раскрытия по высоте, px хода; 0 — выключено
   fotoEase: 'торможение',
   fotoBez: [0.33, 1, 0.68, 1],
@@ -405,6 +428,12 @@ var rail  = document.querySelector('#rail i');
 var toast = document.getElementById('toast');
 var root  = document.documentElement;
 var mobile = false;
+
+/* Единственное место, где читается фактическая геометрия. Правило П3: замер
+   живёт только в покое — раз за перекладку, — а в кадре работает счёт.
+   Здесь его нельзя заменить вычислением: где проходит базовая линия строки и
+   какую коробку занял оверлей, знает только браузер после отрисовки. */
+function korobka(e) { return e.getBoundingClientRect(); }
 
 /* селекты панели возвращают строку — приводим переключатели к «да/нет» */
 function flag(v) { return v !== 0 && v !== '0' && v !== false && v !== ''; }
@@ -513,6 +542,45 @@ function img(src, alt, w, h) {
   return n;
 }
 
+/* ВАРИАНТЫ СЕТКИ ГЕРСТНЕРА.
+   Сетка «Капитала» — поле, которое делится без остатка на 1, 2, 3, 4, 5 и 6
+   колонок при ПОСТОЯННОМ межколоннике. Отсюда вся геометрия вариантов
+   выводится из одного числа: клетка = (поле − (N−1)·межколонник) / N. Это
+   воспроизводит все пять наложенных слоёв макета с точностью до пиксела,
+   поэтому рисовать варианты руками не нужно — их считает закон.
+   Наведение на долю поля показывает свой вариант: шесть долей — шесть
+   способов прочесть одну и ту же сетку. */
+function varySvg(d) {
+  var ns = 'http://www.w3.org/2000/svg';
+  var sv = document.createElementNS(ns, 'svg');
+  sv.setAttribute('class', 'vary');
+  sv.setAttribute('viewBox', '0 0 ' + d.w + ' ' + d.h);
+  sv.setAttribute('preserveAspectRatio', 'none');
+  for (var n = 1; n <= d.varianty; n++) {
+    var g = document.createElementNS(ns, 'g');
+    g.dataset.v = n;
+    var kl = (d.w - (n - 1) * d.mezh) / n;
+    var klv = (d.h - (n - 1) * d.mezh) / n;
+    for (var i = 0; i < n; i++) for (var j = 0; j < n; j++) {
+      var r = document.createElementNS(ns, 'rect');
+      r.setAttribute('x', (i * (kl + d.mezh)).toFixed(2));
+      r.setAttribute('y', (j * (klv + d.mezh)).toFixed(2));
+      r.setAttribute('width', kl.toFixed(2));
+      r.setAttribute('height', klv.toFixed(2));
+      r.setAttribute('fill', 'currentColor');
+      g.appendChild(r);
+    }
+    sv.appendChild(g);
+  }
+  return sv;
+}
+/* линейка зон под схемой: буквы называют доли, засечки их разделяют */
+function lineyka(n) {
+  var l = el('div', 'lineyka');
+  for (var i = 0; i < n; i++) l.appendChild(el('span', null, String.fromCharCode(97 + i)));
+  return l;
+}
+
 /* окно с прокруткой; полосы хода у него нет — колонка крутится молча */
 function win(sc) {
   var w = el('div', 'win');
@@ -561,8 +629,16 @@ function build() {
         c = el('div', 'col fig');
         c.appendChild(idxLine(d.n, id));
         var one = el('div', 'scroller');
-        one.appendChild(pic(d.src, 'илл. ' + d.n, d.w, d.h));
+        if (d.varianty) {
+          var pole = el('span', 'pole');
+          pole.appendChild(pic(d.src, 'илл. ' + d.n, d.w, d.h));
+          pole.appendChild(varySvg(d));
+          one.appendChild(pole);
+        } else {
+          one.appendChild(pic(d.src, 'илл. ' + d.n, d.w, d.h));
+        }
         c.appendChild(win(one));
+        if (d.varianty) c.appendChild(lineyka(d.varianty));
         break;
 
       case 'figs':
@@ -610,7 +686,8 @@ function build() {
       }),
       foto: c.querySelector('img.thumb'),
       // картинки колонки — те, что раскрываются по высоте (портрет подписи не в счёт)
-      raskr: [].slice.call(c.querySelectorAll('.scroller img, .scroller .draw'))
+      raskr: [].slice.call(c.querySelectorAll('.scroller img, .scroller .draw')),
+      vary: c.querySelector('svg.vary'), varAkt: -2
     });
   });
 }
@@ -638,6 +715,8 @@ function layout() {
   });
   root.style.setProperty('--pad', PAD + 'px');
   root.style.setProperty('--ttl-mera', P.ttlMera);
+  root.style.setProperty('--var-sila', (P.varSila / 100).toFixed(3));
+  root.style.setProperty('--var-ms', P.varMs + 'ms');
   root.style.setProperty('--vybeg',
     Math.round(Math.max(200, vh - 2 * PAD) * P.vybeg / 100) + 'px');
   ['bg', 'ink'].forEach(function (k) {
@@ -653,7 +732,7 @@ function layout() {
   var probe = document.getElementById('probe'), bl = {};
   ['main', 'lead', 'cap'].forEach(function (k) {
     var e = probe.querySelector('p.' + k), i = e.querySelector('.bl');
-    bl[k] = i.getBoundingClientRect().top - e.getBoundingClientRect().top;
+    bl[k] = korobka(i).top - korobka(e).top;
   });
   var LAB = Math.round(P.dscSize * u * P.dscLead / 100 + 10 * u);
   root.style.setProperty('--lab', LAB + 'px');
@@ -690,6 +769,13 @@ function layout() {
   wins.forEach(function (w) { w.draw(); });
   maskaRezat();                                  // строки врезки — после ширин
   raskhod();
+  // коробка оверлея вариантов: один замер за перекладку, в координатах ленты
+  cols.forEach(function (c) {
+    if (!c.vary) return;
+    var r = korobka(c.vary);
+    c.varBox = { l: r.left + strip.scrollLeft, t: r.top, w: r.width, h: r.height };
+    c.varAkt = -2;
+  });
 }
 
 var ctx = null;
@@ -717,7 +803,10 @@ function place(c) {
   if (d.t === 'fig') {
     var room = Math.max(60, ctx.avail - ctx.lab);
     stavit(figW(d.span, d.w, d.h, room));
-    e.style.setProperty('--room', room + 'px');
+    /* Окно ограничивается по высоте только в режиме прокрутки: в остальных
+       картинка и так помещается, и полная высота окна отодвинула бы вниз
+       всё, что стоит под ней, — линейку зон в первую очередь. */
+    e.style.setProperty('--room', P.figFit === 'scroll' ? room + 'px' : '');
     return;
   }
   if (d.t === 'figs') {
@@ -954,6 +1043,29 @@ function raskrytie() {
     var srez = ((1 - q) * 100).toFixed(2);
     for (var k = 0; k < c.raskr.length; k++) {
       c.raskr[k].style.clipPath = q >= 1 ? '' : 'inset(0 0 ' + srez + '% 0)';
+    }
+  }
+}
+
+/* Какая доля поля под курсором — та и показана. Считается по положению,
+   как и всё остальное в стенде: событий наведения на зоны нет, есть точка
+   и поле, поделённое на доли. */
+function varyTick() {
+  for (var i = 0; i < cols.length; i++) {
+    var c = cols[i];
+    if (!c.vary || !c.varBox) continue;
+    var akt = -1;
+    if (!mobile && mx != null) {
+      // коробка снята раз за перекладку в координатах ленты; здесь только счёт
+      var b = c.varBox, x = mx + strip.scrollLeft, n = c.vary.children.length;
+      if (x >= b.l && x <= b.l + b.w && my >= b.t && my <= b.t + b.h && b.w > 0) {
+        akt = Math.min(n - 1, Math.floor((x - b.l) / (b.w / n)));
+      }
+    }
+    if (akt === c.varAkt) continue;
+    c.varAkt = akt;
+    for (var k = 0; k < c.vary.children.length; k++) {
+      c.vary.children[k].classList.toggle('on', k === akt);
     }
   }
 }
@@ -1251,6 +1363,8 @@ StendPanel.build({
     ['naborDsc', '', 'toggle', ['Перебирать и дескрипторы', 'Не трогать дескрипторы']],
     ['naborFoto', 'Сдвиг картинки подписи, %', 0, 200, 5],
     ['vybeg', 'Выбег стопки, % высоты', 0, 150, 5],
+    ['varSila', 'Варианты сетки: сила, %', 0, 60, 1],
+    ['varMs', 'Варианты сетки: проявление, мс', 0, 800, 10],
     ['fotoPath', 'Картинка: путь раскрытия, px', 0, 2000, 20],
     ['fotoEase', 'Картинка: кривая раскрытия', 'ease'],
     ['maskaPath', 'Врезка: путь выезда, px', 0, 2000, 20],
@@ -1304,6 +1418,8 @@ StendPanel.build({
     naborLatch: 'Набранное больше не рассыпается при ходе назад.',
     naborDsc: 'Индексы над колонками, подписи к картинкам и строка автора перебираются тем же законом, что и тело.',
     naborFoto: 'Насколько картинка под подписью приходит сверху, в долях своей высоты. Пока текст пересобирается, она доезжает до места.',
+    varSila: 'Насколько плотно закрашен вариант сетки под курсором. Цвет — бледно-красный из макета, тот же, которым показаны варианты сеток Брокманна.',
+    varMs: 'Сколько проявляется вариант при переходе с доли на долю.',
     fotoPath: 'Картинка приходит раскрываясь: верхний край стоит, нижний идёт вниз, содержимое распрямляется. За сколько пикселов хода она успевает раскрыться. 0 — приходит готовой.',
     fotoEase: 'Кривая раскрытия. «Своя (безье)» открывает редактор.',
     vybeg: 'Сколько стопка картинок крутится после последней картинки, в долях высоты ленты. Последняя успевает встать в полный рост и побыть одна, а не упирается в конец ровно в тот момент, когда пришла. 0 — упирается сразу.',
@@ -1348,6 +1464,7 @@ function setLive(el) {
   nabor();
   maska();
   raskrytie();
+  varyTick();
   var now = performance.now();
   if (!rested()) { setLive(null); lastLook = 0; }
   else if (now - lastLook > 90) {
