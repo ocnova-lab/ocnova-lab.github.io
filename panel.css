@@ -145,6 +145,8 @@
   color: var(--st-accent); font: 500 13px var(--st-font);
   transition: background .15s ease;
 }
+.st-panel .st-copy { margin-top: 14px; margin-bottom: 0; }
+.st-panel .st-copy + .st-reset { margin-top: 8px; }
 .st-panel .st-reset:hover { background: rgba(255, 255, 255, .09); }
 .st-panel .st-reset:active { background: rgba(255, 255, 255, .12); }
 

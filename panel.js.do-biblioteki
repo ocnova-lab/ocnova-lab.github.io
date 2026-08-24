@@ -28,9 +28,6 @@
    ──────────────────────────────────────────────────────────────────── */
 (function () {
   var THEME_KEY = 'stend-panel-theme';
-  // Реестр органов управления (библиотека /panel-lib): StendPanel.tip('имя', fn).
-  // fn(row, d, P, api) строит строку панели; api = {save, host, bindTip, accent, repaints, controls}
-  var TIPY = {};
 
   function build(o) {
     // ?reset=1 — аварийный сброс сохранённых настроек ещё до применения
@@ -318,16 +315,6 @@
         return;
       }
 
-      // орган из библиотеки: [key, подпись, 'имя-типа', ...]
-      if (typeof d[2] === 'string' && TIPY[d[2]]) {
-        TIPY[d[2]](row, d, P, {
-          save: save, host: host, bindTip: bindTip, accent: accent,
-          repaints: repaints, controls: controls,
-        });
-        host.appendChild(row);
-        return;
-      }
-
       // [key, подпись, min, max, шаг, {mul}] — mul: множитель показа
       // (панель говорит в единицах экрана, параметр живёт своим числом)
       var opts = d[5] || {};
@@ -459,9 +446,5 @@
     return { save: save, panel: panel, applyTheme: applyTheme };
   }
 
-  window.StendPanel = {
-    build: build,
-    tip: function (imya, fn) { TIPY[imya] = fn; return this; },
-    tipy: TIPY,
-  };
+  window.StendPanel = { build: build };
 })();

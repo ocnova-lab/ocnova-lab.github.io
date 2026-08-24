@@ -1,0 +1,31 @@
+<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Проба библиотеки органов</title>
+<link rel="stylesheet" href="/panel.css">
+<style>*{margin:0;padding:0;box-sizing:border-box}html,body{height:100%}
+body{background:#101014;color:#f0f0f2;font-family:-apple-system,sans-serif}</style></head>
+<body><script src="/panel.js"></script>
+<script src="/panel-lib/anchor.js"></script>
+<script src="/panel-lib/segment.js"></script>
+<script src="/panel-lib/toggle.js"></script>
+<script src="/panel-lib/nabor.js"></script>
+<script>
+/* Проба библиотеки — панель из четырёх новых органов.
+   Смотрит: ни на что, стенд служебный. Закон: не применяется. */
+var DEFAULTS = { yakor:'c', vid:'lesenka', setka:true, priemy:['akcent'], sila:4 };
+var P = Object.assign({}, DEFAULTS);
+StendPanel.build({
+  storageKey:'panel-proba', params:P, defaults:DEFAULTS,
+  defs:[
+    ['h','Сетка'],
+    ['vid','Тип сетки','segment',[['kolonnaya','Колонная'],['lesenka','Лесенка'],['rezinka','Резинка']]],
+    ['setka','','toggle',['Показать сетку','Скрыть сетку']],
+    ['h','Место'],
+    ['yakor','Якорь','anchor'],
+    ['sila','Сила, %',0,100,1],
+    ['h','Приёмы'],
+    ['priemy','Ходы','nabor',[['akcent','Акцент'],['vybor','Выбор'],['propusk','Пропуск'],['obedinenie','Объединение']]],
+  ],
+  desc:{ yakor:'точка привязки', vid:'закон сетки' },
+});
+</script></body></html>

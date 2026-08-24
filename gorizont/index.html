@@ -63,11 +63,14 @@
       пропусками трёх ступеней по тому, что стоит рядом (перед разделом /
       между группами / у картинки).
 
-ЦВЕТ. Один на весь макет — чёрный с синим подтоном. Им набран текст,
+ЦВЕТ. Один на весь макет — серо-синий #878C97, выбран Сергеем пипеткой.
+Им набран текст,
 индексы, подписи, титул и им же прочерчены линии схем: схемы вставлены
 разметкой и берут цвет от набора, а не носят свой. Разница веса идёт
-толщиной штриха и кеглем, а не оттенком. Волосяные линии датчиков хода
-выведены из того же цвета подмешиванием к фону.
+толщиной штриха и кеглем, а не оттенком: второй плотности в макете нет,
+индекс набран тем же цветом, что и текст, и на наведении меняет не цвет,
+а подчёркивание. Волосяные линии датчиков хода выведены из того же цвета
+подмешиванием к фону.
 
 ЧИСЛА (П2). Объявленный модуль один — колонка. --u = col / 340; все кегли,
 интерлиньяжи и отбивки макета множатся на него, поэтому ручка «Колонка»
@@ -80,6 +83,15 @@
 замер — высота набора в колонке: сколько порций займёт абзац, знает только
 браузер, вычислить это до отрисовки нечем. Замер идёт раз на раскладку, не
 в кадре.
+
+ЖИВАЯ КОЛОНКА. Основной набор 14/20 хорош для ленты и тесноват для чтения.
+Колонка, на которой остановился курсор, вырастает на пятую часть: растёт
+весь набор разом через собственный масштаб колонки --k, поэтому мера строки
+в знаках не меняется — меняется кегль, а не вёрстка. Если выросшему тексту
+не хватает высоты, он забирает ещё одну колонку по тому же закону порций.
+Лента расступается: соседи справа встают за выросшей колонкой по цепочке,
+левый край читаемой колонки не двигается — место чтения не теряется.
+Растёт только колонка с набором: картинка и так занимает максимум по высоте.
 
 ДВА СКРОЛЛА (закон 13. Рубеж ◌, смотрит на скролл, реагирует щелчком —
 кандидат, стенд первый прецедент). Колонка с прокруткой забирает себе
@@ -129,13 +141,14 @@
      Пролёт в N колонок = N·col + (N−1)·gut — считается в JS (span()). */
   :root {
     --col: 340px; --gut: 30px; --pad: 30px; --avail: 100vh;
-    --u: 1;              /* модуль набора = колонка / 340 (ставится в JS) */
+    --ub: 1;             /* модуль набора = колонка / 340 (ставится в JS) */
+    --zms: 260ms; --zbez: cubic-bezier(.65,0,.35,1);
     /* Цвет один на весь макет: набор, индексы, подписи, титул и линии схем.
        Разница веса идёт толщиной штриха и кеглем, а не оттенком.
        Волосяные линии датчиков выведены из него же — подмешаны к фону. */
-    --ink: #0A0F1A;      /* чёрный с синим подтоном — единственный цвет */
+    --ink: #878C97;      /* серо-синий — единственный цвет макета */
     --bg: #fff;
-    --hair: color-mix(in srgb, var(--ink) 14%, var(--bg));
+    --hair: color-mix(in srgb, var(--ink) 30%, var(--bg));
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -157,19 +170,32 @@
   }
   #strip::-webkit-scrollbar { display: none; }
 
-  .col { flex: 0 0 auto; height: var(--avail); width: var(--col); }
+  /* --k — собственный масштаб колонки: 1 в покое, больше — когда ожила.
+     Через него множится модуль набора, поэтому растёт всё разом: кегли,
+     интерлиньяжи, отбивки и ширина колонки многоколонника. */
+  @property --k { syntax: '<number>'; inherits: true; initial-value: 1; }
+  .col {
+    flex: 0 0 auto; height: var(--avail); width: var(--col);
+    --k: 1;
+    --u: calc(var(--ub) * var(--k));
+    transition: width var(--zms) var(--zbez), --k var(--zms) var(--zbez);
+  }
+  body.noanim .col { transition: none; }
   /* колонки с текстом: не влез по высоте — перетекает в соседнюю */
-  .col.flow { column-width: var(--col); column-gap: var(--gut); column-fill: auto; }
+  .col.flow { column-width: calc(var(--col) * var(--k));
+              column-gap: calc(var(--gut) * var(--k)); column-fill: auto; }
 
   /* ── набор ── */
   .idx {
     font-family: "JetBrains Mono", ui-monospace, monospace;
     font-size: calc(11px * var(--u)); line-height: calc(20px * var(--u));
-    letter-spacing: -0.01em; color: var(--ink); opacity: .62; text-align: center;
+    letter-spacing: -0.01em; color: var(--ink); text-align: center;
     margin-bottom: calc(10px * var(--u)); white-space: pre;
   }
   .idx[data-id] { cursor: pointer; }
-  .idx[data-id]:hover { opacity: 1; }   /* тот же цвет, полная плотность */
+  /* индекс кликают ради ссылки — подсказка подчёркиванием, а не цветом:
+     цвет в макете один, менять его на наведении нечем */
+  .idx[data-id]:hover { text-decoration: underline dotted; text-underline-offset: 4px; }
   .idx.sub { color: var(--ink); margin-bottom: calc(18px * var(--u)); }
   .main { font-size: calc(14px * var(--u)); line-height: calc(20px * var(--u));
           letter-spacing: -0.01em; }
@@ -223,7 +249,7 @@
   .vrail b { position: absolute; left: 0; width: 100%; background: var(--hair);
              transition: background .18s; }
   /* колонка ожила: колесо теперь крутит её, а не ленту */
-  .win.live .vrail b { background: var(--ink); }
+  .col.live .vrail b { background: var(--ink); }
   .scroller figure + figure, .scroller img + img { margin-top: calc(54px * var(--u)); }
   .scroller img { display: block; width: 100%; height: auto; }
 
@@ -278,6 +304,10 @@ var DEFAULTS = {
   lag: 82,         // инерция, %
   snap: 0,         // притяжение к краю колонки
   wake: 420,       // пауза, после которой колонка под курсором оживает, мс
+  zoom: 120,       // насколько крупнее живая колонка, % (100 — не растёт)
+  zoomMs: 260,     // сколько длится рост
+  zoomEase: 'плавный',
+  zoomBez: [0.65, 0, 0.35, 1],
   ride: 620,       // проезд к фрагменту и по клавишам, мс
   rideEase: 'плавный',
   rideBez: [0.65, 0, 0.35, 1],
@@ -286,17 +316,23 @@ var DEFAULTS = {
   gapMid: 72,      // мобайл: пропуск между группами
   gapSml: 40,      // мобайл: пропуск у картинки
   mob: 700,        // порог мобайла
-  palette: 'sinchern', // палитра пресет-списком
+  palette: 'osnova', // палитра пресет-списком
   bg: '#ffffff',
-  ink: '#0a0f1a',
+  ink: '#878c97',
   dbg: 0,          // показать границы колонок
   dbgbuf: 0        // показать буферы
 };
 var P = Object.assign({}, DEFAULTS);
 try { Object.assign(P, JSON.parse(localStorage.getItem('gorizont-params') || '{}')); } catch (e) {}
-// параметры из адреса поверх сохранённых: ?col=300&figLaw=0&dbg=1
+// Параметры из адреса поверх сохранённых: ?col=300&figFit=step&dbg=1.
+// Тип берём у исходного значения, а не угадываем по строке: иначе цвет
+// «#0a0f1a» станет числом, а рукоятки безье — одной координатой.
 new URLSearchParams(location.search).forEach(function (v, k) {
-  if (k in DEFAULTS) P[k] = isNaN(parseFloat(v)) ? v : parseFloat(v);
+  if (!(k in DEFAULTS)) return;
+  var d = DEFAULTS[k];
+  P[k] = Array.isArray(d) ? v.split(',').map(Number)
+       : typeof d === 'number' ? parseFloat(v)
+       : v;
 });
 
 var DATA  = window.GORIZONT || [];
@@ -496,13 +532,16 @@ function layout() {
   document.body.classList.toggle('dbg', flag(P.dbg));
   document.body.classList.toggle('dbgbuf', flag(P.dbgbuf));
   var u = P.col / 340;                     // модуль набора: колонка макета
-  root.style.setProperty('--u', u.toFixed(4));
+  root.style.setProperty('--ub', u.toFixed(4));
   root.style.setProperty('--col', P.col + 'px');
   root.style.setProperty('--gut', P.gut + 'px');
   root.style.setProperty('--pad', P.pad + 'px');
   ['bg', 'ink'].forEach(function (k) {
     root.style.setProperty('--' + k, P[k]);
   });
+  root.style.setProperty('--zms', P.zoomMs + 'ms');
+  var zb = P.zoomEase === 'bezier' ? P.zoomBez : (BEZ_APPROX[P.zoomEase] || BEZ_APPROX['плавный']);
+  root.style.setProperty('--zbez', 'cubic-bezier(' + zb.join(',') + ')');
 
   if (mobile) return layoutMob(vw);
 
@@ -515,44 +554,66 @@ function layout() {
      колонки, буферы стоят колонкой, а слабину берёт титул; когда экран
      жмёт и титул упирается в колонку, слабину отдают буферы. Ужимается
      то, что пусто, а не то, что читают. */
-  var titleW = Math.max(P.col, vw - 2 * (P.col + P.gut));
-  var tbufW = Math.max(0, Math.round((vw - titleW - 2 * P.gut) / 2));
+  ctx = {
+    u: u, avail: avail, lab: lab,
+    titleW: Math.max(P.col, vw - 2 * (P.col + P.gut))
+  };
+  ctx.tbufW = Math.max(0, Math.round((vw - ctx.titleW - 2 * P.gut) / 2));
 
-  cols.forEach(function (c) {
-    var d = c.d, e = c.el;
-    e.style.height = '';
-    e.style.setProperty('--room', '');
-    if (d.t === 'buffer') {
-      e.style.width = (e.classList.contains('tbuf') ? tbufW : P.col) + 'px';
-      return;
-    }
-
-    if (d.t === 'title') {
-      var w = titleW;
-      e.style.width = w + 'px';
-      // коридор кегля титула: границы — решение глаза, тоже в модуле
-      e.style.setProperty('--ttl', Math.max(34 * u, Math.min(60 * u, w / 1531 * 60)).toFixed(1) + 'px');
-      return;
-    }
-    if (d.t === 'fig') {
-      var room = Math.max(60, avail - lab);
-      e.style.width = figW(d.span, d.w, d.h, room) + 'px';
-      e.style.setProperty('--room', room + 'px');
-      return;
-    }
-    if (d.t === 'figs') {
-      // окно стопки — вся высота колонки, но ширина считается по ОДНОЙ
-      // картинке: у стопки с номером на каждой её долю ещё режет строка номера
-      var box = Math.max(60, avail - (d.label === 'outside' ? lab : 0));
-      var it = d.items[0];
-      var one = Math.max(60, box - (d.label === 'each' ? Math.round(38 * u) : 0));
-      e.style.width = figW(d.span, it.w, it.h, one) + 'px';
-      e.style.setProperty('--room', box + 'px');
-      return;
-    }
-    fit(e);                                             // текстовые колонки
-  });
+  document.body.classList.add('noanim');   // общая перекладка не анимируется
+  cols.forEach(place);
   wins.forEach(function (w) { w.draw(); });
+  snapshot();
+  requestAnimationFrame(function () { document.body.classList.remove('noanim'); });
+}
+
+var ctx = null;
+
+/* Одна колонка. Вынесено отдельно: когда колонка оживает под курсором,
+   перекладывать всю ленту незачем — меняется она одна, остальные просто
+   встают за ней по цепочке. */
+function place(c) {
+  if (!ctx) return;
+  // растёт только колонка с набором: картинка и так занимает максимум по
+  // высоте, увеличивать её значит выводить её из экрана
+  var d = c.d, e = c.el;
+  var k = (live(c) && e.classList.contains('flow')) ? P.zoom / 100 : 1;
+  e.style.setProperty('--k', k);
+  e.style.height = '';
+  e.style.setProperty('--room', '');
+  if (d.t === 'buffer') {
+    e.style.width = (e.classList.contains('tbuf') ? ctx.tbufW : P.col) + 'px';
+    return;
+  }
+  if (d.t === 'title') {
+    var w = ctx.titleW;
+    e.style.width = w + 'px';
+    // коридор кегля титула: границы — решение глаза, тоже в модуле
+    e.style.setProperty('--ttl',
+      Math.max(34 * ctx.u, Math.min(60 * ctx.u, w / 1531 * 60)).toFixed(1) + 'px');
+    return;
+  }
+  if (d.t === 'fig') {
+    var room = Math.max(60, ctx.avail - ctx.lab);
+    e.style.width = figW(d.span, d.w, d.h, room) + 'px';
+    e.style.setProperty('--room', room + 'px');
+    return;
+  }
+  if (d.t === 'figs') {
+    // окно стопки — вся высота колонки, но ширина считается по ОДНОЙ
+    // картинке: у стопки с номером на каждой её долю ещё режет строка номера
+    var box = Math.max(60, ctx.avail - (d.label === 'outside' ? ctx.lab : 0));
+    var it = d.items[0];
+    var one = Math.max(60, box - (d.label === 'each' ? Math.round(38 * ctx.u) : 0));
+    e.style.width = figW(d.span, it.w, it.h, one) + 'px';
+    e.style.setProperty('--room', box + 'px');
+    return;
+  }
+  fit(e, k);                                      // текстовые колонки
+}
+
+/* Координаты колонок снимаются раз за перекладку — в прокрутке не читаются */
+function snapshot() {
   stops = cols.filter(function (c) { return c.el.id; }).map(function (c) {
     return { id: c.el.id, l: c.el.offsetLeft, r: c.el.offsetLeft + c.el.offsetWidth };
   });
@@ -573,12 +634,15 @@ function figW(sp, w, h, room) {
 }
 
 /* абзац не влез по высоте — добираем пролёт, пока не влезет */
-function fit(e) {
-  e.style.width = P.col + 'px';
-  var n = Math.max(1, Math.ceil((e.scrollWidth + P.gut) / (P.col + P.gut)));
-  e.style.width = span(Math.min(n, 8)) + 'px';
+function fit(e, k) {
+  k = k || 1;
+  var one = P.col * k, gap = P.gut * k;
+  var w = function (n) { return Math.round(n * one + (n - 1) * gap); };
+  e.style.width = w(1) + 'px';
+  var n = Math.max(1, Math.ceil((e.scrollWidth + gap) / (one + gap)));
+  e.style.width = w(Math.min(n, 8)) + 'px';
   for (var g = 0; g < 8 && e.scrollWidth > e.clientWidth + 1 && n < 8; g++) {
-    n++; e.style.width = span(n) + 'px';
+    n++; e.style.width = w(n) + 'px';
   }
 }
 
@@ -645,7 +709,7 @@ function evalEase(name, bez, t) {
 var cur = 0, tgt = 0, raf = 0, ride = null;
 var lastPush = 0;          // когда ленту последний раз вели вбок
 var mx = null, my = null;  // где стоит курсор
-var liveWin = null;        // окно, которому сейчас отдано колесо
+var liveCol = null;        // колонка под курсором, которая ожила
 
 function tick() {
   if (ride) {
@@ -679,15 +743,14 @@ function rested() {
 }
 /* Колонку под курсором ищем попаданием точки, а не запоминаем по наведению:
    лента едет под неподвижным курсором, и запомненное окно тут же врёт. */
-function winAt() {
+function colAt() {
   if (mx == null || mobile) return null;
   var el = document.elementFromPoint(mx, my);
-  return el && el.closest ? el.closest('.win') : null;
+  return el && el.closest ? el.closest('.col') : null;
 }
+function live(c) { return liveCol === c.el; }
 function awake(sc) {
-  if (!rested()) return false;
-  var w = winAt();
-  return !!w && w.contains(sc);
+  return rested() && !!liveCol && liveCol.contains(sc);
 }
 
 strip.addEventListener('wheel', function (e) {
@@ -705,6 +768,11 @@ strip.addEventListener('wheel', function (e) {
 
 document.addEventListener('pointermove', function (e) { mx = e.clientX; my = e.clientY; });
 document.addEventListener('pointerleave', function () { mx = my = null; });
+
+// ширина колонки едет по кривой — координаты снимаем, когда она доехала
+strip.addEventListener('transitionend', function (e) {
+  if (e.propertyName === 'width') snapshot();
+});
 
 strip.addEventListener('scroll', function () {
   if (Math.abs(strip.scrollLeft - cur) > 2) { cur = tgt = strip.scrollLeft; }
@@ -770,6 +838,11 @@ function gotoHash(h, glide) {
 }
 window.addEventListener('hashchange', function () { gotoHash(null, true); });
 
+function inside(el, x, y) {
+  var r = el.getBoundingClientRect();      // один замер прямоугольника, не в кадре раскладки
+  return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+}
+
 /* ── панель ── */
 StendPanel.build({
   storageKey: 'gorizont-params',
@@ -790,9 +863,9 @@ StendPanel.build({
     ]],
     ['h', 'Цвет'],
     ['palette', 'Палитра', 'preset', [
-      ['sinchern', 'Синь-чёрный на белом', { bg: '#ffffff', ink: '#0a0f1a' }],
-      ['chern', 'Чистый чёрный', { bg: '#ffffff', ink: '#000000' }],
-      ['noch', 'Ночь', { bg: '#0a0f1a', ink: '#e6e9f0' }],
+      ['osnova', 'Серо-синий на белом', { bg: '#ffffff', ink: '#878c97' }],
+      ['chern', 'Синь-чёрный на белом', { bg: '#ffffff', ink: '#0a0f1a' }],
+      ['noch', 'Ночь', { bg: '#0a0f1a', ink: '#c9cdd6' }],
       ['own', 'Свои цвета', {}]
     ]],
     ['bg', 'Фон', 'color'],
@@ -802,6 +875,9 @@ StendPanel.build({
     ['lag', 'Инерция, %', 0, 96, 1],
     ['snap', 'Притяжение к колонке', 'select', [[0, 'нет'], [1, 'есть']]],
     ['wake', 'Колонка оживает после паузы, мс', 0, 1500, 10],
+    ['zoom', 'Живая колонка крупнее, %', 100, 180, 1],
+    ['zoomMs', 'Рост колонки, мс', 0, 1200, 10],
+    ['zoomEase', 'Кривая роста', 'ease'],
     ['ride', 'Проезд к фрагменту, мс', 0, 2000, 10],
     ['rideEase', 'Кривая проезда', 'ease'],
     ['h', 'Мобайл'],
@@ -820,6 +896,9 @@ StendPanel.build({
     figFit: 'Что делать, когда картинка в высоту экрана не влезает. Уже кратности — ширина сходит с шага колонки, зато картинка видна целиком. На пролёт назад — кратность держится, картинка целая, но мельче. Прокрутка — ширина как в макете, лишнее уходит в вертикальный ход колонки.',
     lag: 'Чем больше, тем дольше лента догоняет колесо.',
     wake: 'Сколько лента должна простоять, чтобы колонка под курсором забрала себе колесо. Пока едем — колонки с картинками пролетают мимо. 0 — забирает сразу.',
+    zoom: 'Насколько крупнее становится колонка под курсором, когда лента встала. Растёт весь набор разом: кегль, интерлиньяж, отбивки и ширина колонки — мера строки в знаках не меняется. 100 — не растёт.',
+    zoomMs: 'Сколько длится рост и возврат.',
+    zoomEase: 'Кривая роста. «Своя (безье)» открывает редактор.',
     ride: 'Сколько едет лента, когда её зовут клавишей, адресом фрагмента или притяжением. 0 — сразу.',
     rideEase: 'Кривая этого проезда. «Своя (безье)» открывает редактор.',
     snap: 'После остановки лента подтягивается к ближайшему краю колонки.',
@@ -834,20 +913,30 @@ StendPanel.build({
 
 /* панель меняет параметры молча — следим за ними и перекладываем */
 var sig = '', lastLook = 0;
-function setLive(w) {
-  if (w === liveWin) return;
-  if (liveWin) liveWin.classList.remove('live');
-  liveWin = w;
-  if (liveWin) liveWin.classList.add('live');
+/* Колонка ожила: набор в ней крупнее, и она же забирает колесо, если ей
+   есть куда крутиться. Ограничитель дребезга (П7): пока точка курсора
+   внутри уже живой колонки, живой остаётся она — иначе выросшая колонка
+   сдвигала бы соседей под неподвижным курсором и они бы перемигивались. */
+function setLive(el) {
+  if (el === liveCol) return;
+  var was = liveCol;
+  if (was) was.classList.remove('live');
+  liveCol = el;
+  if (liveCol) liveCol.classList.add('live');
+  cols.forEach(function (c) { if (c.el === was || c.el === liveCol) place(c); });
+  snapshot();
 }
 (function watch() {
   var s = [P.col, P.gut, P.pad, P.mob, P.figFit, P.dbg, P.dbgbuf,
            P.gapBig, P.gapMid, P.gapSml,
-           P.bg, P.ink].join(',');
+           P.bg, P.ink, P.zoom, P.zoomMs, P.zoomEase, String(P.zoomBez)].join(',');
   if (s !== sig) { sig = s; layout(); }
   var now = performance.now();
   if (!rested()) { setLive(null); lastLook = 0; }
-  else if (now - lastLook > 120) { lastLook = now; setLive(winAt()); }
+  else if (now - lastLook > 90) {
+    lastLook = now;
+    if (!(liveCol && mx != null && inside(liveCol, mx, my))) setLive(colAt());
+  }
   requestAnimationFrame(watch);
 })();
 
