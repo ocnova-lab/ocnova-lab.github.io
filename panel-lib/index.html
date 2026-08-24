@@ -47,6 +47,9 @@
 <script src="/panel-lib/datchik.js"></script>
 <script src="/panel-lib/pruzhina.js"></script>
 <script src="/panel-lib/vybor.js"></script>
+<script src="/panel-lib/ugol.js"></script>
+<script src="/panel-lib/palitra.js"></script>
+<script src="/panel-lib/para.js"></script>
 <script>
 /* ─────────────────────────────────────────────────────────────────
    Библиотека органов управления — живой каталог ручек панели.
@@ -75,6 +78,9 @@ var ORGANY = [
   ['датчик',    "[key, 'Профиль', 'datchik', { fn: function (x) { … }, x: [0, 1] }]"],
   ['пружина',   "[key, 'Пружина', 'pruzhina']  →  [период мс, затухание]"],
   ['превью',    "[key, 'Композиция', 'vybor', [['A', 'Колонки']], { risovat: … }]"],
+  ['угол',      "[key, 'Завал оси, °', 'ugol', 0, 45]"],
+  ['палитра',   "[key, 'Палитра', 'palitra', [['night', 'Ночь', { bg: '#101014' }]]]"],
+  ['пара',      "[key, 'Поле, px', 'para', [['padT', 'сверху', 0, 300, 4], …]]"],
 ];
 document.getElementById('spisok').innerHTML = ORGANY.map(function (o) {
   return '<li><b>' + o[0] + '</b><code>' + o[1].replace(/</g, '&lt;') + '</code></li>';
@@ -90,6 +96,7 @@ var DEFAULTS = {
   yakor: 'c', vid: 'lesenka', setka: true, priemy: ['akcent'],
   pole: [40, 180], sila: 60, ostrota: 2.2,
   spring: [320, 0.35], kompoziciya: 'A',
+  zaval: 12, padT: 60, padB: 120,
 };
 var P = Object.assign({}, DEFAULTS);
 try { Object.assign(P, JSON.parse(localStorage.getItem('panel-lib-params') || '{}')); } catch (e) {}
@@ -105,6 +112,8 @@ function prilozhit() {
   main.style.paddingLeft = P.pole[0] / 8 + 'px';
   main.style.paddingRight = P.pole[1] / 8 + 'px';
   main.style.fontSize = P.size / 4.5 + 'em';
+  main.style.transform = 'rotate(' + (-P.zaval / 6) + 'deg)';
+  main.style.marginTop = (P.padT - P.padB) / 8 + 'px';
 }
 
 StendPanel.build({
@@ -114,11 +123,6 @@ StendPanel.build({
     ['h', 'Свои органы'],
     ['size', 'Кегль, % ширины', 1.5, 12, 0.1],
     ['face', 'Гарнитура', 'select', [['evenmono', 'Even Mono'], ['times', 'Times New Roman']]],
-    ['palette', 'Палитра', 'preset', [
-      ['night', 'Ночь', { bg: '#101014', ink: '#f0f0f2', acc: '#4d8dff' }],
-      ['white', 'Чёрное на белом', { bg: '#ffffff', ink: '#111111', acc: '#1b2db3' }],
-      ['svoi', 'Свои цвета', {}],
-    ]],
     ['bg', 'Фон', 'color'],
     ['ink', 'Текст', 'color'],
     ['hodEase', 'Кривая хода', 'ease'],
@@ -156,6 +160,13 @@ StendPanel.build({
         }
       },
     }],
+    ['h', 'Ещё из библиотеки'],
+    ['zaval', 'Завал оси, °', 'ugol', 0, 45],
+    ['', 'Поле, px', 'para', [['padT', 'сверху', 0, 300, 4], ['padB', 'снизу', 0, 300, 4]]],
+    ['palette', 'Палитра', 'palitra', [
+      ['night', 'Ночь', { bg: '#101014', ink: '#f0f0f2', acc: '#4d8dff' }],
+      ['white', 'Чёрное на белом', { bg: '#ffffff', ink: '#111111', acc: '#1b2db3' }],
+      ['blue', 'Синий на светлом', { bg: '#e7ecf6', ink: '#1b2db3', acc: '#1b2db3' }]]],
     ['h', 'Правки'],
     ['pravki', 'Шаг назад', 'otkat'],
   ],
@@ -170,6 +181,8 @@ StendPanel.build({
     pravki: '⌘Z отменяет, ⇧⌘Z возвращает; одно перетаскивание — один шаг',
     spring: 'период и затухание; панель и стенд считают одну физику',
     kompoziciya: 'наведи на вариант — покажет, не выбирая',
+    zaval: 'угол показан углом, а не числом на дорожке',
+    palette: 'профиль виден цветом, а не назван словом',
   },
   onChange: prilozhit,
 });

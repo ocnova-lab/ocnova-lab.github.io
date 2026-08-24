@@ -62,9 +62,7 @@
   animation: st-panel-in .28s cubic-bezier(.32, .72, 0, 1);
 }
 @keyframes st-panel-in {
-  /* прозрачность не анимируем: непроигранная анимация оставляла панель
-     невидимой (поймано 2026-08-24 на headless-снимке — opacity застревал в 0) */
-  from { transform: scale(.94) translateY(6px); }
+  from { opacity: 0; transform: scale(.94) translateY(6px); }
 }
 .st-panel::-webkit-scrollbar { width: 5px; }
 .st-panel::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .22); border-radius: 3px; }
@@ -231,41 +229,3 @@
 }
 .st-theme-nothing input[type="color"].st-color,
 .st-theme-nothing input[type="color"].st-color::-webkit-color-swatch { border-radius: 0; }
-
-/* ── Узкий экран: панель становится нижним листом ──
-   Найдено 2026-08-24 на прогоне каталога: панель 324 px на экране 360 px
-   закрывает содержимое целиком — стенд не виден, крутить нечего.
-   Это тот случай, когда закон меняется качественно, а не подстраивается:
-   на широком экране панель стоит РЯДОМ с работой, на узком — ПОВЕРХ неё,
-   и значит должна вести себя как лист: во всю ширину, снизу, с ручкой хвата
-   и коротким ходом до края. Приёмы раскладки сняты с tweakpane-compact-kit. */
-@media (max-width: 560px) {
-  .st-panel {
-    /* лист лежит ПОВЕРХ работы, а не рядом с ней: стекло уплотняется,
-       иначе сквозь панель читается то, чем управляешь */
-    --st-glass: rgba(18, 18, 20, .95);
-    /* лист плотный, размывать под ним нечего: backdrop-filter на весь низ экрана
-       даёт лишний композитный слой и мешает содержимому под панелью */
-    -webkit-backdrop-filter: none; backdrop-filter: none;
-    left: 0; right: 0; bottom: 0; width: auto;
-    max-height: 62dvh;
-    border-radius: var(--st-radius) var(--st-radius) 0 0;
-    border-left: 0; border-right: 0; border-bottom: 0;
-    padding: 16px 14px calc(14px + env(safe-area-inset-bottom));
-    transform-origin: bottom center;
-    animation: st-list-in .3s cubic-bezier(.32, .72, 0, 1);
-  }
-  /* хват: полоска сверху говорит, что лист поднят над работой */
-  .st-panel::before {
-    content: ""; display: block; width: 36px; height: 4px; margin: -6px auto 12px;
-    border-radius: 2px; background: var(--st-border);
-  }
-  .st-panel.st-theme-nothing { --st-glass: rgba(10, 10, 10, .97); }
-  .st-gear { bottom: calc(12px + env(safe-area-inset-bottom)); }
-  .st-tip { display: none; }            /* подсказке негде встать: лист во всю ширину */
-}
-@keyframes st-list-in {
-  /* только ход снизу: если анимация не проиграется (снимок, reduced-motion,
-     старый браузер), лист обязан остаться видимым — прозрачность не трогаем */
-  from { transform: translateY(16px); }
-}
