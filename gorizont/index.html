@@ -142,7 +142,7 @@
      --pad  поле сверху и снизу (20)   --avail высота ленты
      Пролёт в N колонок = N·col + (N−1)·gut — считается в JS (span()). */
   :root {
-    --col: 340px; --gut: 30px; --gutmin: 10px; --pad: 30px; --avail: 100vh;
+    --col: 340px; --gut: 30px; --pad: 30px; --avail: 100vh;
     /* набор: кегль в пикселах при базовой колонке, строка и трекинг — в долях кегля */
     --ttl-lh: 1.17; --ttl-tr: -0.015em;
     --lead-fs: 30px; --lead-lh: 1.3;  --lead-tr: 0.021em;
@@ -236,24 +236,6 @@
   .scroller { height: 100%; overflow-y: auto; overflow-x: hidden;
               scrollbar-width: none; overscroll-behavior: contain; }
   .scroller::-webkit-scrollbar { display: none; }
-  /* Ход колонки: та же волосяная линия, что у ленты внизу, только вбок.
-     Показывается сама, когда колонке есть куда крутиться.
-     Координаты выведены: линия живёт в системе окна (.win) и стоит
-     посередине межколонника справа от него — right = −gut/2, по высоте
-     во всё окно. Бегунок внутри линии: высота = доля видимого от общего,
-     верх = доля прокрученного — обе доли, не замеры. */
-  /* система координат — окно .win; вбок на половину межколонника, по высоте во всё окно */
-  .vrail { position: absolute; top: 0; bottom: 0; right: calc(var(--gutmin) / -2);
-           width: 1px; background: var(--hair); display: none; }
-  .vrail.on { display: block; }
-  /* бегунок: высота = доля видимого от общего, верх = доля прокрученного (обе доли, не замеры) */
-  .vrail b { position: absolute; left: 0; width: 100%; background: var(--hair);
-             transition: background .18s; }
-  /* колонка ожила: колесо теперь крутит её, а не ленту */
-  .col.live .vrail b { background: var(--ink); }
-  .scroller figure + figure, .scroller img + img { margin-top: calc(54px * var(--u)); }
-  .scroller img { display: block; width: 100%; height: auto; }
-
   /* ── ход ленты ── */
   #rail { position: fixed; left: 0; right: 0; bottom: 0; height: 1px; background: var(--hair); }
   #rail i { display: block; height: 100%; width: 0; background: var(--ink); }
@@ -280,7 +262,6 @@
   body.mob .col.buffer + .col { margin-top: 0 !important; }
   body.mob .win { height: auto !important; }
   body.mob .scroller { height: auto !important; overflow: visible; }
-  body.mob .vrail { display: none !important; }
   body.mob .scroller figure + figure, body.mob .scroller img + img,
   body.mob .scroller .draw + .draw { margin-top: var(--gut); }
   body.mob #rail { display: none; }
@@ -320,10 +301,14 @@ var DEFAULTS = {
   naborFront: 25,  // фронт перебора, % длины строки
   naborTick: 70,   // перещёлк знака, мс
   naborLatch: false, // защёлка: набранное не рассыпается обратно
+  naborDsc: 1,     // перебирать дескрипторы: индексы, подписи, строку автора
+  naborFoto: 60,   // сдвиг картинки под подписью, % её высоты
   maskaPath: 700,  // врезка: за сколько пикселов хода строки выезжают из-под маски, 0 — выключено
   maskaSdvig: 45,  // сдвиг строк, % пути — насколько строки расходятся во времени
   maskaEase: 'торможение',
   maskaBez: [0.33, 1, 0.68, 1],
+  ttlMs: 900,      // титул: появление при заходе, мс
+  ttlPath: 520,    // титул: путь ухода наверх после касания левого края, px
   ride: 390,       // проезд к фрагменту и по клавишам, мс
   rideEase: 'плавный',
   rideBez: [0.65, 0, 0.35, 1],
@@ -370,6 +355,7 @@ new URLSearchParams(location.search).forEach(function (v, k) {
    в горизонтальный ход — это закон стенда, а не украшение; без него лента
    просто не поедет. Движение становится один в один с колесом, как у нативной
    прокрутки. Для съёмки и проверки: ?tiho=1 включает, ?tiho=0 выключает. */
+var T0 = performance.now();     // отсчёт появления титула — с загрузки  // без ручки
 var TIHO = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
 if (/[?&]tiho=1/.test(location.search)) TIHO = true;
 if (/[?&]tiho=0/.test(location.search)) TIHO = false;
@@ -488,20 +474,11 @@ function img(src, alt, w, h) {
   return n;
 }
 
-/* окно с прокруткой + датчик хода сбоку */
+/* окно с прокруткой; полосы хода у него нет — колонка крутится молча */
 function win(sc) {
-  var w = el('div', 'win'), r = el('i', 'vrail'), b = el('b');
-  r.appendChild(b); w.appendChild(sc); w.appendChild(r);
-  function draw() {
-    var over = sc.scrollHeight - sc.clientHeight;
-    r.classList.toggle('on', over > 2 && !mobile);
-    if (over <= 2) return;
-    var part = sc.clientHeight / sc.scrollHeight;
-    b.style.height = (part * 100).toFixed(2) + '%';
-    b.style.top = (sc.scrollTop / sc.scrollHeight * 100).toFixed(2) + '%';
-  }
-  sc.addEventListener('scroll', draw);
-  w.draw = draw;
+  var w = el('div', 'win');
+  w.appendChild(sc);
+  w.draw = function () { };
   wins.push(w);
   return w;
 }
@@ -587,7 +564,14 @@ function build() {
       // перенабор — только моноширинному телу: неразрывный пробел там
       // ровно той же ширины, и разбивка строк не едет
       txtEl: c.dataset.nabor ? c.querySelector('p.main') : null,
-      txt: c.dataset.nabor ? d.text : '', pn: -1, hold: 0, tick: 0, shown: null
+      txt: c.dataset.nabor ? d.text : '', pn: -1, hold: 0, tick: 0, shown: null,
+      // дескрипторы колонки: индекс, подпись, строка автора — тот же перебор
+      // титул живёт маской целиком, перебор его не трогает
+      dsc: c.classList.contains('title') ? [] :
+        [].map.call(c.querySelectorAll('.idx, .cap, .by'), function (e) {
+        return { el: e, txt: e.textContent, shown: null };
+      }),
+      foto: c.querySelector('img.thumb')
     });
   });
 }
@@ -605,7 +589,6 @@ function layout() {
   root.style.setProperty('--ub', u.toFixed(4));
   root.style.setProperty('--col', COL + 'px');
   root.style.setProperty('--gut', GUT + 'px');
-  root.style.setProperty('--gutmin', P.gut + 'px');
   [['ttl', null, P.ttlLead, P.ttlTrack],
    ['lead', P.leadSize, P.leadLead, P.leadTrack],
    ['main', P.mainSize, P.mainLead, P.mainTrack],
@@ -823,17 +806,49 @@ function flapText(target, seed, p, tick, win) {
    перекладки: разбивка зависит от ширины, а её знает только браузер. */
 function maskaRezat() {
   for (var i = 0; i < cols.length; i++) {
-    var c = cols[i], e = c.el.querySelector('p.lead');
+    var c = cols[i];
+    if (c.d.t === 'title') {
+      // титул режется целиком: дата и заголовок — одна последовательность строк
+      var d1 = c.el.querySelector('.idx'), h1 = c.el.querySelector('h1');
+      if (mobile) { StendMaska.snyat(d1); StendMaska.snyat(h1); c.maska = null; continue; }
+      c.maska = StendMaska.rezat(d1).concat(StendMaska.rezat(h1));
+      continue;
+    }
+    var e = c.el.querySelector('p.lead');
     if (!e) { c.maska = null; continue; }
     c.maska = (mobile || !P.maskaPath) ? (StendMaska.snyat(e), null) : StendMaska.rezat(e);
   }
 }
+/* ТИТУЛ: приходит снизу при заходе, уходит наверх у левого края.
+   Две фазы одной маски. Появление живёт временем — оно случается один раз,
+   при заходе на страницу, и положением его не задать. Уход живёт положением:
+   как только левый край колонки титула коснулся левого края экрана, строки
+   начинают уходить вверх и уходят за назначенный путь; ход назад возвращает
+   их сверху вниз тем же законом. Сторона маски и есть разница между этими
+   фазами: приходят снизу, уходят вверх. */
+function maskaTtl(vw, sl) {
+  var c = null;
+  for (var i = 0; i < cols.length; i++) if (cols[i].d.t === 'title') c = cols[i];
+  if (!c || !c.maska) return;
+  var levo = c.l - sl;
+  var vyhod = (!P.ttlPath || levo >= 0) ? 1 : Math.max(0, 1 + levo / P.ttlPath);
+  var vhod = (TIHO || !P.ttlMs) ? 1
+    : Math.min(1, (performance.now() - T0) / P.ttlMs);
+  StendMaska.pokazat(c.maska, Math.min(vhod, vyhod), {
+    sdvig: P.maskaSdvig / 100,
+    storona: vyhod < 1 ? 'sverh' : 'sniz',
+    izing: function (q) { return evalEase(P.maskaEase, P.maskaBez, q); }
+  });
+}
+
 function maska() {
-  if (mobile || !P.maskaPath) return;
+  if (mobile) return;
   var vw = window.innerWidth, sl = strip.scrollLeft;
+  maskaTtl(vw, sl);
+  if (!P.maskaPath) return;
   for (var i = 0; i < cols.length; i++) {
     var c = cols[i];
-    if (!c.maska) continue;
+    if (!c.maska || c.d.t === 'title') continue;
     var p = TIHO ? 1 : (vw - (c.l - sl)) / P.maskaPath;
     p = p < 0 ? 0 : p > 1 ? 1 : p;
     StendMaska.pokazat(c.maska, p, {
@@ -848,6 +863,10 @@ function nabor() {
     for (var t = 0; t < cols.length; t++) {
       var q = cols[t];
       if (q.txtEl && q.shown !== q.txt) { q.txtEl.textContent = q.txt; q.shown = q.txt; }
+      if (q.dsc) q.dsc.forEach(function (dd) {
+        if (dd.shown !== dd.txt) { dd.el.textContent = dd.txt; dd.shown = dd.txt; }
+      });
+      if (q.foto && q.fotoY) { q.foto.style.transform = ''; q.fotoY = 0; }
     }
     return;
   }
@@ -866,6 +885,34 @@ function nabor() {
     if (c.hold < 20) c.tick = tick;
     var out = p >= 1 ? c.txt : flapText(c.txt, c.i, p, c.tick, win);
     if (out !== c.shown) { c.txtEl.textContent = out; c.shown = out; }
+  }
+  naborDsc(tick, win);
+}
+
+/* Дескрипторы перебираются тем же законом. Их доля считается по колонке,
+   в которой они стоят, — у колонок без тела статьи она своя. Картинка под
+   подписью идёт сверху вниз: пока текст пересобирается, она доезжает до
+   своего места, а не стоит готовой над несобранным. */
+function naborDsc(tick, win) {
+  if (!flag(P.naborDsc)) return;
+  var vw = window.innerWidth, sl = strip.scrollLeft;
+  for (var i = 0; i < cols.length; i++) {
+    var c = cols[i];
+    if (!c.dsc || !c.dsc.length) continue;
+    var p = (vw - (c.l - sl)) / P.naborPath;
+    p = p < 0 ? 0 : p > 1 ? 1 : p;
+    for (var k = 0; k < c.dsc.length; k++) {
+      var dd = c.dsc[k];
+      var out = p >= 1 ? dd.txt : flapText(dd.txt, c.i * 7 + k * 3, p, c.tick, win);
+      if (out !== dd.shown) { dd.el.textContent = out; dd.shown = out; }
+    }
+    if (c.foto) {
+      var y = (1 - p) * -P.naborFoto;
+      if (c.fotoY !== y) {
+        c.foto.style.transform = y ? 'translate3d(0,' + y.toFixed(1) + '%,0)' : '';
+        c.fotoY = y;
+      }
+    }
   }
 }
 
@@ -1097,9 +1144,13 @@ StendPanel.build({
     ['naborFront', 'Фронт перебора, %', 0, 100, 1],
     ['naborTick', 'Перещёлк знака, мс', 20, 300, 5],
     ['naborLatch', '', 'toggle', ['Защёлкивать набранное', 'Отпускать набранное назад']],
+    ['naborDsc', '', 'toggle', ['Перебирать и дескрипторы', 'Не трогать дескрипторы']],
+    ['naborFoto', 'Сдвиг картинки подписи, %', 0, 200, 5],
     ['maskaPath', 'Врезка: путь выезда, px', 0, 2000, 20],
     ['maskaSdvig', 'Врезка: сдвиг строк, %', 0, 95, 1],
     ['maskaEase', 'Врезка: кривая выезда', 'ease'],
+    ['ttlMs', 'Титул: появление, мс', 0, 3000, 50],
+    ['ttlPath', 'Титул: путь ухода, px', 0, 1500, 20],
     ['h', 'Ход'],
     ['wheel', 'Колесо, %', 20, 300, 5],
     ['wake', 'Колесо колонке после паузы, мс', 0, 1500, 10],
@@ -1142,9 +1193,13 @@ StendPanel.build({
     naborFront: 'Ширина фронта, на котором буквы перещёлкиваются случайными знаками, в долях длины строки. 0 — буквы просто проявляются без перебора.',
     naborTick: 'Как часто перещёлкивается знак на фронте. Перебор замирает, когда лента встала.',
     naborLatch: 'Набранное больше не рассыпается при ходе назад.',
+    naborDsc: 'Индексы над колонками, подписи к картинкам и строка автора перебираются тем же законом, что и тело.',
+    naborFoto: 'Насколько картинка под подписью приходит сверху, в долях своей высоты. Пока текст пересобирается, она доезжает до места.',
     maskaPath: 'Врезка появляется иначе, чем тело: строки выезжают снизу из-под собственной маски. За сколько пикселов хода они успевают выехать. 0 — выключено.',
     maskaSdvig: 'Какая часть пути уходит на расхождение строк. 0 — все выезжают разом и читаются как сдвиг блока; больше — строка за строкой.',
-    maskaEase: 'Кривая выезда строки. «Своя (безье)» открывает редактор.',
+    maskaEase: 'Кривая выезда строки. «Своя (безье)» открывает редактор. Той же кривой и тем же расхождением строк живёт титул.',
+    ttlMs: 'Титул приходит снизу из-под маски при заходе на страницу. Сколько это длится. 0 — стоит готовым.',
+    ttlPath: 'Как только левый край титула коснулся левого края экрана, строки уходят вверх — за сколько пикселов хода. Ход назад возвращает их сверху вниз. 0 — не уходит.',
     wheel: 'Сколько ленты проходит за один щелчок колеса.',
     lag: 'Чем больше, тем дольше лента догоняет колесо.',
     ride: 'Сколько едет лента, когда её зовут клавишей, адресом фрагмента или притяжением. 0 — сразу.',
@@ -1174,7 +1229,7 @@ function setLive(el) {
   var s = [P.colDolya, String(P.col), String(P.mod), P.gut, P.pad, P.mob, P.figFit, P.dbg, P.dbgbuf,
            P.ttlLead, P.ttlTrack, P.leadSize, P.leadLead, P.leadTrack,
            P.mainSize, P.mainLead, P.mainTrack, P.dscSize, P.dscLead, P.dscTrack,
-           P.naborPath, P.maskaPath,
+           P.naborPath, P.maskaPath, P.ttlPath,
            P.gapBig, P.gapMid, P.gapSml,
            P.bg, P.ink, String(P.ttl)].join(',');
   if (s !== sig) { sig = s; layout(); }

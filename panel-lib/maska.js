@@ -47,20 +47,29 @@
       ? el.getAttribute('data-maska') : el.textContent;
     el.setAttribute('data-maska', ishod);
 
-    var slova = ishod.split(/\s+/).filter(Boolean);
-    if (!slova.length) return [];
+    // жёсткий перенос в исходнике — свой знак: иначе при пересборке слов
+    // авторская разбивка пропала бы и строки легли бы иначе
+    var toki = [];
+    ishod.split(/\n|\u2028/).forEach(function (kus, k) {
+      if (k) toki.push('\n');
+      kus.split(/\s+/).filter(Boolean).forEach(function (w) { toki.push(w); });
+    });
+    if (!toki.length) return [];
     el.textContent = '';
-    var probe = slova.map(function (w, i) {
+    var probe = [];
+    toki.forEach(function (w, i) {
+      if (w === '\n') { el.appendChild(document.createElement('br')); probe.push(null); return; }
       var sp = document.createElement('span');
       sp.textContent = w;
       el.appendChild(sp);
-      if (i < slova.length - 1) el.appendChild(document.createTextNode(' '));
-      return sp;
+      if (i < toki.length - 1 && toki[i + 1] !== '\n') el.appendChild(document.createTextNode(' '));
+      probe.push(sp);
     });
-    var stroki = [], verh = null;
+    var stroki = [], verh = null, razryv = false;
     probe.forEach(function (sp) {
+      if (!sp) { razryv = true; return; }
       var t = sp.offsetTop;
-      if (verh === null || Math.abs(t - verh) > 1) { stroki.push([]); verh = t; }
+      if (verh === null || razryv || Math.abs(t - verh) > 1) { stroki.push([]); verh = t; razryv = false; }
       stroki[stroki.length - 1].push(sp.textContent);
     });
 
@@ -86,7 +95,9 @@
 
   /* Доля выезда p (0 — всё под маской, 1 — всё на месте). sdvig — какая часть
      пути уходит на расхождение строк: 0 — все выезжают разом, 0.9 — почти
-     строго друг за другом. */
+     строго друг за другом. storona — с какой стороны маски прячется строка:
+     'sniz' (по умолчанию) — приходит снизу и туда же уходит, 'sverh' — сверху.
+     Одним и тем же вызовом делается и появление, и уход: меняется сторона. */
   function pokazat(stroki, p, o) {
     o = o || {};
     var n = stroki.length; if (!n) return;
@@ -97,7 +108,7 @@
       var q = okno > 0 ? (p - i * shag) / okno : (p >= 1 ? 1 : 0);
       q = q < 0 ? 0 : q > 1 ? 1 : q;
       if (o.izing) q = o.izing(q);
-      var y = (1 - q) * 101;            // 101, а не 100: прячем выносные
+      var y = (1 - q) * 101 * (o.storona === 'sverh' ? -1 : 1);   // 101: прячем выносные
       var s = stroki[i].style;
       var was = stroki[i]._y;
       if (was === undefined || Math.abs(was - y) > 0.05) {
