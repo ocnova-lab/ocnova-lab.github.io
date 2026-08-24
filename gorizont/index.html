@@ -75,6 +75,15 @@
 браузер, вычислить это до отрисовки нечем. Замер идёт раз на раскладку, не
 в кадре.
 
+ДВА СКРОЛЛА (закон 13. Рубеж ◌, смотрит на скролл, реагирует щелчком —
+кандидат, стенд первый прецедент). Колонка с прокруткой забирает себе
+колесо не по наведению, а по остановке: пока лента едет, такие колонки
+пролетают мимо и колесо остаётся горизонтальным. Вертикаль просыпается,
+когда лента стоит, пауза после последнего хода вбок выдержана и курсор
+на этой колонке; первый же ход вбок снова её усыпляет. Момент, когда
+колонка ожила, показывает датчик хода сбоку: его бегунок темнеет.
+Переключение стало намерением читателя, а не случайностью пути курсора.
+
 ДВИЖЕНИЕ (П5). Две динамики, обе с ручками:
   колесо → лента с экспоненциальным догоном («Колесо, %» + «Инерция, %»);
   клавиши, переход по адресу фрагмента и притяжение к колонке → проезд по
@@ -201,7 +210,10 @@
            width: 1px; background: var(--hair); display: none; }
   .vrail.on { display: block; }
   /* бегунок: высота = доля видимого от общего, верх = доля прокрученного (обе доли, не замеры) */
-  .vrail b { position: absolute; left: 0; width: 100%; background: var(--ink); }
+  .vrail b { position: absolute; left: 0; width: 100%; background: var(--hair);
+             transition: background .18s; }
+  /* колонка ожила: колесо теперь крутит её, а не ленту */
+  .win.live .vrail b { background: var(--ink); }
   .scroller figure + figure, .scroller img + img { margin-top: calc(54px * var(--u)); }
   .scroller img { display: block; width: 100%; height: auto; }
 
@@ -254,6 +266,7 @@ var DEFAULTS = {
   wheel: 100,      // ход колеса, %
   lag: 82,         // инерция, %
   snap: 0,         // притяжение к краю колонки
+  wake: 420,       // пауза, после которой колонка под курсором оживает, мс
   ride: 620,       // проезд к фрагменту и по клавишам, мс
   rideEase: 'плавный',
   rideBez: [0.65, 0, 0.35, 1],
@@ -593,6 +606,9 @@ function evalEase(name, bez, t) {
 }
 
 var cur = 0, tgt = 0, raf = 0, ride = null;
+var lastPush = 0;          // когда ленту последний раз вели вбок
+var mx = null, my = null;  // где стоит курсор
+var liveWin = null;        // окно, которому сейчас отдано колесо
 
 function tick() {
   if (ride) {
@@ -612,21 +628,46 @@ function tick() {
 function run() { if (!raf) raf = requestAnimationFrame(tick); }
 function maxScroll() { return Math.max(0, strip.scrollWidth - strip.clientWidth); }
 function hold(x) { return Math.max(0, Math.min(maxScroll(), x)); }
-function push(dx) { ride = null; tgt = hold(tgt + dx); run(); }   // колесо перебивает проезд
-function rideTo(x) { x = hold(x); ride = { from: cur, to: x, t0: performance.now() }; tgt = x; run(); }
+function push(dx) { ride = null; lastPush = performance.now(); tgt = hold(tgt + dx); run(); }
+function rideTo(x) { x = hold(x); lastPush = performance.now(); ride = { from: cur, to: x, t0: performance.now() }; tgt = x; run(); }
+
+/* Пока лента едет, колонки с картинками пролетают мимо: колесо остаётся
+   горизонтальным, даже если курсор пересёк такую колонку. Вертикаль в
+   колонке просыпается только на остановке — лента стоит, пауза после
+   последнего хода вбок больше «wake», курсор на этой колонке. Первый же
+   ход вбок снова её усыпляет. Читателя не разворачивает посреди движения:
+   переключение стало намерением, а не случайностью. */
+function rested() {
+  return !ride && cur === tgt && performance.now() - lastPush >= P.wake;
+}
+/* Колонку под курсором ищем попаданием точки, а не запоминаем по наведению:
+   лента едет под неподвижным курсором, и запомненное окно тут же врёт. */
+function winAt() {
+  if (mx == null || mobile) return null;
+  var el = document.elementFromPoint(mx, my);
+  return el && el.closest ? el.closest('.win') : null;
+}
+function awake(sc) {
+  if (!rested()) return false;
+  var w = winAt();
+  return !!w && w.contains(sc);
+}
 
 strip.addEventListener('wheel', function (e) {
   if (mobile) return;
   if (e.target.closest && e.target.closest('.st-panel')) return;   // панель скроллится сама
   var sc = e.target.closest && e.target.closest('.scroller');
-  if (sc && Math.abs(e.deltaY) >= Math.abs(e.deltaX)) {
+  if (sc && awake(sc) && Math.abs(e.deltaY) >= Math.abs(e.deltaX)) {
     var top = sc.scrollTop <= 0, bot = sc.scrollTop >= sc.scrollHeight - sc.clientHeight - 1;
-    if ((e.deltaY < 0 && !top) || (e.deltaY > 0 && !bot)) return;  // вертикаль внутри стопки
+    if ((e.deltaY < 0 && !top) || (e.deltaY > 0 && !bot)) return;  // вертикаль внутри колонки
   }
   e.preventDefault();
   var d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
   push(d * P.wheel / 100);
 }, { passive: false });
+
+document.addEventListener('pointermove', function (e) { mx = e.clientX; my = e.clientY; });
+document.addEventListener('pointerleave', function () { mx = my = null; });
 
 strip.addEventListener('scroll', function () {
   if (Math.abs(strip.scrollLeft - cur) > 2) { cur = tgt = strip.scrollLeft; }
@@ -726,6 +767,7 @@ StendPanel.build({
     ['wheel', 'Колесо, %', 20, 300, 5],
     ['lag', 'Инерция, %', 0, 96, 1],
     ['snap', 'Притяжение к колонке', 'select', [[0, 'нет'], [1, 'есть']]],
+    ['wake', 'Колонка оживает после паузы, мс', 0, 1500, 10],
     ['ride', 'Проезд к фрагменту, мс', 0, 2000, 10],
     ['rideEase', 'Кривая проезда', 'ease'],
     ['h', 'Мобайл'],
@@ -743,6 +785,7 @@ StendPanel.build({
     gut: 'Расстояние между колонками. Входит в пролёт широких блоков.',
     figFit: 'Что делать, когда картинка в высоту экрана не влезает. Уже кратности — ширина сходит с шага колонки, зато картинка видна целиком. На пролёт назад — кратность держится, картинка целая, но мельче. Прокрутка — ширина как в макете, лишнее уходит в вертикальный ход колонки.',
     lag: 'Чем больше, тем дольше лента догоняет колесо.',
+    wake: 'Сколько лента должна простоять, чтобы колонка под курсором забрала себе колесо. Пока едем — колонки с картинками пролетают мимо. 0 — забирает сразу.',
     ride: 'Сколько едет лента, когда её зовут клавишей, адресом фрагмента или притяжением. 0 — сразу.',
     rideEase: 'Кривая этого проезда. «Своя (безье)» открывает редактор.',
     snap: 'После остановки лента подтягивается к ближайшему краю колонки.',
@@ -756,12 +799,21 @@ StendPanel.build({
 });
 
 /* панель меняет параметры молча — следим за ними и перекладываем */
-var sig = '';
+var sig = '', lastLook = 0;
+function setLive(w) {
+  if (w === liveWin) return;
+  if (liveWin) liveWin.classList.remove('live');
+  liveWin = w;
+  if (liveWin) liveWin.classList.add('live');
+}
 (function watch() {
   var s = [P.col, P.gut, P.pad, P.mob, P.figFit, P.dbg, P.dbgbuf,
            P.gapBig, P.gapMid, P.gapSml,
            P.bg, P.ink, P.ink2, P.black, P.hair].join(',');
   if (s !== sig) { sig = s; layout(); }
+  var now = performance.now();
+  if (!rested()) { setLive(null); lastLook = 0; }
+  else if (now - lastLook > 120) { lastLook = now; setLive(winAt()); }
   requestAnimationFrame(watch);
 })();
 
