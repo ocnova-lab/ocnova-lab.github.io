@@ -210,7 +210,8 @@ var DEFAULTS = {
   osWght: 450,  // насыщенность знака оси
   osShape: 'ring', // ось замкнута в кольцо или разомкнута лентой
   // геометрия оси: вершины в долях экрана; по умолчанию — кольцо вокруг блока
-  osPts: [[0.500, 0.130], [0.666, 0.238], [0.735, 0.500], [0.666, 0.762],
+  osPts: // без ручки — вершины тянутся мышью по холсту, не слайдером
+        [[0.500, 0.130], [0.666, 0.238], [0.735, 0.500], [0.666, 0.762],
           [0.500, 0.870], [0.334, 0.762], [0.265, 0.500], [0.334, 0.238]],
   osLineW: 20,  // ширина строки набора, доли кегля: сколько фраз склеится
   osRitm: 'width', // ритм потока: шаг по ширине строки или постоянный
@@ -489,7 +490,11 @@ function frameOs(dt) {
 
 // ── скролл: колесо, палец и клавиши двигают цель, лента догоняет ──
 addEventListener('wheel', function (e) {
-  osTarget += (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) * 1.2;
+  // колесо шлёт пиксели, строки (deltaMode 1) или экраны (2) — сводим к пикселям // без ручки
+  var kx = e.deltaMode === 1 ? 100 / 6 : e.deltaMode === 2 ? innerWidth : 1;
+  var ky = e.deltaMode === 1 ? 100 / 6 : e.deltaMode === 2 ? innerHeight : 1;
+  var dx = e.deltaX * kx, dy = e.deltaY * ky;
+  osTarget += (Math.abs(dx) > Math.abs(dy) ? dx : dy) * 1.2;
 }, { passive: true });
 var osTouch = null;
 addEventListener('touchstart', function (e) { osTouch = e.touches[0].clientX; }, { passive: true });

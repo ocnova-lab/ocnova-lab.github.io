@@ -79,7 +79,7 @@ var DEFAULTS = {
   track: 0,         // трекинг, % кегля
   weight: 700,
   face: 'evenmono',
-  v: 2,             // версия набора настроек — для разовых миграций
+  v: 2,             // служебное — версия набора настроек, для разовых миграций
   /* расфокус */
   maxStroke: 28,    // максимальный прирост обводки на сторону, % кегля
   clean: 24,        // чистая зона сверху, % высоты экрана
@@ -298,7 +298,9 @@ var cleanY = 0, fullY = 0;
 window.addEventListener('wheel', function (e) {
   if (e.target.closest && e.target.closest('.st-panel')) return;
   e.preventDefault();
-  target += e.deltaY * P.wheel / 100;
+  // колесо шлёт пиксели, строки (deltaMode 1) или экраны (2) — сводим к пикселям // без ручки
+  var ky = e.deltaMode === 1 ? 100 / 6 : e.deltaMode === 2 ? innerHeight : 1;
+  target += e.deltaY * ky * P.wheel / 100;
 }, { passive: false });
 
 var dragY = null;

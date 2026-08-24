@@ -224,7 +224,9 @@ window.addEventListener('pointermove', function (e) {
 });
 document.addEventListener('mouseleave', function () { mouseTX = 0; mouseTY = 0; });
 window.addEventListener('wheel', function (e) {
-  scrollT += e.deltaY * P.scrollAmp / 100 * 0.005;
+  // колесо шлёт пиксели, строки (deltaMode 1) или экраны (2) — сводим к пикселям // без ручки
+  var ky = e.deltaMode === 1 ? 100 / 6 : e.deltaMode === 2 ? innerHeight : 1;
+  scrollT += e.deltaY * ky * P.scrollAmp / 100 * 0.005;
 }, { passive: true });
 var lastTouchY = null;          // на таче кольцо прокручивает вертикальный свайп
 window.addEventListener('touchstart', function (e) { lastTouchY = e.touches[0].clientY; }, { passive: true });

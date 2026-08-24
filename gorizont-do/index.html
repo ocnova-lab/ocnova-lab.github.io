@@ -384,17 +384,6 @@ new URLSearchParams(location.search).forEach(function (v, k) {
        : v;
 });
 
-/* Системная настройка «меньше движения». Не ручка — её ставит человек в
-   системе, стенд обязан слушаться. // без ручки
-   Здесь она снимает всю анимацию: инерцию ленты, проезд по кривой, ход поля
-   роста и перебор знаков. Захват колеса остаётся: перевод вертикального ввода
-   в горизонтальный ход — это закон стенда, а не украшение; без него лента
-   просто не поедет. Движение становится один в один с колесом, как у нативной
-   прокрутки. Для съёмки и проверки: ?tiho=1 включает, ?tiho=0 выключает. */
-var TIHO = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
-if (/[?&]tiho=1/.test(location.search)) TIHO = true;
-if (/[?&]tiho=0/.test(location.search)) TIHO = false;
-
 var DATA  = window.GORIZONT || [];
 var strip = document.getElementById('strip');
 var rail  = document.querySelector('#rail i');
@@ -802,7 +791,7 @@ function dolya(d, reach) {              // спад доли от расстоя
 function polе() {
   if (!ctx) return;
   var lens = lensX(), reach = Math.max(1, P.reach * (P.col + GUT));
-  var lag = TIHO ? 1 : 1 - P.zoomLag / 100, acc = 0, dvizh = false;
+  var lag = 1 - P.zoomLag / 100, acc = 0, dvizh = false;
   for (var i = 0; i < cols.length; i++) {
     var c = cols[i], e = c.el;
     var cel = 0;
@@ -921,13 +910,6 @@ function flapText(target, seed, p, tick, win) {
   return out;
 }
 function nabor() {
-  if (TIHO) {                       // «меньше движения»: текст стоит набранным
-    for (var t = 0; t < cols.length; t++) {
-      var q = cols[t];
-      if (q.txtEl && q.shown !== q.txt) { q.txtEl.textContent = q.txt; q.shown = q.txt; }
-    }
-    return;
-  }
   if (mobile || !P.naborPath) return;
   var vw = window.innerWidth, sl = strip.scrollLeft;
   var tick = Math.floor(performance.now() / Math.max(20, P.naborTick));
@@ -995,7 +977,7 @@ function tick() {
     if (p >= 1) { cur = tgt = ride.to; ride = null; }
     else cur = ride.from + (ride.to - ride.from) * evalEase(P.rideEase, P.rideBez, p);
   } else {
-    var k = TIHO ? 1 : 1 - P.lag / 100;
+    var k = 1 - P.lag / 100;
     cur += (tgt - cur) * (k <= 0 ? 1 : k);
     if (Math.abs(tgt - cur) < 0.5) cur = tgt;
   }
@@ -1008,11 +990,7 @@ function run() { if (!raf) raf = requestAnimationFrame(tick); }
 function maxScroll() { return Math.max(0, strip.scrollWidth - strip.clientWidth); }
 function hold(x) { return Math.max(0, Math.min(maxScroll(), x)); }
 function push(dx) { ride = null; lastPush = performance.now(); tgt = hold(tgt + dx); run(); }
-function rideTo(x) {
-  x = hold(x); lastPush = performance.now(); tgt = x;
-  if (TIHO || !P.ride) { ride = null; cur = x; strip.scrollLeft = cur; measure(); return; }
-  ride = { from: cur, to: x, t0: performance.now() }; run();
-}
+function rideTo(x) { x = hold(x); lastPush = performance.now(); ride = { from: cur, to: x, t0: performance.now() }; tgt = x; run(); }
 
 /* Пока лента едет, колонки с картинками пролетают мимо: колесо остаётся
    горизонтальным, даже если курсор пересёк такую колонку. Вертикаль в
@@ -1048,10 +1026,7 @@ function awake(sc) {
 strip.addEventListener('wheel', function (e) {
   if (mobile) return;
   if (e.target.closest && e.target.closest('.st-panel')) return;   // панель скроллится сама
-  // колесо шлёт пиксели, строки (deltaMode 1) или экраны (2) — сводим к пикселям // без ручки
-  var kx = e.deltaMode === 1 ? 100 / 6 : e.deltaMode === 2 ? innerWidth : 1;
-  var ky = e.deltaMode === 1 ? 100 / 6 : e.deltaMode === 2 ? innerHeight : 1;
-  var dx = e.deltaX * kx, dy = e.deltaY * ky;
+  var dx = e.deltaX, dy = e.deltaY;   // ПРОБА: как было до починки, без перевода в пиксели
   var sc = e.target.closest && e.target.closest('.scroller');
   if (sc && awake(sc) && Math.abs(dy) >= Math.abs(dx)) {
     var top = sc.scrollTop <= 0, bot = sc.scrollTop >= sc.scrollHeight - sc.clientHeight - 1;

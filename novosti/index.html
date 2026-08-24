@@ -463,7 +463,9 @@ addEventListener('wheel', (e) => {
   e.preventDefault();
   if (derzhim) return;
   dovodJob = null;
-  scroll += e.deltaY;
+  // колесо шлёт пиксели, строки (deltaMode 1) или экраны (2) — сводим к пикселям // без ручки
+  const ky = e.deltaMode === 1 ? 100 / 6 : e.deltaMode === 2 ? innerHeight : 1;
+  scroll += e.deltaY * ky;
 }, { passive: false });
 
 // ── старт после шрифтов ──
