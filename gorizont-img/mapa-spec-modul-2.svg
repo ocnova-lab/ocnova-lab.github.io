@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 484" font-family="Helvetica, Arial, sans-serif">
+  <rect x="0" y="0" width="960" height="484" fill="#ffffff"/>
+
+  <!-- экран -->
+  <rect x="100" y="40" width="620" height="360" fill="none" stroke="#999" stroke-width="1.5"/>
+  <text x="100" y="30" font-size="12" fill="#999">экран</text>
+
+  <!-- центральная ось -->
+  <line x1="410" y1="40" x2="410" y2="400" stroke="#cccccc" stroke-dasharray="4 5"/>
+  <text x="410" y="424" font-size="12" fill="#999" text-anchor="middle">центр экрана</text>
+
+  <!-- обычные модули для масштаба -->
+  <rect x="130" y="70" width="90" height="90" fill="#dbe4f7" fill-opacity="0.45" stroke="#2749B0" stroke-opacity="0.45"/>
+  <rect x="600" y="290" width="90" height="90" fill="#dbe4f7" fill-opacity="0.45" stroke="#2749B0" stroke-opacity="0.45"/>
+  <text x="130" y="180" font-size="11" fill="#aaa">обычный модуль —</text>
+  <text x="130" y="194" font-size="11" fill="#aaa">от ширины сцены</text>
+
+  <!-- большой модуль по центру -->
+  <rect x="285" y="70" width="250" height="300" fill="#dbe4f7" stroke="#2749B0" stroke-width="1.5"/>
+  <text x="410" y="446" font-size="13" fill="#555" text-anchor="middle">большой модуль встаёт после каждых трёх строк; высоту задаёт высота экрана, но не шире сцены</text>
+  <text x="410" y="468" font-size="13" fill="#555" text-anchor="middle">на телефоне — во всю ширину сцены встык, высота от пропорции самой картинки</text>
+
+  <!-- высота экрана -->
+  <g stroke="#A63A2B" stroke-width="1.5">
+    <line x1="760" y1="40" x2="760" y2="400"/>
+    <line x1="754" y1="40" x2="766" y2="40"/>
+    <line x1="754" y1="400" x2="766" y2="400"/>
+  </g>
+  <text x="774" y="224" font-size="12" fill="#A63A2B">высота экрана</text>
+
+  <!-- высота картинки -->
+  <g stroke="#A63A2B" stroke-width="1.5">
+    <line x1="555" y1="70" x2="555" y2="370"/>
+    <line x1="549" y1="70" x2="561" y2="70"/>
+    <line x1="549" y1="370" x2="561" y2="370"/>
+  </g>
+  <text x="569" y="224" font-size="12" fill="#A63A2B">высота картинки</text>
+</svg>

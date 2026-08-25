@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" font-family="Helvetica, Arial, sans-serif">
+  <rect x="0" y="0" width="960" height="420" fill="#ffffff"/>
+
+  <!-- эталонная сцена -->
+  <g>
+    <rect x="40" y="70" width="480" height="257" fill="none" stroke="#999" stroke-width="1.5"/>
+    <line x1="57" y1="70" x2="57" y2="327" stroke="#cccccc" stroke-dasharray="4 5"/>
+    <line x1="503" y1="70" x2="503" y2="327" stroke="#cccccc" stroke-dasharray="4 5"/>
+    <rect x="57" y="104" width="77" height="77" fill="#dbe4f7" stroke="#2749B0"/>
+    <rect x="303" y="130" width="77" height="77" fill="#dbe4f7" stroke="#2749B0"/>
+    <rect x="180" y="216" width="77" height="77" fill="#dbe4f7" stroke="#2749B0"/>
+    <rect x="426" y="241" width="77" height="77" fill="#dbe4f7" stroke="#2749B0"/>
+    <g stroke="#A63A2B" stroke-width="1.5">
+      <line x1="57" y1="90" x2="134" y2="90"/>
+      <line x1="57" y1="84" x2="57" y2="96"/>
+      <line x1="134" y1="84" x2="134" y2="96"/>
+    </g>
+    <text x="95" y="82" font-size="12" fill="#A63A2B" text-anchor="middle">модуль 300</text>
+    <text x="280" y="352" font-size="13" fill="#777" text-anchor="middle">эталон формата: сцена 1440</text>
+  </g>
+
+  <!-- сцена уже эталона: тот же рисунок в долях -->
+  <g>
+    <rect x="560" y="70" width="360" height="193" fill="none" stroke="#999" stroke-width="1.5"/>
+    <line x1="573" y1="70" x2="573" y2="263" stroke="#cccccc" stroke-dasharray="4 5"/>
+    <line x1="907" y1="70" x2="907" y2="263" stroke="#cccccc" stroke-dasharray="4 5"/>
+    <rect x="573" y="96" width="58" height="58" fill="#dbe4f7" stroke="#2749B0"/>
+    <rect x="757" y="115" width="58" height="58" fill="#dbe4f7" stroke="#2749B0"/>
+    <rect x="665" y="180" width="58" height="58" fill="#dbe4f7" stroke="#2749B0"/>
+    <rect x="849" y="198" width="58" height="58" fill="#dbe4f7" stroke="#2749B0"/>
+    <g stroke="#A63A2B" stroke-width="1.5">
+      <line x1="573" y1="86" x2="631" y2="86"/>
+      <line x1="573" y1="80" x2="573" y2="92"/>
+      <line x1="631" y1="80" x2="631" y2="92"/>
+    </g>
+    <text x="602" y="78" font-size="12" fill="#A63A2B" text-anchor="middle">модуль 225</text>
+    <text x="740" y="352" font-size="13" fill="#777" text-anchor="middle">сцена 1080: модуль 300 × 1080/1440 = 225</text>
+  </g>
+
+  <text x="480" y="392" font-size="14" fill="#555" text-anchor="middle">K = сцена / эталон;  модуль, просвет, смещение и поля умножаются на K — размеры становятся долями сцены, рисунок сохраняется</text>
+</svg>

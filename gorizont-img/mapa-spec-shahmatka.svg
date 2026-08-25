@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 470" font-family="Helvetica, Arial, sans-serif">
+  <rect x="0" y="0" width="960" height="470" fill="#ffffff"/>
+
+  <!-- направляющие колонок -->
+  <g stroke="#dddddd" stroke-width="1" stroke-dasharray="4 5">
+    <line x1="100" y1="45" x2="100" y2="430"/>
+    <line x1="300" y1="45" x2="300" y2="430"/>
+    <line x1="500" y1="45" x2="500" y2="430"/>
+    <line x1="700" y1="45" x2="700" y2="430"/>
+  </g>
+  <g font-size="12" fill="#999" text-anchor="middle">
+    <text x="160" y="32">силовая линия 1</text>
+    <text x="360" y="32">линия 2</text>
+    <text x="560" y="32">линия 3</text>
+    <text x="760" y="32">линия 4</text>
+  </g>
+
+  <!-- строка 1: линии 1 и 3 -->
+  <rect x="100" y="60" width="120" height="120" fill="#dbe4f7" stroke="#2749B0"/>
+  <rect x="500" y="100" width="120" height="120" fill="#dbe4f7" stroke="#2749B0"/>
+
+  <!-- строка 2: линии 2 и 4 -->
+  <rect x="300" y="260" width="120" height="120" fill="#dbe4f7" stroke="#2749B0"/>
+  <rect x="700" y="300" width="120" height="120" fill="#dbe4f7" stroke="#2749B0"/>
+
+  <!-- смещение внутри строки -->
+  <g stroke="#A63A2B" stroke-width="1.5">
+    <line x1="480" y1="60" x2="480" y2="100"/>
+    <line x1="474" y1="60" x2="486" y2="60"/>
+    <line x1="474" y1="100" x2="486" y2="100"/>
+  </g>
+  <text x="466" y="85" font-size="12" fill="#A63A2B" text-anchor="end">смещение</text>
+
+  <!-- шаг строки -->
+  <g stroke="#A63A2B" stroke-width="1.5">
+    <line x1="70" y1="60" x2="70" y2="260"/>
+    <line x1="64" y1="60" x2="76" y2="60"/>
+    <line x1="64" y1="260" x2="76" y2="260"/>
+  </g>
+  <text x="58" y="160" font-size="12" fill="#A63A2B" text-anchor="middle" transform="rotate(-90 58 160)">шаг строки</text>
+
+  <text x="480" y="458" font-size="15" fill="#555" text-anchor="middle">шаг строки = модуль + смещение + просвет между строками</text>
+</svg>

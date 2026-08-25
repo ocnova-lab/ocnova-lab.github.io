@@ -316,6 +316,21 @@
     font-size: var(--ttl, 60px); white-space: pre-line;
   }
 
+  /* ── таблица ── */
+  .tabl { display: block; }
+  .tsh  { font-family: "JetBrains Mono", ui-monospace, monospace;
+          font-size: calc(var(--dsc-fs) * var(--ub)); line-height: var(--dsc-lh);
+          letter-spacing: var(--dsc-tr);
+          padding-bottom: calc(8px * var(--u)); }
+  .tabl .tr { display: block; padding: calc(10px * var(--u)) 0;
+              border-top: 1px solid var(--hair); }
+  .tabl .tk { font-family: "JetBrains Mono", ui-monospace, monospace;
+              font-size: calc(var(--dsc-fs) * var(--ub)); line-height: var(--dsc-lh);
+              letter-spacing: var(--dsc-tr);
+              padding-bottom: calc(4px * var(--u)); }
+  .tabl .tc { font-size: calc(var(--main-fs) * var(--u)); line-height: var(--main-lh);
+              letter-spacing: var(--main-tr); white-space: pre-line; }
+
   /* ── картинки ── */
   .col.fig .idx, .col.figs .idx { margin-bottom: calc(17px * var(--u)); }
   .col.fig img { display: block; width: 100%; height: auto; }
@@ -410,6 +425,12 @@
      Строка каталога — окно на уменьшенную ленту. Подрезка снизу идёт
      overflow, а не правкой высот: раскладка не трогается, перенос
      остаётся чистым, и бесшовность перехода не страдает. */
+  #teni { position: fixed; inset: 0; visibility: hidden; pointer-events: none;
+          overflow: hidden; z-index: -1; }
+  /* место сборки соседней статьи повторяет ленту: те же поля и та же
+     раскладка, иначе замер набора соврёт */
+  .ten-lenta { position: absolute; inset: 0; display: flex; align-items: flex-start;
+               padding: var(--pad) 0; overflow: hidden; }
   #ryady { position: fixed; inset: 0; overflow: hidden; z-index: 2;
            pointer-events: none; opacity: 0; }
   body.kat #ryady { pointer-events: auto; opacity: 1; }
@@ -456,6 +477,10 @@
      где она проходит внутри строки каждого стиля. Считать это из метрик
      шрифта нельзя — у трёх гарнитур свои ascender и descender. -->
 <div id="probe" aria-hidden="true"><p class="main"><i class="bl"></i>H</p><p class="lead"><i class="bl"></i>H</p><p class="cap"><i class="bl"></i>H</p></div>
+<!-- тень: здесь собираются ленты соседних статей для строк каталога.
+     Собирать их в самой ленте нельзя — читатель увидел бы, как она
+     пересобирается у него под руками. -->
+<div id="teni" aria-hidden="true"></div>
 <div id="rail"><i></i></div>
 <button id="krest" type="button" aria-label="Закрыть статью — в каталог">
   <svg viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.2"
@@ -465,6 +490,9 @@
 
 <script src="/gorizont-data.js"></script>
 <script src="/gorizont-ru.js"></script>
+<script src="/gorizont-prostranstvo.js"></script>
+<script src="/gorizont-pyat-slov.js"></script>
+<script src="/gorizont-vaib-koding.js"></script>
 <script src="/panel.js"></script>
 <!-- органы панели из библиотеки /panel-lib (каталог: стенды.0снова.рф/panel-lib) -->
 <script src="/panel-lib/segment.js"></script>
@@ -521,7 +549,6 @@ var DEFAULTS = {
   katMs: 760,      // каталог: переход туда и обратно, мс
   katEase: 'плавный',
   katBez: [0.65, 0, 0.35, 1],
-  katStatey: 10,   // каталог: сколько статей показывать (пока копии одной)
   ride: 390,       // проезд к фрагменту и по клавишам, мс
   rideEase: 'плавный',
   rideBez: [0.65, 0, 0.35, 1],
@@ -577,13 +604,44 @@ if (/[?&]tiho=1/.test(location.search)) TIHO0 = true;
 if (/[?&]tiho=0/.test(location.search)) TIHO0 = false;
 TIHO = TIHO0;
 
-var DATA  = window.GORIZONT || [];
+/* ── СТАТЬИ ───────────────────────────────────────────────────────────
+   Стенд держит не одну ленту, а список статей. Статья — это материал
+   (записи), перевод (карта по адресу фрагмента), язык материала и папка
+   картинок. Порядок списка есть порядок строк каталога.
+   «Эволюция сеток» собрана вручную по макету, поэтому её материал лежит
+   отдельными файлами; остальные собраны из хранилища скриптом и приходят
+   одним объектом. Для стенда разницы нет: важен состав, не происхождение. */
+var STATI = [{
+  slug: 'setki', yazyk: 'en', img: '/gorizont-img/',
+  imya: { ru: 'Эволюция сеток: от позиции к алгоритму. От чертежа к закону',
+          en: 'The Evolution of the Grid: from Position to Algorithm. From Blueprint to Law' },
+  lenta: window.GORIZONT || [], per: window.GORIZONT_RU || {}
+}];
+['prostranstvo', 'pyat-slov', 'vaib-koding'].forEach(function (k) {
+  var a = (window.GORIZONT_STATI || {})[k];
+  if (a) STATI.push(a);
+});
+function statyaPo(slug) {
+  for (var i = 0; i < STATI.length; i++) if (STATI[i].slug === slug) return STATI[i];
+  return STATI[0];
+}
+function nomerStati(st) {
+  for (var i = 0; i < STATI.length; i++) if (STATI[i] === st) return i;
+  return 0;
+}
+/* Адрес статьи: /gorizont/<слаг> на боевом, ?st=<слаг> локально. */
+function adresStati() {
+  var m = location.pathname.match(/\/gorizont\/([a-z0-9-]+)\/?$/);
+  if (m && m[1] !== 'katalog') return m[1];
+  var q = location.search.match(/[?&]st=([a-z0-9-]+)/);
+  return q ? q[1] : 'setki';
+}
+var STATYA = statyaPo(adresStati());
 /* ── ДВА ЯЗЫКА ────────────────────────────────────────────────────────
    Русский — оригинал статьи, английский — перевод; в макете стоит
    английский, им лента и открывается. Перевод лежит отдельно и ключуется
    индексом фрагмента, поэтому материал не раздваивается: чего в переводе
    нет, берётся из основного файла. */
-var RU = window.GORIZONT_RU || {};
 var LANG_KEY = 'gorizont-lang';
 var LANG = 'en';
 try { if (localStorage.getItem(LANG_KEY) === 'ru') LANG = 'ru'; } catch (e) {}
@@ -595,10 +653,11 @@ function klyuchRU(d) {
   if (d.t === 'cap') return 'cap-' + d.to;
   return d.n || '';
 }
-/* Слово берётся из перевода, если он есть; иначе из материала. */
+/* Слово берётся из перевода, когда просят не тот язык, на котором лежит
+   материал статьи. Чего в переводе нет — берётся из материала. */
 function slovo(d, pole) {
-  if (LANG === 'ru') {
-    var r = RU[klyuchRU(d)];
+  if (LANG !== STATYA.yazyk) {
+    var r = STATYA.per[klyuchRU(d)];
     if (r && r[pole] != null) return r[pole];
   }
   return d[pole];
@@ -608,6 +667,7 @@ var rail  = document.querySelector('#rail i');
 var toast = document.getElementById('toast');
 var root  = document.documentElement;
 var mobile = false;
+var TEN = false;          // лента собирается в тени, а не на экране // без ручки
 
 /* Единственное место, где читается фактическая геометрия. Правило П3: замер
    живёт только в покое — раз за перекладку, — а в кадре работает счёт.
@@ -657,8 +717,9 @@ function anchorOf(d) {
 /* ── ступень пропуска для буфера (мобайл) ── */
 function gapLevel(i) {
   var prev = null, next = null, k;
-  for (k = i - 1; k >= 0; k--) if (DATA[k].t !== 'buffer') { prev = DATA[k]; break; }
-  for (k = i + 1; k < DATA.length; k++) if (DATA[k].t !== 'buffer') { next = DATA[k]; break; }
+  var L = STATYA.lenta;
+  for (k = i - 1; k >= 0; k--) if (L[k].t !== 'buffer') { prev = L[k]; break; }
+  for (k = i + 1; k < L.length; k++) if (L[k].t !== 'buffer') { next = L[k]; break; }
   if (!prev) return 'big';
   if (next && next.t === 'title') return 'big';
   if (next && next.n && /–\s*00$/.test(next.n)) return 'big';       // начало раздела
@@ -691,7 +752,7 @@ function draw(src, w, h) {
   box.style.setProperty('--ar', w + ' / ' + h);
   if (drawn[src] !== undefined) { box.innerHTML = drawn[src]; return box; }
   drawn[src] = null;
-  fetch('/gorizont-img/' + src).then(function (r) { return r.text(); }).then(function (t) {
+  fetch(STATYA.img + src).then(function (r) { return r.text(); }).then(function (t) {
     drawn[src] = t;
     [].forEach.call(document.querySelectorAll('.draw[data-src="' + src + '"]'), function (n) {
       n.innerHTML = t;
@@ -713,7 +774,7 @@ function pic(src, alt, w, h) {
 
 function img(src, alt, w, h) {
   var n = document.createElement('img');
-  n.src = '/gorizont-img/' + src;
+  n.src = STATYA.img + src;
   n.alt = alt || '';
   // натуральные размеры проставлены заранее: место под картинку занято
   // до загрузки, лента не дёргается и ссылка на фрагмент попадает точно
@@ -842,6 +903,26 @@ function lineyka(n) {
   return l;
 }
 
+/* ТАБЛИЦА В ЛЕНТЕ. Ширина у неё одна — колонка: широкую таблицу лента не
+   берёт вовсе, решение о таких принимается в макете. Отсюда устройство:
+   ячейки строки идут не в ряд, а друг под другом — первая меткой в
+   моноширинном дескрипторе, вторая набором тела. Строки разделены
+   волосяной линией того же цвета, что и весь макет; своего цвета таблица
+   не заводит. // без ручки */
+function tablicaEl(d) {
+  var t = el('div', 'tabl');
+  var sh = slovo(d, 'shapka') || [];
+  if (sh.length) t.appendChild(el('div', 'tsh', sh.join('  ·  ')));
+  (slovo(d, 'telo') || []).forEach(function (r) {
+    var tr = el('div', 'tr');
+    r.forEach(function (yach, k) {
+      tr.appendChild(el('div', k ? 'tc' : 'tk', yach));
+    });
+    t.appendChild(tr);
+  });
+  return t;
+}
+
 /* окно с прокруткой; полосы хода у него нет — колонка крутится молча */
 function win(sc) {
   var w = el('div', 'win');
@@ -852,7 +933,7 @@ function win(sc) {
 }
 
 function build() {
-  DATA.forEach(function (d, i) {
+  STATYA.lenta.forEach(function (d, i) {
     var c, id = anchorOf(d);
     switch (d.t) {
       case 'buffer':
@@ -881,6 +962,12 @@ function build() {
         // вторая строка под заголовком раздела — та же строчная метка, что
         // и строка автора под врезкой: один стиль на одну роль
         if (d.pod) c.appendChild(el('div', 'by', slovo(d, 'pod')));
+        break;
+
+      case 'tabl':
+        c = el('div', 'col tabl-col');
+        c.appendChild(idxLine(d.n, id));
+        c.appendChild(tablicaEl(d));
         break;
 
       case 'cap':
@@ -1083,6 +1170,10 @@ function place(c) {
     // кегль титула — модулем, внутри коридора в настоящих пикселах
     e.style.setProperty('--ttl',
       Math.max(P.ttl[0], Math.min(P.ttl[1], P.ttlSize * ctx.u)).toFixed(1) + 'px');
+    return;
+  }
+  if (d.t === 'tabl') {                  // таблица шириной ровно в колонку
+    stavit(COL);
     return;
   }
   if (d.t === 'fig') {
@@ -1720,7 +1811,7 @@ window.addEventListener('keydown', function (e) {
 /* ── ход + адрес фрагмента ── */
 var lastHash = '', stops = [];   // stops — координаты колонок, снятые при раскладке
 function measure() {
-  if (mobile) return;
+  if (mobile || TEN) return;
   var m = maxScroll();
   rail.style.width = (m ? (strip.scrollLeft / m * 100) : 0).toFixed(2) + '%';
   var x = strip.scrollLeft + 1;
@@ -1831,7 +1922,6 @@ StendPanel.build({
     ['katMasht', 'Каталог: масштаб, %', 8, 60, 1],
     ['katKrop', 'Каталог: строка, % ленты', 20, 100, 5],
     ['katProm', 'Каталог: промежуток, % строки', 0, 60, 1],
-    ['katStatey', 'Каталог: статей', 1, 20, 1],
     ['katMs', 'Каталог: переход, мс', 0, 2000, 20],
     ['katEase', 'Каталог: кривая перехода', 'ease'],
     ['h', 'Ход'],
@@ -1902,7 +1992,6 @@ StendPanel.build({
     katMasht: 'Во сколько раз каталог уменьшает ленту. 25 % взято с макета: колонка 86 при 340, межколонник 8 при 30.',
     katKrop: 'Строка каталога — окно на уменьшенную ленту. Сколько ленты она показывает: 100 % — всю, вместе с воздухом под коротким текстом; меньше — строка подрезается снизу и статьи стоят плотнее. Подрезка идёт окном и раскладку не трогает.',
     katProm: 'Промежуток между статьями, в долях самой строки: расстояние выведено из строки, а не назначено пикселами.',
-    katStatey: 'Сколько статей в каталоге. Статья пока одна, соседи — её копии; когда статей станет много, ручка уйдёт.',
     katMs: 'Сколько длится переход из статьи в каталог и обратно. Переход — доля: его можно прервать на полпути, и он поедет назад с того места, где застали.',
     katEase: 'Кривая перехода в каталог.',
     ride: 'Сколько едет лента, когда её зовут клавишей, адресом фрагмента или притяжением. 0 — сразу.',
@@ -1936,6 +2025,8 @@ StendPanel.build({
 var katK = 0, katCel = 0, katOt = 0, katT0 = 0, katDvig = false;
 var katS0 = 0, katY = 0, katSled = false, katGryaz = true;
 var katSlot = null, katKlonW = 0, katKolco = null, katRaspah = false;
+var katRyad = [];         // строки соседних статей; у своей на месте null
+var teni = document.getElementById('teni');
 
 /* Колонки, которые в каталоге не читаются: картинка без подписи немая,
    подпись без картинки пустая, буфер — пропуск, которого на такой мере
@@ -1949,7 +2040,7 @@ function katShag() {
   return { h: h, shag: h * (1 + P.katProm / 100) };
 }
 function katMax() {
-  return Math.max(0, Math.max(1, P.katStatey) * katShag().shag - window.innerHeight + PAD);
+  return Math.max(0, STATI.length * katShag().shag - window.innerHeight + PAD);
 }
 
 /* Копия ленты для каталога: только читаемые колонки и без адресов —
@@ -1967,16 +2058,12 @@ function katKlonSdelat() {
   }
   return k;
 }
-/* Копии снимаются с ленты один раз за перекладку и в покое: титул сперва
-   показывается целиком (в статье маска могла увести его наверх — копия
-   обязана взять его показанным), потом считается ширина копии, потом
-   собираются кольцо статьи и строки соседей. */
-function katSobrat(n) {
-  /* Копия обязана снять ленту ПОКАЗАННОЙ. Текст в колонке за экраном стоит
-     несобранным — неразрывными пробелами, — а титул и врезки могут быть
-     уведены маской. Копия этого не знает и унесёт с собой пустоту, поэтому
-     перед съёмом лента доводится до покоя вручную: порядок кадра тут не
-     помощник, съём идёт в том же кадре, что и решение открыть каталог. */
+/* Копия обязана снять ленту ПОКАЗАННОЙ. Текст в колонке за экраном стоит
+   несобранным — неразрывными пробелами, — а титул и врезки могут быть
+   уведены маской. Копия этого не знает и унесёт с собой пустоту, поэтому
+   перед съёмом лента доводится до покоя вручную: порядок кадра тут не
+   помощник, съём идёт в том же кадре, что и решение открыть каталог. */
+function katPokazat() {
   for (var i = 0; i < cols.length; i++) {
     var c = cols[i];
     if (c.txtEl && c.shown !== c.txt) { c.txtEl.textContent = c.txt; c.shown = c.txt; }
@@ -1986,19 +2073,52 @@ function katSobrat(n) {
     }
     if (c.maska) StendMaska.pokazat(c.maska, 1, { sdvig: 0, izing: function (t) { return t; } });
   }
-  katKlonW = 0;
-  for (var j = 0; j < cols.length; j++) if (!katSzhat(cols[j])) katKlonW += cols[j].w1 + GUT;
-  var obr = katKlonSdelat();
+}
+function katShirina() {                        // ширина копии = где встанет титул
+  var w = 0;
+  for (var j = 0; j < cols.length; j++) if (!katSzhat(cols[j])) w += cols[j].w1 + GUT;
+  return w;
+}
+
+/* СОСЕДНЯЯ СТАТЬЯ СОБИРАЕТСЯ В ТЕНИ. Строка каталога — не картинка статьи,
+   а сама её лента, только мелко: значит её надо по-настоящему собрать и
+   разложить. Делать это в живой ленте нельзя — читатель увидел бы, как она
+   пересобирается под руками. Поэтому движок на время переключается на
+   другую статью и другое место, а потом возвращается: всё, что принадлежит
+   статье, это шесть величин, и подмены их достаточно. */
+function sobratVTeni(st) {
+  var mesto = el('div', 'ten-lenta');
+  teni.appendChild(mesto);
+  var bylo = { st: STATYA, cols: cols, wins: wins, strip: strip, ten: TEN };
+  STATYA = st; cols = []; wins = []; strip = mesto; TEN = true;
+  build(); layout(); katPokazat();
+  var res = { klon: katKlonSdelat(), w: katShirina() };
+  STATYA = bylo.st; cols = bylo.cols; wins = bylo.wins;
+  strip = bylo.strip; TEN = bylo.ten;
+  mesto.remove();
+  return res;
+}
+
+/* Строки каталога: у каждой статьи своя, у текущей ею работает сама лента. */
+function katSobrat() {
+  katPokazat();
+  katKlonW = katShirina();
+  var svoy = katKlonSdelat();
   if (katKolco) katKolco.remove();
-  katKolco = obr.cloneNode(true);
+  katKolco = svoy.cloneNode(true);
   strip.appendChild(katKolco);                 // кольцо: копия в хвост ленты
   katSlot.textContent = '';
-  for (var r = 0; r < n; r++) {
+  katRyad = [];
+  for (var i = 0; i < STATI.length; i++) {
+    if (STATI[i] === STATYA) { katRyad.push(null); continue; }
+    var k = sobratVTeni(STATI[i]);
     var ryad = el('div', 'ryad'), para = el('div', 'para');
-    para.appendChild(obr.cloneNode(true));     // конец статьи — слева от титула
-    para.appendChild(obr.cloneNode(true));     // начало — справа
+    para.appendChild(k.klon.cloneNode(true));  // конец статьи — слева от титула
+    para.appendChild(k.klon);                  // начало — справа
     ryad.appendChild(para);
+    ryad.dataset.st = STATI[i].slug;
     katSlot.appendChild(ryad);
+    katRyad.push({ el: ryad, w: k.w });
   }
 }
 /* Вернулись в статью — кольцо снимается: иначе за последним буфером
@@ -2011,13 +2131,21 @@ function katKolcoSnyat() {
 function katAdresEst() {
   return /\/katalog\/?$/.test(location.pathname) || /[?&]katalog=1/.test(location.search);
 }
-function katAdres(v) {
-  var a, p = location.pathname;
-  if (/\.html$/.test(p) || p === '/') a = p + (v ? '?katalog=1' : '') + location.hash;
-  else a = (v ? p.replace(/\/$/, '') + '/katalog'
-             : p.replace(/\/katalog\/?$/, '')) + location.hash;
-  try { history.pushState({ kat: v ? 1 : 0 }, '', a); } catch (e) {}
+/* Адрес: на боевом путь, локально запрос — файловый сервер путей не знает. */
+function adres(kat, slug) {
+  var p = location.pathname, a;
+  if (/\.html$/.test(p) || p === '/') {
+    var q = [];
+    if (kat) q.push('katalog=1');
+    if (slug && slug !== 'setki') q.push('st=' + slug);
+    a = p + (q.length ? '?' + q.join('&') : '');
+  } else {
+    var koren = p.replace(/\/(katalog|[a-z0-9-]+)\/?$/, '') || '/gorizont';
+    a = kat ? koren + '/katalog' : (slug && slug !== 'setki' ? koren + '/' + slug : koren);
+  }
+  try { history.pushState({ kat: kat ? 1 : 0, st: slug }, '', a); } catch (e) {}
 }
+function katAdres(v) { adres(v, STATYA.slug); }
 function katPusk(v, bezAdresa) {
   if (mobile) return;
   v = v ? 1 : 0;
@@ -2044,11 +2172,9 @@ function katTick() {
   krest.style.pointerEvents = q > 0.5 ? 'none' : '';
 
   if (!katSlot) { katSlot = el('div'); katSlot.id = 'ryady'; document.body.appendChild(katSlot); }
-  var n = Math.max(1, Math.round(P.katStatey)) - 1;
-  if (q > 0 && (katGryaz || !katKolco || katSlot.children.length !== n)) {
-    katSobrat(n); katGryaz = false;
-  }
+  if (q > 0 && (katGryaz || !katKolco)) { katSobrat(); katGryaz = false; }
   if (q === 0) { katKolcoSnyat(); }
+  var moy = nomerStati(STATYA);              // в какой строке стоит своя лента
 
   /* 1. нечитаемые колонки сходят на нет; заодно считается ширина ленты —
         она же координата титула копии, приставленной в хвост */
@@ -2077,35 +2203,62 @@ function katTick() {
     if (!katRaspah) { katRaspah = true; strip.classList.add('raspah'); strip.scrollLeft = 0; }
     strip.style.transformOrigin = '0 0';
     strip.style.transform = 'translate(' + (vw / 2 - X * s).toFixed(2) + 'px,'
-      + (-katY * q).toFixed(2) + 'px) scale(' + s.toFixed(4) + ')';
+      + (q * (moy * g.shag - katY)).toFixed(2) + 'px) scale(' + s.toFixed(4) + ')';
   } else {
     if (katRaspah) { katRaspah = false; strip.classList.remove('raspah'); }
     strip.style.transform = '';
     cur = tgt = katS0; strip.scrollLeft = katS0;
   }
-  /* 4. соседние статьи всплывают снизу */
-  var tx = vw / 2 - (katKlonW + vw / 2) * mash;
-  for (var r = 0; r < katSlot.children.length; r++) {
-    var ryad = katSlot.children[r];
-    var y = PAD * s + (r + 1) * g.shag - katY + (1 - q) * vh * 0.35;
-    ryad.style.height = g.h.toFixed(1) + 'px';
-    ryad.style.transform = 'translateY(' + y.toFixed(2) + 'px)';
-    ryad.style.opacity = q;
-    ryad.firstChild.style.transform =
-      'translateX(' + tx.toFixed(2) + 'px) scale(' + mash.toFixed(4) + ')';
+  /* 4. соседние статьи всплывают снизу. У каждой своя ширина ленты, значит
+        и свой сдвиг: титул копии обязан встать в середину экрана. */
+  for (var r = 0; r < katRyad.length; r++) {
+    var rr = katRyad[r];
+    if (!rr) continue;
+    var y = PAD * s + r * g.shag - katY + (1 - q) * vh * 0.35;
+    rr.el.style.height = g.h.toFixed(1) + 'px';
+    rr.el.style.transform = 'translateY(' + y.toFixed(2) + 'px)';
+    rr.el.style.opacity = q;
+    rr.el.firstChild.style.transform =
+      'translateX(' + (vw / 2 - (rr.w + vw / 2) * mash).toFixed(2) + 'px) scale('
+      + mash.toFixed(4) + ')';
   }
 }
 
 var krest = document.getElementById('krest');
 krest.addEventListener('click', function () { katPusk(true); });
-/* В каталоге клик по любой строке возвращает в статью. Когда статей станет
-   много, у строки появится свой адрес — сейчас он у всех один. */
+/* ОТКРЫТЬ СТАТЬЮ ИЗ КАТАЛОГА. Строка каталога и лента статьи — одно и то же
+   содержимое в разной мере, поэтому открыть статью значит ПОДМЕНИТЬ строку
+   лентой в той же геометрии и погнать долю обратно. Подмена не видна:
+   подменяется одинаковое на одинаковое. */
+function katOtkryt(slug) {
+  var st = statyaPo(slug);
+  if (st === STATYA) { katPusk(false); return; }
+  var idx = nomerStati(st);
+  STATYA = st;
+  strip.textContent = ''; cols.length = 0; wins.length = 0;
+  katKolco = null;
+  build(); layout(); katPokazat();
+  katKlonW = katShirina();
+  katKolco = katKlonSdelat(); strip.appendChild(katKolco);
+  if (katRyad[idx]) katRyad[idx].el.style.display = 'none';
+  katGryaz = true;                 // строки пересоберутся к следующему разу
+  katS0 = 0;                       // статья открывается с титула
+  strip.lang = LANG;
+  katCel = 0; katOt = katK; katT0 = performance.now(); katDvig = true;
+  adres(false, slug);
+}
 document.addEventListener('click', function (e) {
   if (!katK || katDvig) return;
   if (e.target.closest && (e.target.closest('.st-panel') || e.target.closest('.st-gear'))) return;
+  var r = e.target.closest && e.target.closest('.ryad');
+  if (r && r.dataset.st) { katOtkryt(r.dataset.st); return; }
   katPusk(false);
 });
-window.addEventListener('popstate', function () { katPusk(katAdresEst(), true); });
+window.addEventListener('popstate', function () {
+  var slug = adresStati();
+  if (slug !== STATYA.slug && !katAdresEst()) { katOtkryt(slug); return; }
+  katPusk(katAdresEst(), true);
+});
 
 var sig = '', lastLook = 0;
 /* Колонка ожила: набор в ней крупнее, и она же забирает колесо, если ей
