@@ -235,7 +235,7 @@ def polozhit(ist, vyhod, imya):
 # Пролёты, назначенные глазом Сергея: скан обложки читается только крупно,
 # и пропорция об этом не знает. Пока таких немного — держим списком.
 RUKOY = {'ruder-tipografika-kniga': 2, 'weingart-1': 2, 'weingart-2': 2,
-         'david-vertical': 2, 'medunetsky-construction-1921': 2}
+         'david-vertical': 2}
 
 
 def prolyot(put):
