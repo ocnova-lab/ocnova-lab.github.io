@@ -133,6 +133,32 @@
   Ручки: «Вспышка: доля слов, %» (сила), «Вспышка: длина, мс» и «Вспышка:
   кривая затухания» (динамика), «Вспышка: перещёлк, мс» (темп).
 
+КАТАЛОГ СТАТЕЙ. Круглая кнопка с крестиком закрывает статью и переводит
+в каталог — другой адрес (/gorizont/katalog), но тот же документ: страница
+не перезагружается, поэтому переход бесшовный. Адрес ведёт History API,
+кнопка «назад» браузера работает.
+  Каталог — ТА ЖЕ ЛЕНТА, свёрнутая в кольцо и разрезанная по титулу.
+  Кольцо делается копией, приставленной в конец: если встать на титул
+  КОПИИ, слева от него окажется конец статьи, справа — её начало. Ни одна
+  колонка при этом не сдвигается, потому что приставка идёт в хвост.
+  Смотрит: на долю перехода k (0 — статья, 1 — каталог).
+  Реагирует: плавно, по кривой.
+  Всё в каталоге — функция k, поэтому переход обратим и его можно прервать
+  на полпути: это не два состояния с анимацией между ними, а одно состояние
+  с параметром.
+      масштаб ленты                 1 → «Каталог: масштаб, %» (25 из макета:
+                                    колонка 86 при 340, межколонник 8 при 30)
+      картинки, подписи и буферы    ширина сходит на нет: в каталоге они не
+                                    читаются и только съедают место
+      положение по горизонтали      доля между тем, где стоял читатель, и
+                                    титулом копии
+      положение по вертикали        лента садится в свою строку каталога
+      соседние статьи               всплывают снизу, прозрачность = k
+  Строка каталога — окно на уменьшенную ленту, подрезанное снизу долей
+  «Каталог: строка, % ленты»: подрезка не трогает раскладку, это тот же
+  чистый перенос, поэтому бесшовность не страдает.
+  Пока статья одна, соседи — её копии, число задаёт «Каталог: статей».
+
 ДВИЖЕНИЕ (П5). Две динамики, обе с ручками:
   колесо → лента с экспоненциальным догоном («Колесо, %» + «Инерция, %»);
   клавиши, переход по адресу фрагмента и притяжение к колонке → проезд по
@@ -367,6 +393,41 @@
   body.mob .scroller figure + figure, body.mob .scroller img + img,
   body.mob .scroller .draw + .draw { margin-top: var(--gut); }
   body.mob #rail { display: none; }
+
+  /* ── каталог статей ──────────────────────────────────────────────
+     Строка каталога — окно на уменьшенную ленту. Подрезка снизу идёт
+     overflow, а не правкой высот: раскладка не трогается, перенос
+     остаётся чистым, и бесшовность перехода не страдает. */
+  #ryady { position: fixed; inset: 0; overflow: hidden; z-index: 2;
+           pointer-events: none; opacity: 0; }
+  body.kat #ryady { pointer-events: auto; opacity: 1; }
+  /* фон непрозрачный: им же строка подрезает то, что торчит из соседней */
+  .ryad { position: absolute; left: 0; top: 0; width: 100vw;
+          overflow: hidden; background: var(--bg); }
+  .ryad > .para { display: flex; align-items: flex-start; transform-origin: 0 0; }
+  .klon { flex: 0 0 auto; display: flex; align-items: flex-start; }
+  /* лента в каталоге — картинка, а не текст: курсором по ней не ведут */
+  body.kat #strip { pointer-events: none; }
+  /* РАСПАХНУТАЯ ЛЕНТА. В статье #strip — контейнер с прокруткой, и он
+     обрезает ленту по экрану: уменьшить такой контейнер значит показать
+     тот же обрезок мельче. В каталоге лента распахивается — обрезка
+     снимается, а вести её начинает перенос вместо прокрутки. Подмена
+     незаметна: в миг подмены перенос равен снятой прокрутке. */
+  #strip.raspah { overflow: visible; }
+  body.kat #rail  { display: none; }
+
+  /* Крестик: закрыть статью. Служебная геометрия интерфейса, числа в
+     настоящих пикселах законны (свод, П2). Цвет — из макета, свой не
+     заводит: волосяная линия и тот же серо-синий. */
+  #krest { position: fixed; right: 22px; bottom: 22px; z-index: 4;
+           width: 44px; height: 44px; padding: 0; border-radius: 50%;
+           border: 1px solid var(--hair); background: var(--bg);
+           color: var(--ink); cursor: pointer;
+           display: grid; place-items: center;
+           transition: border-color .18s, opacity .18s; }
+  #krest:hover { border-color: var(--ink); }
+  #krest svg { display: block; width: 13px; height: 13px; }
+  body.mob #krest { display: none; }
 </style>
 </head>
 <body>
@@ -376,6 +437,10 @@
      шрифта нельзя — у трёх гарнитур свои ascender и descender. -->
 <div id="probe" aria-hidden="true"><p class="main"><i class="bl"></i>H</p><p class="lead"><i class="bl"></i>H</p><p class="cap"><i class="bl"></i>H</p></div>
 <div id="rail"><i></i></div>
+<button id="krest" type="button" aria-label="Закрыть статью — в каталог">
+  <svg viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.2"
+       aria-hidden="true"><path d="M1 1l11 11M12 1L1 12"/></svg>
+</button>
 <div id="toast">ссылка скопирована</div>
 
 <script src="/gorizont-data.js"></script>
@@ -409,7 +474,7 @@ var DEFAULTS = {
   naborLatch: false, // защёлка: набранное не рассыпается обратно
   naborDsc: 1,     // перебирать дескрипторы: индексы, подписи, строку автора
   naborFoto: 60,   // сдвиг картинки под подписью, % её высоты
-  vspDolya: 5,     // вспышка: доля слов колонки, % — 0 выключает
+  vspDolya: 20,    // вспышка: доля слов колонки, % — 0 выключает
   vspMs: 520,      // вспышка: длина, мс
   vspTick: 55,     // вспышка: перещёлк знака, мс
   vspEase: 'разгон',
@@ -429,6 +494,13 @@ var DEFAULTS = {
   maskaBez: [0.33, 1, 0.68, 1],
   ttlMs: 900,      // титул: появление при заходе, мс
   ttlPath: 520,    // титул: путь ухода наверх после касания левого края, px
+  katMasht: 25,    // каталог: масштаб ленты, % (из макета: колонка 86 при 340)
+  katKrop: 80,     // каталог: сколько ленты показывает строка, %
+  katProm: 7,      // каталог: промежуток между строками, % строки
+  katMs: 760,      // каталог: переход туда и обратно, мс
+  katEase: 'плавный',
+  katBez: [0.65, 0, 0.35, 1],
+  katStatey: 10,   // каталог: сколько статей показывать (пока копии одной)
   ride: 390,       // проезд к фрагменту и по клавишам, мс
   rideEase: 'плавный',
   rideBez: [0.65, 0, 0.35, 1],
@@ -478,9 +550,11 @@ new URLSearchParams(location.search).forEach(function (v, k) {
    просто не поедет. Движение становится один в один с колесом, как у нативной
    прокрутки. Для съёмки и проверки: ?tiho=1 включает, ?tiho=0 выключает. */
 var T0 = performance.now();     // отсчёт появления титула — с загрузки  // без ручки
-var TIHO = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
-if (/[?&]tiho=1/.test(location.search)) TIHO = true;
-if (/[?&]tiho=0/.test(location.search)) TIHO = false;
+var TIHO0 = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+var TIHO = TIHO0;
+if (/[?&]tiho=1/.test(location.search)) TIHO0 = true;
+if (/[?&]tiho=0/.test(location.search)) TIHO0 = false;
+TIHO = TIHO0;
 
 var DATA  = window.GORIZONT || [];
 var strip = document.getElementById('strip');
@@ -928,6 +1002,8 @@ function layout() {
      Замер один за перекладку и в покое (П3) — в кадре из него только
      считается доля входа. Своя вертикаль есть только у стопки: одиночная
      картинка никуда по высоте не едет, её вход целиком горизонтальный. */
+  katGryaz = true;                        // перекладка — копии каталога устарели
+  cols.forEach(function (c) { c.katD = undefined; });
   cols.forEach(function (c) {
     c.raskrY = null;
     if (c.d.t !== 'figs' || !c.sc || !c.raskr.length) return;
@@ -1159,7 +1235,9 @@ function maskaTtl(vw, sl) {
   for (var i = 0; i < cols.length; i++) if (cols[i].d.t === 'title') c = cols[i];
   if (!c || !c.maska) return;
   var levo = c.l - sl;
-  var vyhod = (!P.ttlPath || levo >= 0) ? 1 : Math.max(0, 1 + levo / P.ttlPath);
+  // в каталоге лента уведена далеко вправо, и уход титула наверх там ни при
+  // чём: строка обязана показывать титул целиком
+  var vyhod = (katK > 0 || !P.ttlPath || levo >= 0) ? 1 : Math.max(0, 1 + levo / P.ttlPath);
   var vhod = (TIHO || !P.ttlMs) ? 1
     : Math.min(1, (performance.now() - T0) / P.ttlMs);
   StendMaska.pokazat(c.maska, Math.min(vhod, vyhod), {
@@ -1551,6 +1629,11 @@ strip.addEventListener('wheel', function (e) {
   var kx = e.deltaMode === 1 ? 100 / 6 : e.deltaMode === 2 ? innerWidth : 1;
   var ky = e.deltaMode === 1 ? 100 / 6 : e.deltaMode === 2 ? innerHeight : 1;
   var dx = e.deltaX * kx, dy = e.deltaY * ky;
+  if (katK > 0) {                       // в каталоге колесо листает статьи
+    e.preventDefault();
+    katY = Math.max(0, Math.min(katMax(), katY + (Math.abs(dy) >= Math.abs(dx) ? dy : dx)));
+    return;
+  }
   var sc = e.target.closest && e.target.closest('.scroller');
   if (sc && awake(sc) && Math.abs(dy) >= Math.abs(dx)) {
     var top = sc.scrollTop <= 0, bot = sc.scrollTop >= sc.scrollHeight - sc.clientHeight - 1;
@@ -1697,6 +1780,13 @@ StendPanel.build({
     ['vspMs', 'Вспышка: длина, мс', 0, 2000, 20],
     ['vspTick', 'Вспышка: перещёлк, мс', 20, 300, 5],
     ['vspEase', 'Вспышка: кривая затухания', 'ease'],
+    ['h', 'Каталог'],
+    ['katMasht', 'Каталог: масштаб, %', 8, 60, 1],
+    ['katKrop', 'Каталог: строка, % ленты', 20, 100, 5],
+    ['katProm', 'Каталог: промежуток, % строки', 0, 60, 1],
+    ['katStatey', 'Каталог: статей', 1, 20, 1],
+    ['katMs', 'Каталог: переход, мс', 0, 2000, 20],
+    ['katEase', 'Каталог: кривая перехода', 'ease'],
     ['h', 'Ход'],
     ['wheel', 'Колесо, %', 20, 300, 5],
     ['wake', 'Колесо колонке после паузы, мс', 0, 1500, 10],
@@ -1762,6 +1852,12 @@ StendPanel.build({
     ttlPath: 'Как только левый край титула коснулся левого края экрана, строки уходят вверх — за сколько пикселов хода. Ход назад возвращает их сверху вниз. 0 — не уходит.',
     wheel: 'Сколько ленты проходит за один щелчок колеса.',
     lag: 'Чем больше, тем дольше лента догоняет колесо.',
+    katMasht: 'Во сколько раз каталог уменьшает ленту. 25 % взято с макета: колонка 86 при 340, межколонник 8 при 30.',
+    katKrop: 'Строка каталога — окно на уменьшенную ленту. Сколько ленты она показывает: 100 % — всю, вместе с воздухом под коротким текстом; меньше — строка подрезается снизу и статьи стоят плотнее. Подрезка идёт окном и раскладку не трогает.',
+    katProm: 'Промежуток между статьями, в долях самой строки: расстояние выведено из строки, а не назначено пикселами.',
+    katStatey: 'Сколько статей в каталоге. Статья пока одна, соседи — её копии; когда статей станет много, ручка уйдёт.',
+    katMs: 'Сколько длится переход из статьи в каталог и обратно. Переход — доля: его можно прервать на полпути, и он поедет назад с того места, где застали.',
+    katEase: 'Кривая перехода в каталог.',
     ride: 'Сколько едет лента, когда её зовут клавишей, адресом фрагмента или притяжением. 0 — сразу.',
     rideEase: 'Кривая этого проезда.',
     snap: 'После остановки лента подтягивается к ближайшему краю колонки.',
@@ -1773,6 +1869,188 @@ StendPanel.build({
 });
 
 /* панель меняет параметры молча — следим за ними и перекладываем */
+/* ══ КАТАЛОГ СТАТЕЙ ═══════════════════════════════════════════════════
+   Каталог — та же лента, свёрнутая в кольцо и разрезанная по титулу.
+   Кольцо делается копией, приставленной В ХВОСТ ленты: если встать на
+   титул копии, слева окажется конец статьи, справа — её начало. Приставка
+   в хвост не двигает ни одной колонки, поэтому координаты статьи (c.l,
+   stops) остаются верными и в каталоге, и после возврата.
+
+   Всё — функция доли перехода k. Это не два состояния с анимацией между
+   ними, а одно состояние с параметром: переход обратим, его можно
+   прервать на полпути, и никакого «конца анимации», после которого
+   состояние переписывается, не существует.
+
+   Адрес ведёт History API: документ тот же, страница не перезагружается,
+   поэтому переход бесшовный, а адрес всё-таки другой и кнопка «назад»
+   работает. На боевом адресе /gorizont/katalog переписан на /gorizont
+   правилом в vercel.json; локально (файл .html) адрес живёт запросом
+   ?katalog=1 — путь с папкой на простом файловом сервере не открыть. */
+var katK = 0, katCel = 0, katOt = 0, katT0 = 0, katDvig = false;
+var katS0 = 0, katY = 0, katSled = false, katGryaz = true;
+var katSlot = null, katKlonW = 0, katKolco = null, katRaspah = false;
+
+/* Колонки, которые в каталоге не читаются: картинка без подписи немая,
+   подпись без картинки пустая, буфер — пропуск, которого на такой мере
+   уже не видно. Все три сходят на нет шириной. */
+function katSzhat(c) {
+  var t = c.d.t;
+  return t === 'fig' || t === 'figs' || t === 'cap' || t === 'buffer';
+}
+function katShag() {
+  var h = Math.max(40, (window.innerHeight - 2 * PAD) * P.katMasht / 100 * P.katKrop / 100);
+  return { h: h, shag: h * (1 + P.katProm / 100) };
+}
+function katMax() {
+  return Math.max(0, Math.max(1, P.katStatey) * katShag().shag - window.innerHeight + PAD);
+}
+
+/* Копия ленты для каталога: только читаемые колонки и без адресов —
+   якорь в ленте один, дубли ломали бы ссылку на фрагмент. */
+function katKlonSdelat() {
+  var k = el('div', 'klon');
+  for (var i = 0; i < cols.length; i++) {
+    var c = cols[i];
+    if (katSzhat(c)) continue;
+    var e = c.el.cloneNode(true);
+    e.removeAttribute('id');
+    [].forEach.call(e.querySelectorAll('[id]'), function (x) { x.removeAttribute('id'); });
+    e.style.width = c.w1 + 'px';
+    k.appendChild(e);
+  }
+  return k;
+}
+/* Копии снимаются с ленты один раз за перекладку и в покое: титул сперва
+   показывается целиком (в статье маска могла увести его наверх — копия
+   обязана взять его показанным), потом считается ширина копии, потом
+   собираются кольцо статьи и строки соседей. */
+function katSobrat(n) {
+  for (var i = 0; i < cols.length; i++) {
+    if (cols[i].d.t === 'title' && cols[i].maska) {
+      StendMaska.pokazat(cols[i].maska, 1, { sdvig: 0, izing: function (t) { return t; } });
+    }
+  }
+  katKlonW = 0;
+  for (var j = 0; j < cols.length; j++) if (!katSzhat(cols[j])) katKlonW += cols[j].w1 + GUT;
+  var obr = katKlonSdelat();
+  if (katKolco) katKolco.remove();
+  katKolco = obr.cloneNode(true);
+  strip.appendChild(katKolco);                 // кольцо: копия в хвост ленты
+  katSlot.textContent = '';
+  for (var r = 0; r < n; r++) {
+    var ryad = el('div', 'ryad'), para = el('div', 'para');
+    para.appendChild(obr.cloneNode(true));     // конец статьи — слева от титула
+    para.appendChild(obr.cloneNode(true));     // начало — справа
+    ryad.appendChild(para);
+    katSlot.appendChild(ryad);
+  }
+}
+/* Вернулись в статью — кольцо снимается: иначе за последним буфером
+   лежала бы вторая копия статьи, и лента уезжала бы в неё. */
+function katKolcoSnyat() {
+  if (!katKolco) return;
+  katKolco.remove(); katKolco = null; katGryaz = true;
+}
+
+function katAdresEst() {
+  return /\/katalog\/?$/.test(location.pathname) || /[?&]katalog=1/.test(location.search);
+}
+function katAdres(v) {
+  var a, p = location.pathname;
+  if (/\.html$/.test(p) || p === '/') a = p + (v ? '?katalog=1' : '') + location.hash;
+  else a = (v ? p.replace(/\/$/, '') + '/katalog'
+             : p.replace(/\/katalog\/?$/, '')) + location.hash;
+  try { history.pushState({ kat: v ? 1 : 0 }, '', a); } catch (e) {}
+}
+function katPusk(v, bezAdresa) {
+  if (mobile) return;
+  v = v ? 1 : 0;
+  if (v === katCel) return;
+  if (v) { katS0 = strip.scrollLeft; ride = null; }
+  katCel = v; katOt = katK; katT0 = performance.now(); katDvig = true;
+  if (!bezAdresa) katAdres(v);
+}
+
+function katTick() {
+  if (mobile) return;
+  var now = performance.now();
+  if (katDvig) {
+    var t = P.katMs > 0 ? (now - katT0) / P.katMs : 1;
+    if (t >= 1) { t = 1; katDvig = false; }
+    katK = katOt + (katCel - katOt) * evalEase(P.katEase, P.katBez, t);
+  }
+  if (katK === 0 && !katSled) return;        // в статье каталог кадра не тратит
+  katSled = katK > 0;                        // ещё проход — вернуть всё на место
+  var q = katK, vw = window.innerWidth, vh = window.innerHeight;
+  var mash = P.katMasht / 100, s = 1 + (mash - 1) * q;
+  document.body.classList.toggle('kat', q > 0);
+  krest.style.opacity = 1 - q;
+  krest.style.pointerEvents = q > 0.5 ? 'none' : '';
+
+  if (!katSlot) { katSlot = el('div'); katSlot.id = 'ryady'; document.body.appendChild(katSlot); }
+  var n = Math.max(1, Math.round(P.katStatey)) - 1;
+  if (q > 0 && (katGryaz || !katKolco || katSlot.children.length !== n)) {
+    katSobrat(n); katGryaz = false;
+  }
+  if (q === 0) { katKolcoSnyat(); }
+
+  /* 1. нечитаемые колонки сходят на нет; заодно считается ширина ленты —
+        она же координата титула копии, приставленной в хвост */
+  var w = 0;
+  for (var i = 0; i < cols.length; i++) {
+    var c = cols[i], d = katSzhat(c) ? (1 - q) : 1;
+    if (c.katD !== d) {
+      c.katD = d;
+      if (katSzhat(c)) {
+        c.el.style.width = (c.w1 * d) + 'px';
+        c.el.style.marginRight = (GUT * d) + 'px';
+        c.el.style.opacity = d;
+      }
+    }
+    w += (c.w1 + GUT) * d;
+  }
+  /* 2–3. Одна точка ленты ведёт всё: она едет от середины экрана читателя
+        к середине титула копии (w + vw/2) и обязана всё время стоять в
+        середине экрана. Отсюда перенос: tx = vw/2 − X·s. При q=0 это ровно
+        −katS0 при масштабе 1, то есть та же картинка, что и с прокруткой,
+        поэтому подмена прокрутки переносом не видна. По вертикали лента
+        садится в свою строку каталога. */
+  var g = katShag();
+  var X = katS0 + vw / 2 + (w - katS0) * q;
+  if (q > 0) {
+    if (!katRaspah) { katRaspah = true; strip.classList.add('raspah'); strip.scrollLeft = 0; }
+    strip.style.transformOrigin = '0 0';
+    strip.style.transform = 'translate(' + (vw / 2 - X * s).toFixed(2) + 'px,'
+      + (-katY * q).toFixed(2) + 'px) scale(' + s.toFixed(4) + ')';
+  } else {
+    if (katRaspah) { katRaspah = false; strip.classList.remove('raspah'); }
+    strip.style.transform = '';
+    cur = tgt = katS0; strip.scrollLeft = katS0;
+  }
+  /* 4. соседние статьи всплывают снизу */
+  var tx = vw / 2 - (katKlonW + vw / 2) * mash;
+  for (var r = 0; r < katSlot.children.length; r++) {
+    var ryad = katSlot.children[r];
+    var y = PAD * s + (r + 1) * g.shag - katY + (1 - q) * vh * 0.35;
+    ryad.style.height = g.h.toFixed(1) + 'px';
+    ryad.style.transform = 'translateY(' + y.toFixed(2) + 'px)';
+    ryad.style.opacity = q;
+    ryad.firstChild.style.transform =
+      'translateX(' + tx.toFixed(2) + 'px) scale(' + mash.toFixed(4) + ')';
+  }
+}
+
+var krest = document.getElementById('krest');
+krest.addEventListener('click', function () { katPusk(true); });
+/* В каталоге клик по любой строке возвращает в статью. Когда статей станет
+   много, у строки появится свой адрес — сейчас он у всех один. */
+document.addEventListener('click', function (e) {
+  if (!katK || katDvig) return;
+  if (e.target.closest && (e.target.closest('.st-panel') || e.target.closest('.st-gear'))) return;
+  katPusk(false);
+});
+window.addEventListener('popstate', function () { katPusk(katAdresEst(), true); });
+
 var sig = '', lastLook = 0;
 /* Колонка ожила: набор в ней крупнее, и она же забирает колесо, если ей
    есть куда крутиться. Ограничитель дребезга (П7): пока точка курсора
@@ -1793,12 +2071,17 @@ function setLive(el) {
            P.gapBig, P.gapMid, P.gapSml,
            P.bg, P.ink, String(P.ttl), P.ttlSize, P.ttlMera].join(',');
   if (s !== sig) { sig = s; layout(); }
+  // В каталоге лента — картинка: текст стоит набранным, вспышка молчит,
+  // маски показаны. Это ровно то, чем живёт «меньше движения», поэтому
+  // отдельного режима заводить незачем — берётся тот же.
+  TIHO = TIHO0 || katK > 0;
   nabor();
   vspyshka();
   maska();
   stopkaPamyat();     // забыть положение раньше, чем от него считать раскрытие
   raskrytie();
   varyTick();
+  katTick();
   var now = performance.now();
   if (!rested()) { setLive(null); lastLook = 0; }
   else if (now - lastLook > 90) {
@@ -1811,6 +2094,9 @@ function setLive(el) {
 /* ── пуск ── */
 build();
 layout();
+// зашли прямо по адресу каталога — встаём в него сразу, без перехода:
+// переход показывает, ОТКУДА пришли, а тут приходить неоткуда
+if (katAdresEst()) { katK = katCel = katOt = 1; katDvig = false; katS0 = 0; }
 gotoHash(startHash);
 measure();
 var rz = 0;
