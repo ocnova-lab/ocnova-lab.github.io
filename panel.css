@@ -205,7 +205,22 @@
 }
 
 /* ── гармошки, свёрнутые кривые, точный ввод (2026-08-01) ── */
-.st-panel h4.st-sec { user-select: none; }
+.st-panel h4.st-sec { user-select: none; cursor: pointer; }
+.st-panel h4.st-sec:hover { opacity: .85; }
+
+/* верхняя строка панели: язык и складывание — то, что относится к панели
+   целиком, а не к отдельной ручке */
+.st-panel .st-verh { display: flex; align-items: center; gap: 8px;
+  margin: 0 0 10px; }
+.st-panel .st-yaz { display: flex; border: 1px solid var(--st-line, rgba(255,255,255,.18));
+  border-radius: 7px; overflow: hidden; }
+.st-panel .st-yaz-b { border: 0; background: transparent; color: inherit;
+  font: 600 10px/1 inherit; letter-spacing: .06em; padding: 5px 9px; cursor: pointer; }
+.st-panel .st-yaz-b.on { background: var(--st-accent, #0A84FF); color: #fff; }
+.st-panel .st-sver { margin-left: auto; border: 0; background: transparent;
+  color: inherit; opacity: .6; font: inherit; font-size: 11px; cursor: pointer;
+  padding: 4px 2px; }
+.st-panel .st-sver:hover { opacity: 1; }
 .st-panel h4.st-sec::after { content: '▾'; float: right; opacity: .45; }
 .st-panel h4.st-sec.st-closed::after { content: '▸'; }
 .st-panel .card[hidden], .st-panel canvas.curve[hidden] { display: none; }

@@ -105,7 +105,7 @@
     function bindTip(el, key) {
       if (!DESC[key]) return;
       el.addEventListener('mouseenter', function () {
-        tip.textContent = DESC[key];
+        tip.textContent = opisanie(key);
         tip.classList.add('show');
         var r = el.getBoundingClientRect();
         var pr = panel.getBoundingClientRect();
@@ -199,6 +199,47 @@
       return { cv: cv, redraw: redraw };
     }
 
+    /* ── ЯЗЫК ПАНЕЛИ ──────────────────────────────────────────────────
+       Панель говорит на языке читателя, а не стенда: у стенда язык ленты
+       свой, у панели свой. Выбор общий на все стенды — он про человека,
+       а не про страницу, поэтому и ключ хранения общий.
+
+       Перевод приходит от стенда картой `en`: заголовок секции по своему
+       русскому имени, ручка по ключу параметра, подсказка — картой
+       `enDesc`. Чего в карте нет — остаётся по-русски: язык не должен
+       уметь спрятать ручку. Собственные слова панели переведены здесь. */
+    var LANG_KEY = 'stend-panel-lang';
+    var lang = 'ru';
+    try { if (localStorage.getItem(LANG_KEY) === 'en') lang = 'en'; } catch (e) {}
+    var SVOI = {
+      'Панель': 'Panel', 'Тема': 'Theme', 'Эпл': 'Apple', 'Нотхинг': 'Nothing',
+      'Скопировать параметры': 'Copy parameters', 'Сбросить настройки': 'Reset',
+      'скопировано: ': 'copied: ', ' ручек': ' knobs',
+      'всё по умолчанию': 'all at defaults', 'Параметры:': 'Parameters:',
+      'своя (безье)': 'custom (bezier)', 'линейный': 'linear',
+      'разгон': 'ease-in', 'торможение': 'ease-out', 'плавный': 'ease-in-out',
+      'квадрат': 'quad', 'Свернуть всё': 'Collapse all',
+      'Развернуть всё': 'Expand all', 'Язык панели': 'Panel language'
+    };
+    var EN = o.en || {}, ENDESC = o.enDesc || {};
+    function T(klyuch, ru) {
+      if (lang !== 'en') return ru;
+      return EN[klyuch] || EN[ru] || SVOI[ru] || ru;
+    }
+    function opisanie(key) {
+      return (lang === 'en' && ENDESC[key]) || DESC[key] || '';
+    }
+    var nadpisi = [];
+    function nadpis(el, klyuch, ru) {
+      el.textContent = T(klyuch, ru);
+      nadpisi.push({ el: el, k: klyuch, ru: ru });
+    }
+    function smenitYazyk(v) {
+      lang = v;
+      try { localStorage.setItem(LANG_KEY, lang); } catch (e) {}
+      nadpisi.forEach(function (n) { n.el.textContent = T(n.k, n.ru); });
+    }
+
     // ── секции-гармошки: заголовок кликом сворачивает карточку,
     // состояние помнится на стенд (localStorage) ──
     var FOLD_KEY = 'stend-panel-folds:' + o.storageKey;
@@ -207,10 +248,11 @@
     function saveFolds() {
       try { localStorage.setItem(FOLD_KEY, JSON.stringify(folds)); } catch (e) {}
     }
+    var sekcii = [];
     function addSection(title) {
       var h = document.createElement('h4');
-      h.textContent = title;
       h.className = 'st-sec';
+      nadpis(h, 'h:' + title, title);
       var card = document.createElement('div');
       card.className = 'card';
       panel.appendChild(h);
@@ -224,8 +266,55 @@
         applyFold(); saveFolds();
       });
       applyFold();
+      sekcii.push({ title: title, fold: applyFold });
       return card;
     }
+    /* Свернуть всё разом: с десятком секций поштучное складывание — работа,
+       а не удобство. */
+    function svernutVse(zakryt) {
+      sekcii.forEach(function (s) { folds[s.title] = zakryt; s.fold(); });
+      saveFolds();
+    }
+
+    /* ── ВЕРХНЯЯ СТРОКА ПАНЕЛИ ────────────────────────────────────────
+       Две вещи, которые относятся к панели целиком, а не к ручке: на каком
+       языке она говорит и сколько её видно. Стоят сверху, потому что
+       решаются до того, как читатель начал искать ручку. */
+    var verh = document.createElement('div');
+    verh.className = 'st-verh';
+    var yaz = document.createElement('div');
+    yaz.className = 'st-yaz';
+    [['ru', 'RU'], ['en', 'EN']].forEach(function (y) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.textContent = y[1];
+      b.className = 'st-yaz-b' + (lang === y[0] ? ' on' : '');
+      b.addEventListener('click', function () {
+        if (lang === y[0]) return;
+        smenitYazyk(y[0]);
+        [].forEach.call(yaz.children, function (x) {
+          x.classList.toggle('on', x.textContent.toLowerCase() === lang);
+        });
+      });
+      yaz.appendChild(b);
+    });
+    var sver = document.createElement('button');
+    sver.type = 'button'; sver.className = 'st-sver';
+    var vseZakryty = false;
+    function metkaSver() {
+      sver.textContent = T('panel:fold', vseZakryty ? 'Развернуть всё' : 'Свернуть всё');
+    }
+    nadpisi.push({ el: sver, k: 'panel:fold', ru: 'Свернуть всё' });
+    sver.addEventListener('click', function () {
+      vseZakryty = !vseZakryty;
+      svernutVse(vseZakryty);
+      nadpisi.forEach(function (n) {
+        if (n.el === sver) n.ru = vseZakryty ? 'Развернуть всё' : 'Свернуть всё';
+      });
+      metkaSver();
+    });
+    verh.appendChild(yaz); verh.appendChild(sver);
+    panel.appendChild(verh);
+    metkaSver();
 
     // ── сборка строк по defs ──
     var controls = {};
@@ -237,7 +326,7 @@
       }
       var host = curCard || panel;
       var row = document.createElement('div'); row.className = 'row';
-      var lab = document.createElement('label'); lab.textContent = d[1];
+      var lab = document.createElement('label'); nadpis(lab, d[0], d[1]);
       bindTip(lab, d[0]);
       row.appendChild(lab);
 
@@ -295,11 +384,11 @@
         var sel = document.createElement('select');
         Object.keys(EASES).forEach(function (name) {
           var opt = document.createElement('option');
-          opt.value = name; opt.textContent = name;
+          opt.value = name; nadpis(opt, 'ease:' + name, name);
           sel.appendChild(opt);
         });
         var oB = document.createElement('option');
-        oB.value = 'bezier'; oB.textContent = 'своя (безье)';
+        oB.value = 'bezier'; nadpis(oB, 'ease:bezier', 'своя (безье)');
         sel.appendChild(oB);
         sel.value = P[easeKey];
         var ed = buildCurveEditor(easeKey, bezKey, sel);
@@ -400,14 +489,26 @@
       paintFill(inp);
     });
 
+    /* Органы из библиотеки строят свои подписи сами, до языка панели им
+       дела нет. Чтобы он доставал и их, всё, что уже стоит в панели и не
+       взято на учёт, берётся по своему русскому тексту: перевод ищется по
+       нему же. Так новый орган переводится, ничего про язык не зная. */
+    [].forEach.call(panel.querySelectorAll('label, option, button'), function (e) {
+      for (var i = 0; i < nadpisi.length; i++) if (nadpisi[i].el === e) return;
+      var t = (e.textContent || '').trim();
+      if (!t || !/[А-Яа-яЁё]/.test(t)) return;
+      nadpisi.push({ el: e, k: '', ru: t });
+    });
+    if (lang === 'en') nadpisi.forEach(function (n) { n.el.textContent = T(n.k, n.ru); });
+
     // ── подвал: тема панели + сброс ──
     var foot = addSection('Панель');
     var trow = document.createElement('div'); trow.className = 'row';
-    var tlab = document.createElement('label'); tlab.textContent = 'Тема';
+    var tlab = document.createElement('label'); nadpis(tlab, 'panel:theme', 'Тема');
     var tsel = document.createElement('select');
     [['apple', 'Эпл'], ['nothing', 'Нотхинг']].forEach(function (t) {
       var opt = document.createElement('option');
-      opt.value = t[0]; opt.textContent = t[1];
+      opt.value = t[0]; nadpis(opt, 'theme:' + t[0], t[1]);
       tsel.appendChild(opt);
     });
     tsel.value = theme;
@@ -421,7 +522,7 @@
        настроек. Якорь сохраняется — уезжает и место, и вид. */
     var cp = document.createElement('button');
     cp.className = 'st-reset st-copy';
-    cp.textContent = 'Скопировать параметры';
+    nadpis(cp, 'panel:copy', 'Скопировать параметры');
     cp.addEventListener('click', function () {
       var q = [];
       Object.keys(DEFAULTS).forEach(function (k) {
@@ -436,17 +537,21 @@
         (q.length ? '?' + q.join('&') : '') + location.hash;
       var said = function (t) {
         cp.textContent = t;
-        setTimeout(function () { cp.textContent = 'Скопировать параметры'; }, 1400);
+        setTimeout(function () { cp.textContent = T('panel:copy', 'Скопировать параметры'); }, 1400);
       };
-      var ok = function () { said(q.length ? 'скопировано: ' + q.length + ' ручек' : 'всё по умолчанию'); };
-      if (navigator.clipboard) navigator.clipboard.writeText(url).then(ok, function () { prompt('Параметры:', url); });
-      else prompt('Параметры:', url);
+      var ok = function () {
+        said(q.length ? T('', 'скопировано: ') + q.length + T('', ' ручек')
+                      : T('', 'всё по умолчанию'));
+      };
+      var ruchkami = function () { prompt(T('', 'Параметры:'), url); };
+      if (navigator.clipboard) navigator.clipboard.writeText(url).then(ok, ruchkami);
+      else ruchkami();
     });
     panel.appendChild(cp);
 
     var rst = document.createElement('button');
     rst.className = 'st-reset';
-    rst.textContent = 'Сбросить настройки';
+    nadpis(rst, 'panel:reset', 'Сбросить настройки');
     rst.addEventListener('click', function () {
       Object.assign(P, DEFAULTS);
       // рукоятки безье — копиями, чтобы лепка не портила DEFAULTS
