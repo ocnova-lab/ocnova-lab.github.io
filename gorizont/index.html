@@ -870,7 +870,8 @@ function build() {
         c = el('div', 'col flow lead-col');
         c.appendChild(idxLine(d.n, id));
         c.appendChild(el('p', 'lead', slovo(d, 'text')));
-        c.appendChild(el('div', 'by', slovo(d, 'by')));
+        // строка автора необязательна: без неё пустой блок съел бы отбивку
+        if (slovo(d, 'by')) c.appendChild(el('div', 'by', slovo(d, 'by')));
         break;
 
       case 'head':
