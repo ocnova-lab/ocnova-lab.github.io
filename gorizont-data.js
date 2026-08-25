@@ -5,7 +5,7 @@
 //   buffer — пустая колонка-отбивка (в мобайле превращается в вертикальный пропуск)
 //   title  — титул: date + text; ширина колонки считается от окна
 //   lead   — врезка: n, text, by
-//   head   — заголовок раздела: n, text
+//   head   — заголовок раздела: n, text, pod (вторая строка, метка под заголовком)
 //   text   — абзац: n, text  (не влезает по высоте — перетекает в соседнюю колонку)
 //   fig    — одна картинка: n, span (в колонках), src, w, h (натуральные)
 //   figs   — стопка картинок с вертикальной прокруткой внутри колонки:
@@ -82,5 +82,20 @@ window.GORIZONT = [
   { t: "text", n: "02 – 13", text: "Very well. But what does it look like, this algorithmic grid?" },
   { t: "text", n: "02 – 14", text: "The subtlety is that an algorithmic grid is rather hard to see. About as hard as seeing the order in the bark of a tree. In a static mockup it simply is not there — its essence is behaviour, what happens when you pull the window by its edge. Which is why learning it from a picture is like learning music from a photograph of a single chord. And why it has only truly opened up now, when a designer can assemble a working grid in code with words and pull the edge of the window themselves. With no intermediary between them and the result." },
   { t: "text", n: "02 – 15", text: "How this looks in action I will show on our own model — the Mapa Grid photo gallery, laid out by vibe-coding." },
+  { t: "buffer" },
+  // ── РАЗДЕЛ 03. Снят с кадра 95:4 25 августа: Сергей доверстал хвост.
+  //    В макете все эти колонки помечены «02 – 14» — нумерация там не доведена,
+  //    здесь они перенумерованы по разделу, который открывает «03 – 00».
+
+  { t: "head", n: "03 – 00", text: "A Case: Mapa Grid", pod: "(the story of one layout)" },
+  { t: "text", n: "03 – 01", text: "This layout was designed some five years ago, commissioned by an architecture bureau. At that moment I ran into a difficulty:\n\nOn the one hand, the client asked that the catalogue page of their works create a feeling of chaos — and this could be achieved by hand, but I understood that as soon as the layout fell into another designer’s hands, they would ruin it all: every designer has taste settings of their own, and changing them kills the layout as a whole — it turns eclectic and loses its unity." },
+  { t: "text", n: "03 – 02", text: "On the other hand, since the architecture bureau was a rather old one, its works were many, and no standards for recording the results of the work ever existed — or exist now. So their archive was a collection of images of every possible proportion: photographs (vertical and horizontal, of all ratios) and cropped renders of 3D models." },
+  { t: "text", n: "03 – 03", text: "My experience said that some standardisation of the whole photo archive was needed — but, first, that is an enormous amount of work, and second, it would mean the client having to build this process into their own processes and police the observance of the rules." },
+  { t: "text", n: "03 – 04", text: "The solution came as a general question: how do you make the bug become the feature? Not standardise the proportions of the images, but amplify the effect and put it to use? I needed a layout that would give a feeling of arbitrariness while obeying a law executed at the level of code." },
+  { t: "text", n: "03 – 05", text: "Thus the layout was born of a single rule: fit the photo into a square module. From there the rules hooked onto one another: the photo’s orientation decides which edge of the module it is pressed against; the caption is conjugated with the photo’s left edge: it starts from it and travels with it; the force lines are computed from the width of the scene, and their number sets the format — four on desktop, three on tablet, two on the phone; after every three rows the ribbon inserts a big module: on wide formats it is a square as tall as the screen, on the phone it stands full-width, flush, its height dictated by the proportion of the picture itself. Not a single position is assigned — all are computed. Especially for you, the layout has a panel of controls: \n\nmodule size, gap, offset, scene width — plus the format buttons 360 / 768 / 1440, which reassemble the strip without stretching the window. Change a parameter — and the whole composition reassembles before your eyes. Gerstner’s programme, which has at last acquired an executor." },
+  // СХЕМА И ПОДПИСЬ К НЕЙ — колонки 64 и 65 кадра, «Layer 1 — fitting into the
+  //    module». Отложены: схемы и картинки идут отдельным заходом, единым стилем.
+  { t: "buffer" },
+  { t: "text", n: "03 – 06", text: "The way the model computes its sizes deserves a word of its own. The numbers in its law are conventional units. Each format has a reference width: phone 390, tablet 768, desktop 1440 — and all the parameters (module, gap, offset, margins) are set for the reference. At any other width the law multiplies them by the coefficient “scene divided by reference.” The 300 module is in essence a share: a little over a fifth of the scene. Change the format — and the strip recomputes proportionally, keeping its fill; cross a format boundary — and the law switches to another set of numbers. Here the principles of “shares” and “the break” from the list below work as a pair. Gerstner had a reserve of ready variants — here, a reference and a coefficient." },
   { t: "buffer" }
 ];

@@ -242,13 +242,19 @@
   .idx[data-id]:hover { text-decoration: underline dotted; text-underline-offset: 4px; }
   .idx.sub { color: var(--ink); margin-bottom: calc(18px * var(--u)); }
   .main { font-size: calc(var(--main-fs) * var(--u)); line-height: var(--main-lh);
-          letter-spacing: var(--main-tr); }
+          letter-spacing: var(--main-tr); white-space: pre-line; }
   .lead { font-family: "Dent Display", "Even Mono", ui-monospace, monospace;
           font-size: calc(var(--lead-fs) * var(--u)); line-height: var(--lead-lh);
           letter-spacing: var(--lead-tr); }
   .cap  { font-family: "JetBrains Mono", ui-monospace, monospace;
           font-size: calc(var(--dsc-fs) * var(--ub)); line-height: var(--dsc-lh);
-          letter-spacing: var(--dsc-tr); color: var(--ink); }
+          letter-spacing: var(--dsc-tr); color: var(--ink); white-space: pre-line; }
+  /* pre-line у тела и подписей: перевод строки в материале — решение автора,
+     а не случайность выгрузки. В макете список внутри абзаца («02 – 07») и
+     ссылка на страницу в подписи стоят отдельными строками; при обычном
+     white-space они схлопывались в пробел, и абзац шёл сплошняком. Пробелы
+     pre-line по-прежнему схлопывает, поэтому перенабор не трогается:
+     неразрывный пробел под схлопывание не попадает. */
   .by   { font-family: "JetBrains Mono", ui-monospace, monospace;
           font-size: calc(var(--dsc-fs) * var(--ub)); line-height: var(--dsc-lh);
           letter-spacing: var(--dsc-tr); text-align: center; margin-top: calc(20px * var(--u)); }
@@ -740,6 +746,9 @@ function build() {
         c = el('div', 'col flow head-col');
         c.appendChild(idxLine(d.n, id));
         c.appendChild(el('p', 'lead', d.text));
+        // вторая строка под заголовком раздела — та же строчная метка, что
+        // и строка автора под врезкой: один стиль на одну роль
+        if (d.pod) c.appendChild(el('div', 'by', d.pod));
         break;
 
       case 'cap':
