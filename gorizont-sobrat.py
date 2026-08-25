@@ -124,8 +124,11 @@ def razobrat(t):
         b = '\n'.join(tekst).strip()
         del tekst[:]
         if not b: return
-        if re.match(r'^\*\*[^*]+\*\*$', b.replace('\n', ' ').strip()):
+        odna = b.replace('\n', ' ').strip()
+        if re.match(r'^\*\*[^*]+\*\*$', odna):
             kuski.append(('lead', b.replace('**', '').strip()))
+        elif odna.startswith('(') and odna.endswith(')'):
+            kuski.append(('cap', odna))          # оговорка в скобках — дескриптор
         else:
             kuski.append(('text', b))
 
@@ -141,6 +144,10 @@ def razobrat(t):
 
     for stroka in t.split('\n'):
         s1 = stroka.strip()
+        # цитата — рабочая заметка автора, черта — разделитель черновика:
+        # ни то ни другое не статья
+        if s1.startswith('>') or re.match(r'^[-*_]{3,}$', s1):
+            sdat_tekst(); sdat_gruppu(); continue
         if s1.startswith('|'):
             sdat_tekst(); sdat_gruppu(); tab.append(s1); continue
         sdat_tablicu()
@@ -149,9 +156,10 @@ def razobrat(t):
         if s1.startswith('# '):
             sdat_tekst(); sdat_gruppu()
             kuski.append(('title', s1[2:].strip())); continue
-        if re.match(r'^#{2,4} ', s1):
+        m = re.match(r'^(#{2,4}) (.+)$', s1)
+        if m:
             sdat_tekst(); sdat_gruppu()
-            kuski.append(('head', re.sub(r'^#{2,4} ', '', s1).strip())); continue
+            kuski.append(('head', (len(m.group(1)), m.group(2).strip()))); continue
         if '![[' in s1:
             sdat_tekst()
             gruppa.extend(kartinki_v(s1))
@@ -168,10 +176,15 @@ def razobrat(t):
     return kuski
 
 
-def chistka(s):
+def chistka(s, ssylki=None):
+    """Разметка снимается, ссылки — нет: адрес откладывается в отдельный
+       список, чтобы лента могла сделать их живыми."""
     s = re.sub(r'\[\[([^\]|]+)\|([^\]]+)\]\]', r'\2', s)   # вики-ссылка → текст
     s = re.sub(r'\[\[([^\]]+)\]\]', r'\1', s)
-    s = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', s)         # md-ссылка → текст
+    def md(m):
+        if ssylki is not None: ssylki.append([m.group(1), m.group(2)])
+        return m.group(1)
+    s = re.sub(r'\[([^\]]+)\]\((https?://[^)]+)\)', md, s)
     s = s.replace('**', '').replace('`', '')
     s = re.sub(r'[ \t]+\n', '\n', s)
     return s.strip()
@@ -219,6 +232,12 @@ def polozhit(ist, vyhod, imya):
     return novoe
 
 
+# Пролёты, назначенные глазом Сергея: скан обложки читается только крупно,
+# и пропорция об этом не знает. Пока таких немного — держим списком.
+RUKOY = {'ruder-tipografika-kniga': 2, 'weingart-1': 2, 'weingart-2': 2,
+         'david-vertical': 2, 'medunetsky-construction-1921': 2}
+
+
 def prolyot(put):
     """Пролёт выводится из пропорции самой картинки, а не назначается."""
     try:
@@ -226,6 +245,9 @@ def prolyot(put):
             w, h = im.size
     except Exception:
         return 1, 0, 0
+    koren = os.path.basename(put).rsplit('.', 1)[0]
+    if koren in RUKOY:
+        return RUKOY[koren], w, h
     if w <= h * 1.05:
         return 1, w, h
     if w > h * 2:
@@ -248,6 +270,7 @@ def sobrat(imya, put_md, papka_img, slug, dat_ru, dat_en, ttl_ru, ttl_en):
         r = k[0]
         if r == 'lead': r = 'text'
         if r == 'fig':  r = 'fig%d' % len(k[1]['fayly'])
+        if r == 'head': r = 'head%d' % k[1][0]
         return r
     a = [rod_dlya_sverki(k) for k in ru]
     b = [rod_dlya_sverki(k) for k in en]
@@ -265,6 +288,7 @@ def sobrat(imya, put_md, papka_img, slug, dat_ru, dat_en, ttl_ru, ttl_en):
 
     lenta, per = [], {}
     razdel, nomer, fignom = 1, 0, 0
+    nad_ru, nad_en = [None], [None]   # заголовок второго порядка над словом
     propushcheno = []
 
     def dobavit(z):
@@ -293,23 +317,54 @@ def sobrat(imya, put_md, papka_img, slug, dat_ru, dat_en, ttl_ru, ttl_en):
             continue
 
         if rod == 'head':
+            uroven, imya_h = telo
+            sled = ru[j + 1][1][0] if (j + 1 < len(ru) and ru[j + 1][0] == 'head') else 0
+            if uroven == 2 and sled > 2:
+                # «Пять слов по одному» само по себе колонкой не встаёт: оно
+                # надстрочник над каждым словом, иначе колонка пустая, а
+                # нумерация фрагментов получает лишний раздел
+                nad_ru[0] = chistka(imya_h) + ':'
+                pe = para(j, None)
+                nad_en[0] = (chistka(pe[1]) + ':') if pe else None
+                continue
+            if uroven == 2: nad_ru[0] = nad_en[0] = None
             razdel += 1 if lenta else 0
             nomer = 0
             n = '%02d – 00' % razdel
             dobavit({'t': 'buffer'})
-            zap = {'t': 'head', 'n': n, 'text': chistka(telo)}
+            zap = {'t': 'head', 'n': n, 'text': chistka(imya_h)}
+            if nad_ru[0]: zap['nad'] = nad_ru[0]
             dobavit(zap)
-            p = para(j, 'text')
-            if p: per[n] = {'text': chistka(p)}
+            pe = para(j, None)
+            if pe:
+                pz = {'text': chistka(pe[1])}
+                if nad_en[0]: pz['nad'] = nad_en[0]
+                per[n] = pz
             continue
 
         if rod in ('text', 'lead'):
             nomer += 1
             n = '%02d – %02d' % (razdel, nomer)
-            zap = {'t': rod, 'n': n, 'text': chistka(telo)}
+            if rod == 'lead': dobavit({'t': 'buffer'})   # врезке нужен воздух
+            ss = []
+            zap = {'t': rod, 'n': n, 'text': chistka(telo, ss)}
+            if ss: zap['ssylki'] = ss
             dobavit(zap)
             p = para(j, 'text')
-            if p: per[n] = {'text': chistka(p)}
+            if p:
+                ss2 = []
+                pz = {'text': chistka(p, ss2)}
+                if ss2: pz['ssylki'] = ss2
+                per[n] = pz
+            continue
+
+        if rod == 'cap':                      # оговорка в скобках
+            nomer += 1
+            n = '%02d – %02d' % (razdel, nomer)
+            adr = n.replace(' – ', '-')
+            dobavit({'t': 'cap', 'to': adr, 'arrow': n, 'text': chistka(telo)})
+            p = para(j, 'text')
+            if p: per['cap-' + adr] = {'text': chistka(p)}
             continue
 
         if rod == 'fig':
@@ -332,15 +387,18 @@ def sobrat(imya, put_md, papka_img, slug, dat_ru, dat_en, ttl_ru, ttl_en):
                                'span': sp})
             if not gruppa:
                 continue
-            dobavit({'t': 'buffer'})
             if len(gruppa) == 1:
                 g = gruppa[0]
                 dobavit({'t': 'fig', 'n': g['n'], 'span': g['span'],
-                              'src': g['src'], 'w': g['w'], 'h': g['h']})
+                         'src': g['src'], 'w': g['w'], 'h': g['h']})
             else:
-                for g in gruppa:
-                    dobavit({'t': 'fig', 'n': g['n'], 'span': g['span'],
-                                  'src': g['src'], 'w': g['w'], 'h': g['h']})
+                # Несколько картинок кряду — это стопка: одна колонка, а
+                # прокрутка переносит от одной к другой. Ставить их рядом
+                # значит съесть половину экрана на одну мысль.
+                dobavit({'t': 'figs', 'n': gruppa[0]['n'],
+                         'span': max(g['span'] for g in gruppa), 'label': 'each',
+                         'items': [{'n': g['n'], 'src': g['src'], 'w': g['w'], 'h': g['h']}
+                                   for g in gruppa]})
             if telo['pod']:
                 zap = {'t': 'cap', 'to': gruppa[0]['n'], 'arrow': '←',
                        'text': chistka(telo['pod'])}
@@ -348,7 +406,6 @@ def sobrat(imya, put_md, papka_img, slug, dat_ru, dat_en, ttl_ru, ttl_en):
                 p = para(j, 'pod')
                 if p and isinstance(p, dict) and p.get('pod'):
                     per['cap-' + gruppa[0]['n']] = {'text': chistka(p['pod'])}
-            dobavit({'t': 'buffer'})
             continue
 
         if rod == 'tabl':
@@ -357,7 +414,6 @@ def sobrat(imya, put_md, papka_img, slug, dat_ru, dat_en, ttl_ru, ttl_en):
                 all(c.startswith('![[') for c in r if c) for r in tb['telo'] if r)
             if kartinochnaya and tb['telo']:
                 # это не таблица, а пара картинок с подписями в шапке
-                dobavit({'t': 'buffer'})
                 pervy = None
                 for k, yach in enumerate(tb['telo'][0]):
                     m = re.match(r'!\[\[([^\]]+)\]\]', yach)
@@ -382,7 +438,6 @@ def sobrat(imya, put_md, papka_img, slug, dat_ru, dat_en, ttl_ru, ttl_en):
                     if pe and isinstance(pe, dict):
                         pod_en = u' · '.join(c for c in pe['shapka'] if c)
                         per['cap-' + pervy] = {'text': chistka(pod_en)}
-                dobavit({'t': 'buffer'})
                 continue
             if tb['shirina'] > SHIROKAYA or len(tb['shapka']) > 2:
                 propushcheno.append(u'широкая таблица %d×%d, %d знаков в строке'
@@ -409,24 +464,28 @@ def js(s):
     return '"' + s + '"'
 
 
+# Порядок полей в записи — для чтения глазом; сериализуются ВСЕ поля.
+# Белый список тут был ошибкой: новое поле молча терялось.
+PORYADOK = ['t', 'n', 'to', 'arrow', 'date', 'nad', 'text', 'by', 'pod',
+            'span', 'label', 'src', 'w', 'h', 'items', 'shapka', 'telo', 'ssylki']
+
+
+def znachenie(v):
+    if isinstance(v, bool): return 'true' if v else 'false'
+    if isinstance(v, int): return '%d' % v
+    if isinstance(v, dict):
+        return '{ ' + ', '.join('%s: %s' % (k, znachenie(v[k]))
+                                for k in sorted(v, key=lambda x: PORYADOK.index(x)
+                                if x in PORYADOK else 99)) + ' }'
+    if isinstance(v, list):
+        return '[' + ', '.join(znachenie(c) for c in v) + ']'
+    return js(v)
+
+
 def zapis_js(z):
-    poryadok = ['t', 'n', 'to', 'arrow', 'date', 'text', 'by', 'pod',
-                'span', 'src', 'w', 'h', 'shapka', 'telo']
-    chasti = []
-    for k in poryadok:
-        if k not in z: continue
-        v = z[k]
-        if isinstance(v, (int,)) and not isinstance(v, bool):
-            chasti.append('%s: %d' % (k, v))
-        elif isinstance(v, list):
-            if v and isinstance(v[0], list):
-                chasti.append('%s: [%s]' % (k, ', '.join(
-                    '[' + ', '.join(js(c) for c in r) + ']' for r in v)))
-            else:
-                chasti.append('%s: [%s]' % (k, ', '.join(js(c) for c in v)))
-        else:
-            chasti.append('%s: %s' % (k, js(v)))
-    return '{ ' + ', '.join(chasti) + ' }'
+    klyuchi = [k for k in PORYADOK if k in z] + \
+              [k for k in z if k not in PORYADOK]
+    return '{ ' + ', '.join('%s: %s' % (k, znachenie(z[k])) for k in klyuchi) + ' }'
 
 
 def zapisat(slug, imya_ru, imya_en, lenta, per, yazyk, shapka):

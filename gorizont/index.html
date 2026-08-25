@@ -284,6 +284,9 @@
   .lead { font-family: "Dent Display", "Even Mono", ui-monospace, monospace;
           font-size: calc(var(--lead-fs) * var(--u)); line-height: var(--lead-lh);
           letter-spacing: var(--lead-tr); }
+  /* ссылка: цвета не заводит, отличает её подчёркивание */
+  .col a { color: inherit; text-decoration: underline;
+           text-underline-offset: .18em; text-decoration-thickness: 1px; }
   .cap  { font-family: "JetBrains Mono", ui-monospace, monospace;
           font-size: calc(var(--dsc-fs) * var(--ub)); line-height: var(--dsc-lh);
           letter-spacing: var(--dsc-tr); color: var(--ink); white-space: pre-line; }
@@ -293,6 +296,9 @@
      white-space они схлопывались в пробел, и абзац шёл сплошняком. Пробелы
      pre-line по-прежнему схлопывает, поэтому перенабор не трогается:
      неразрывный пробел под схлопывание не попадает. */
+  .nad  { font-family: "JetBrains Mono", ui-monospace, monospace;
+          font-size: calc(var(--dsc-fs) * var(--ub)); line-height: var(--dsc-lh);
+          letter-spacing: var(--dsc-tr); padding-bottom: calc(6px * var(--u)); }
   .by   { font-family: "JetBrains Mono", ui-monospace, monospace;
           font-size: calc(var(--dsc-fs) * var(--ub)); line-height: var(--dsc-lh);
           letter-spacing: var(--dsc-tr); text-align: center; margin-top: calc(20px * var(--u)); }
@@ -336,12 +342,13 @@
   .col.fig img { display: block; width: 100%; height: auto; }
   /* ВАРИАНТЫ СЕТКИ поверх схемы. Оверлей живёт в системе координат самой
      схемы (общий viewBox), поэтому совпадает с ней при любом масштабе.
-     Заливка — бледно-красный из макета, им же в кадре 07 показаны варианты
-     сеток Брокманна: один цвет на один смысл во всей статье. */
+     Заливка — цвет макета с прозрачностью: своего цвета у подсветки нет. */
   .pole { position: relative; display: block; }
   /* координаты выведены: оверлей растянут по коробке схемы, своих нет */
+  /* Варианты сетки берут цвет макета, а не свой: второго цвета в макете
+     нет, и вводить его ради подсветки незачем — хватает прозрачности. */
   .vary { position: absolute; inset: 0; width: 100%; height: 100%;
-          pointer-events: none; color: #FF7070; }
+          pointer-events: none; color: var(--ink); }
   .vary > g { opacity: 0; transition: opacity var(--var-ms, 180ms) linear; }
   .vary > g.on { opacity: var(--var-sila, .11); }
   /* линейка зон: шесть равных долей поля, засечка на каждой границе */
@@ -529,7 +536,7 @@ var DEFAULTS = {
   vspEase: 'разгон',
   vspBez: [0.32, 0, 0.67, 0],
   vybeg: 50,       // выбег стопки после последней картинки, % высоты ленты
-  varSila: 11,     // варианты сетки: сила заливки, % (бледно-красный из макета)
+  varSila: 30,     // варианты сетки: сила заливки, % от цвета макета
   varMs: 180,      // варианты сетки: проявление, мс
   fotoPath: 760,   // картинка: путь раскрытия по высоте, px хода; 0 — выключено
   stopPut: 100,    // стопка: путь входа снизу, % собственного роста картинки; 0 — выключено
@@ -923,6 +930,36 @@ function tablicaEl(d) {
   return t;
 }
 
+/* ССЫЛКА В ТЕЛЕ. Адрес в материале остаётся адресом: и записанный голым,
+   и спрятанный за словами. Цвета ссылка не заводит — цвет в макете один, —
+   отличает её подчёркивание. // без ручки */
+function abzac(txt, ss) {
+  var p = el('p', 'main');
+  var meta = [];
+  for (var i = 0; i < ss.length; i++) meta.push({ t: ss[i][0], u: ss[i][1] });
+  var re = /https?:\/\/[^\s,;)»]+/g, m;
+  while ((m = re.exec(txt))) meta.push({ t: m[0], u: m[0] });
+  if (!meta.length) { p.textContent = txt; return p; }
+  var poz = 0;
+  while (poz < txt.length) {
+    var kto = null, gde = -1;
+    for (var k = 0; k < meta.length; k++) {
+      var j = txt.indexOf(meta[k].t, poz);
+      if (j >= 0 && (gde < 0 || j < gde)) { gde = j; kto = meta[k]; }
+    }
+    if (!kto) break;
+    if (gde > poz) p.appendChild(document.createTextNode(txt.slice(poz, gde)));
+    var a = document.createElement('a');
+    a.href = kto.u; a.textContent = kto.t;
+    a.target = '_blank'; a.rel = 'noopener';
+    p.appendChild(a);
+    poz = gde + kto.t.length;
+  }
+  if (poz < txt.length) p.appendChild(document.createTextNode(txt.slice(poz)));
+  p.dataset.ssylki = '1';
+  return p;
+}
+
 /* окно с прокруткой; полосы хода у него нет — колонка крутится молча */
 function win(sc) {
   var w = el('div', 'win');
@@ -958,6 +995,10 @@ function build() {
       case 'head':
         c = el('div', 'col flow head-col');
         c.appendChild(idxLine(d.n, id));
+        // Надстрочник — заголовок второго порядка. Своей колонки он не
+        // получает: пустая колонка на одно слово и лишний раздел в
+        // нумерации фрагментов дороже, чем строка над словом.
+        if (d.nad) c.appendChild(el('div', 'nad', slovo(d, 'nad')));
         c.appendChild(el('p', 'lead', slovo(d, 'text')));
         // вторая строка под заголовком раздела — та же строчная метка, что
         // и строка автора под врезкой: один стиль на одну роль
@@ -1016,8 +1057,12 @@ function build() {
       default:
         c = el('div', 'col flow');
         c.appendChild(idxLine(d.n, id));
-        c.appendChild(el('p', 'main', slovo(d, 'text')));
-        c.dataset.nabor = '1';        // перенабирается только тело статьи
+        var pp = abzac(slovo(d, 'text'), slovo(d, 'ssylki') || []);
+        c.appendChild(pp);
+        // перенабирается только тело статьи — и только то, что целиком текст:
+        // набор пишет в колонку строкой, а ссылка это объект, и переписать
+        // объект строкой значит его потерять
+        if (!pp.dataset.ssylki) c.dataset.nabor = '1';
     }
     // вторая часть индекса «00» — колонка открывает раздел; её индекс
     // уходит на левый флаг: метка начала, а не рядовая нумерация
@@ -1114,7 +1159,10 @@ function layout() {
 
   cols.forEach(function (c) {
     if (!c.el.classList.contains('flow')) return;
-    var stil = c.el.querySelector('p.lead') ? 'lead'
+    // первой строкой в колонке может стоять надстрочник — тогда и базовая
+    // линия считается по его стилю, а не по стилю заголовка
+    var stil = c.el.querySelector('.nad') ? 'cap'
+             : c.el.querySelector('p.lead') ? 'lead'
              : c.el.querySelector('p.cap') ? 'cap' : 'main';
     c.pt = Math.round(ctx.LAB + bl.main - bl[stil]);
     c.el.style.paddingTop = c.pt + 'px';
@@ -1335,9 +1383,12 @@ function flapText(target, seed, p, tick, win) {
     var ch = target[i];
     if (ch === ' ' || ch === '\n' || ch === '\u2028') { out += ch; continue; }
     var t = (i + jit(seed, i) * 2.2) / (L + 2.2);   // порог буквы: слева направо, с дрожью
+    // знаки препинания перебор не трогает: скобка, сменившаяся другой,
+    // читается как опечатка, а не как набор
+    var znak = ch.toLowerCase() === ch.toUpperCase() && !(ch >= '0' && ch <= '9');
     if (p >= t) out += ch;
-    else if (p > 0 && t - p < win) out += flapChar(ch, tick + i * 7 + seed * 3);
-    else out += NBSP;
+    else if (p > 0 && t - p < win) out += znak ? ch : flapChar(ch, tick + i * 7 + seed * 3);
+    else out += znak ? ch : NBSP;
   }
   return out;
 }
