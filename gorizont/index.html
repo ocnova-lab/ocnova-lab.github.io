@@ -550,6 +550,87 @@ function img(src, alt, w, h) {
    поэтому рисовать варианты руками не нужно — их считает закон.
    Наведение на долю поля показывает свой вариант: шесть долей — шесть
    способов прочесть одну и ту же сетку. */
+/* СЕТКА ГЕРСТНЕРА РИСУЕТСЯ ЗАКОНОМ, А НЕ ЛЕЖИТ КАРТИНКОЙ.
+   Она — наложение пяти сеток на одном поле, и у слоёв много общих рёбер:
+   при отрисовке слой за слоем эти рёбра ложатся друг на друга, и линия в
+   этих местах толстеет. Поэтому рисуется не пять слоёв, а ОДИН чертёж:
+   все рёбра всех слоёв собираются отрезками, сливаются по общей координате
+   (совпадающие и соприкасающиеся — в один), и только потом чертятся.
+   Волосяная линия задана non-scaling-stroke: она остаётся в один пиксел
+   при любом масштабе схемы, а не растёт вместе с ней. */
+function slit(otrezki) {
+  otrezki.sort(function (a, b) { return a[0] - b[0]; });
+  var out = [], cur = null;
+  for (var i = 0; i < otrezki.length; i++) {
+    var o = otrezki[i];
+    if (cur && o[0] <= cur[1] + 0.01) { if (o[1] > cur[1]) cur[1] = o[1]; }
+    else { cur = [o[0], o[1]]; out.push(cur); }
+  }
+  return out;
+}
+/* Две линии, разошедшиеся меньше чем на волосяную, при любом показе лягут
+   в одну утолщённую: у чертежа нет разрешения тоньше собственного штриха.
+   Поэтому такие координаты сводятся в одну линию по среднему. В сетке
+   «Капитала» так расходятся ребро шестиколонника (117,2) и ребро
+   пятиколонника (117,44): 0,24 — вчетверо меньше волосяной. Ближайшая
+   ЗАКОННАЯ пара отстоит на 12, так что слипание им не грозит. */
+function slyanie(m) {
+  var VOLOS = 1;                                   // волосяная линия в мере поля
+  var kl = Object.keys(m).sort(function (a, b) { return Number(a) - Number(b); });
+  var gr = [], cur = null;
+  kl.forEach(function (kk) {
+    var k = Number(kk);
+    if (cur && k - cur.k[cur.k.length - 1] < VOLOS) { cur.k.push(k); cur.s = cur.s.concat(m[kk]); }
+    else { cur = { k: [k], s: m[kk].slice() }; gr.push(cur); }
+  });
+  return gr.map(function (g) {
+    var s = 0;
+    g.k.forEach(function (k) { s += k; });
+    return { k: s / g.k.length, s: slit(g.s) };
+  });
+}
+function setkaSvg(d) {
+  var ns = 'http://www.w3.org/2000/svg';
+  var V = {}, H = {};
+  var klyuch = function (v) { return (Math.round(v * 100) / 100).toFixed(2); };
+  var dob = function (m, k, a, b) { (m[klyuch(k)] = m[klyuch(k)] || []).push([a, b]); };
+  (d.sloi || []).forEach(function (n) {
+    var kl = (d.w - (n - 1) * d.mezh) / n, shag = kl + d.mezh;
+    var klv = (d.h - (n - 1) * d.mezh) / n, shagv = klv + d.mezh;
+    for (var i = 0; i < n; i++) for (var j = 0; j < n; j++) {
+      var x0 = i * shag, x1 = x0 + kl, y0 = j * shagv, y1 = y0 + klv;
+      dob(V, x0, y0, y1); dob(V, x1, y0, y1);
+      dob(H, y0, x0, x1); dob(H, y1, x0, x1);
+    }
+  });
+  var put = [];
+  slyanie(V).forEach(function (l) {
+    l.s.forEach(function (o) {
+      put.push('M' + l.k.toFixed(2) + ' ' + o[0].toFixed(2) + 'V' + o[1].toFixed(2));
+    });
+  });
+  slyanie(H).forEach(function (l) {
+    l.s.forEach(function (o) {
+      put.push('M' + o[0].toFixed(2) + ' ' + l.k.toFixed(2) + 'H' + o[1].toFixed(2));
+    });
+  });
+  var sv = document.createElementNS(ns, 'svg');
+  sv.setAttribute('class', 'draw');
+  sv.style.setProperty('--ar', d.w + ' / ' + d.h);
+  sv.setAttribute('viewBox', '0 0 ' + d.w + ' ' + d.h);
+  sv.setAttribute('preserveAspectRatio', 'none');
+  var pth = document.createElementNS(ns, 'path');
+  pth.setAttribute('d', put.join(''));
+  pth.setAttribute('fill', 'none');
+  pth.setAttribute('stroke', 'currentColor');
+  pth.setAttribute('stroke-width', '1');
+  pth.setAttribute('vector-effect', 'non-scaling-stroke');
+  pth.setAttribute('shape-rendering', 'crispEdges');
+  sv.appendChild(pth);
+  sv.dataset.otrezkov = put.length;
+  return sv;
+}
+
 function varySvg(d) {
   var ns = 'http://www.w3.org/2000/svg';
   var sv = document.createElementNS(ns, 'svg');
@@ -631,7 +712,7 @@ function build() {
         var one = el('div', 'scroller');
         if (d.varianty) {
           var pole = el('span', 'pole');
-          pole.appendChild(pic(d.src, 'илл. ' + d.n, d.w, d.h));
+          pole.appendChild(d.risuem ? setkaSvg(d) : pic(d.src, 'илл. ' + d.n, d.w, d.h));
           pole.appendChild(varySvg(d));
           one.appendChild(pole);
         } else {
