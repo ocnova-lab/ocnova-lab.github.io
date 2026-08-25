@@ -157,23 +157,7 @@
   Строка каталога — окно на уменьшенную ленту, подрезанное снизу долей
   «Каталог: строка, % ленты»: подрезка не трогает раскладку, это тот же
   чистый перенос, поэтому бесшовность не страдает.
-  КАТАЛОГ В МОБАЙЛЕ — ТОТ ЖЕ ЗАКОН НА ПЕРЕСТАВЛЕННЫХ ОСЯХ. Каталог всегда
-  развёрнут ПОПЕРЁК ЧТЕНИЯ: на десктопе читают вбок — ряды складываются
-  вниз; в мобайле читают вниз — значит ряды встают вбок и листаются пальцем.
-  Ни одного нового правила: те же величины, прочитанные на других осях.
-      вдоль чтения      точка, стоящая в середине экрана, едет от места, где
-                        читатель остановился, к середине титула копии
-      поперёк           своя лента садится в свой ряд, соседи приходят справа
-      кольцо            копия по-прежнему в хвост — только хвост теперь снизу
-      прокрутку         подменяет перенос: на десктопе ради этого распахивался
-                        #strip, тут замирает сам документ — в мобайле
-                        крутится он
-      крой              не участвует: он снимает воздух ПОПЕРЁК ленты, а
-                        поперёк неё стоит вся колонка целиком, воздуха нет
-      сходит на нет     ничто: картинка на всю меру ряда видна целой и
-                        говорит. Значит переход — чистый перенос, ни одного
-                        размера в кадре, и это же условие плавности на
-                        телефоне
+  Пока статья одна, соседи — её копии, число задаёт «Каталог: статей».
 
 ДВИЖЕНИЕ (П5). Две динамики, обе с ручками:
   колесо → лента с экспоненциальным догоном («Колесо, %» + «Инерция, %»);
@@ -429,10 +413,7 @@
   /* ── мобайл: те же колонки, только друг под другом ── */
   html.mob, body.mob { height: auto; overflow: visible; }   /* в мобайле крутится сам документ */
   body.mob #strip { position: static; display: block; overflow: visible;
-                    height: auto;
-                    /* поле сбоку — не второе число, а то же, которым живёт
-                       колонка: --pole ставит layoutMob из (экран − COL) / 2 */
-                    padding: var(--gap-big, 0px) var(--pole, 20px) var(--pad); }
+                    height: auto; padding: var(--gap-big, 0px) 20px var(--pad); }
   body.mob .col { width: auto !important; height: auto !important;
                   column-width: auto !important; margin-right: 0 !important; }
   /* межколонник, поставленный на попа: обычная отбивка между колонками */
@@ -485,29 +466,6 @@
   #strip.raspah { overflow: visible; }
   body.kat #rail  { display: none; }
 
-  /* ── каталог в мобайле: те же правила на переставленных осях ────────
-     Ряд идёт вдоль чтения (сверху вниз), ряды стоят поперёк него (слева
-     направо). Ряд остаётся «ряд»: род колонки от оси не зависит. */
-  body.mob .ryad { width: auto; height: 100vh; }
-  body.mob .ryad > .para { display: block; }
-  /* кольцо в мобайле: копия отбивается от конца статьи тем же межколонником,
-     поставленным на попа (приём 19, воздух одной природы). Отбивка стоит
-     МЕЖДУ концом и началом, а не перед первым: у первой копии в ряду ей не
-     от чего отбиваться, и, схлопнувшись наружу, она сдвинула бы весь ряд
-     мимо замера — ошибка невидимая, потому что раскладка от неё верна. */
-  body.mob .klon { display: block; }
-  body.mob .col + .klon, body.mob .klon + .klon { margin-top: var(--gut); }
-  /* место сборки в тени повторяет ленту и здесь — иначе замер набора соврёт */
-  body.mob .ten-lenta { display: block;
-                        padding: var(--gap-big, 0px) var(--pole, 20px) var(--pad); }
-  /* ЗАМЕРШИЙ ДОКУМЕНТ. На десктопе прокрутку ленты подменял перенос, и ради
-     этого распахивался #strip. В мобайле крутится сам документ — значит
-     замирает он: тело встаёт в экран, а ленту ведёт тот же перенос. В миг
-     подмены перенос равен снятой прокрутке, поэтому подмена не видна.
-     Возврат прокрутки на место — в katTickMob, там же, где снят перенос. */
-  body.mob.kat { position: fixed; inset: 0; overflow: hidden; }
-  body.mob.kat, body.mob.kat #ryady { touch-action: none; }
-
   /* Крестик: закрыть статью. Стоит на середине нижнего края — на той же
      вертикали, по которой в каталоге встаёт титул: кнопка ждёт там, куда
      статья уедет. В углу её было не видно, потому что волосяная обводка на
@@ -524,13 +482,7 @@
            transition: background .18s; }
   #krest:hover { background: color-mix(in srgb, var(--ink) 78%, var(--bg)); }
   #krest svg { display: block; width: 13px; height: 13px; }
-  /* В мобайле крестик стоит на середине ПРАВОГО края — на той же
-     горизонтали, по которой в каталоге встаёт титул, и с той стороны,
-     откуда приходят соседние статьи. Правило то же, что на десктопе
-     («кнопка ждёт там, куда статья уедет»), оси переставлены вместе
-     с каталогом. */
-  body.mob #krest { left: auto; right: 16px; bottom: auto; top: 50%;
-                    transform: translateY(-50%); }
+  body.mob #krest { display: none; }
 
   /* Кнопка языка — рядом с шестернёй и её же видом: орган управления берётся
      у панели, свой стенд не заводит (свод, алфавит). Служебная геометрия. */
@@ -836,7 +788,7 @@ function draw(src, w, h) {
 var reflow = 0;
 function relayout() {
   if (reflow) return;
-  reflow = requestAnimationFrame(function () { reflow = 0; layout(); measure(); katPromerit(); });
+  reflow = requestAnimationFrame(function () { reflow = 0; layout(); measure(); });
 }
 
 function pic(src, alt, w, h) {
@@ -1380,8 +1332,6 @@ function guard(c) {
 
 function layoutMob(vw) {
   root.style.setProperty('--avail', 'auto');
-  // поле ленты сбоку выводится из колонки, а не назначается вторым числом
-  root.style.setProperty('--pole', ((vw - COL) / 2).toFixed(1) + 'px');
   // верхний пропуск держал буфер перед титулом; буфера нет — держит поле ленты
   root.style.setProperty('--gap-big', P.gapBig + 'px');
   wins.forEach(function (w) { w.draw(); });
@@ -1398,24 +1348,9 @@ function layoutMob(vw) {
     e.style.paddingTop = '';        // место под индекс держал он сам — см. CSS выше
     e.style.setProperty('--room', '');
     if (d.t === 'title') {
-      /* КЕГЛЬ ТИТУЛА В МОБАЙЛЕ УПИРАЕТСЯ В САМОЕ ДЛИННОЕ СЛОВО, а не в
-         коридор. На десктопе титулу дан целый экран, и меру строки держит
-         его мера в знаках; в мобайле дана одна колонка, переносить слово
-         некуда — значит кегль сходит вниз ровно настолько, чтобы слово
-         влезло, и ни на волос ниже. Ширина слова растёт с кеглем линейно
-         (трекинг объявлен в em), поэтому доля «дано / надо» даёт ответ с
-         одного захода. Замер один на раскладку, не в кадре (П3, то же
-         исключение, что и у высоты набора). */
-      var kegl = Math.max(P.ttl[0], Math.min(P.ttl[1], P.ttlSize * U));
-      e.style.setProperty('--ttl', kegl.toFixed(1) + 'px');
-      var h1 = e.querySelector('h1');
-      if (h1) {
-        var dano = h1.clientWidth, nado = h1.scrollWidth;
-        if (nado > dano + 0.5 && dano > 0) {
-          e.style.setProperty('--ttl',
-            Math.max(9, kegl * dano / nado).toFixed(1) + 'px');
-        }
-      }
+      var w = vw - 40;
+      e.style.setProperty('--ttl',
+        Math.max(P.ttl[0], Math.min(P.ttl[1], P.ttlSize * U)).toFixed(1) + 'px');
     }
   });
 }
@@ -1950,7 +1885,7 @@ strip.addEventListener('wheel', function (e) {
   var dx = e.deltaX * kx, dy = e.deltaY * ky;
   if (katK > 0) {                       // в каталоге колесо листает статьи
     e.preventDefault();
-    katSdvig = Math.max(0, Math.min(katMax(), katSdvig + (Math.abs(dy) >= Math.abs(dx) ? dy : dx)));
+    katY = Math.max(0, Math.min(katMax(), katY + (Math.abs(dy) >= Math.abs(dx) ? dy : dx)));
     return;
   }
   var sc = e.target.closest && e.target.closest('.scroller');
@@ -2219,7 +2154,7 @@ StendPanel.build({
     wheel: 'Сколько ленты проходит за один щелчок колеса.',
     lag: 'Чем больше, тем дольше лента догоняет колесо.',
     katMasht: 'Во сколько раз каталог уменьшает ленту. 25 % взято с макета: колонка 86 при 340, межколонник 8 при 30.',
-    katKrop: 'Строка каталога — окно на уменьшенную ленту. Сколько ленты она показывает: 100 % — всю, вместе с воздухом под коротким текстом; меньше — строка подрезается снизу и статьи стоят плотнее. Подрезка идёт окном и раскладку не трогает. В мобайле крой не участвует: он снимает воздух поперёк ленты, а поперёк неё там стоит вся колонка целиком.',
+    katKrop: 'Строка каталога — окно на уменьшенную ленту. Сколько ленты она показывает: 100 % — всю, вместе с воздухом под коротким текстом; меньше — строка подрезается снизу и статьи стоят плотнее. Подрезка идёт окном и раскладку не трогает.',
     katProm: 'Промежуток между статьями, в долях самой строки: расстояние выведено из строки, а не назначено пикселами.',
     katMs: 'Сколько длится переход из статьи в каталог и обратно. Переход — доля: его можно прервать на полпути, и он поедет назад с того места, где застали.',
     katEase: 'Кривая перехода в каталог.',
@@ -2252,46 +2187,24 @@ StendPanel.build({
    правилом в vercel.json; локально (файл .html) адрес живёт запросом
    ?katalog=1 — путь с папкой на простом файловом сервере не открыть. */
 var katK = 0, katCel = 0, katOt = 0, katT0 = 0, katDvig = false;
-var katS0 = 0, katSdvig = 0, katSled = false, katGryaz = true;
-var katSlot = null, katKolco = null, katRaspah = false;
-/* katSdvig — сдвиг вдоль оси, ПОПЕРЁК которой лежат ленты: на десктопе он
-   вертикальный (ряды стоят вниз), в мобайле горизонтальный (ряды вбок).
-   katMoya — где встанет титул копии своей ленты и какая её точка обязана
-   стоять в середине экрана. */
-var katMoya = { l: 0, c: 0 };
+var katS0 = 0, katY = 0, katSled = false, katGryaz = true;
+var katSlot = null, katKlonW = 0, katKolco = null, katRaspah = false;
 var katRyad = [];         // строки соседних статей; у своей на месте null
 var teni = document.getElementById('teni');
 
-/* ЧТО СХОДИТ НА НЕТ — РЕШАЕТ МЕРА ПОПЕРЁК ЛЕНТЫ. На десктопе ряд каталога
-   тонкий: картинка показывает в нём полоску и молчит, подпись без картинки
-   пуста, буфер на такой мере уже не виден — все три сходят на нет шириной.
-   В мобайле поперёк ленты стоит ВСЯ КОЛОНКА целиком: картинка видна целой и
-   говорит, подпись стоит при ней — сходить на нет нечему. Заодно весь
-   переход остаётся чистым переносом, без правки размеров в кадре: на
-   телефоне это же и есть условие плавности. */
+/* Колонки, которые в каталоге не читаются: картинка без подписи немая,
+   подпись без картинки пустая, буфер — пропуск, которого на такой мере
+   уже не видно. Все три сходят на нет шириной. */
 function katSzhat(c) {
-  if (mobile) return false;
   var t = c.d.t;
   return t === 'fig' || t === 'figs' || t === 'cap' || t === 'buffer';
 }
-/* Поле ленты сбоку в мобайле — то же число, которым живёт колонка
-   (COL = экран − 2·поле), а не назначенное второй раз. // без ручки */
-function katPole() { return Math.max(0, (window.innerWidth - COL) / 2); }
-/* ТОЛЩИНА ленты поперёк чтения: на десктопе высота ряда, в мобайле его
-   ширина. Крой снимает воздух под коротким текстом — в мобайле его нет,
-   поперёк ленты стоит вся колонка, поэтому крой туда и не входит.
-   Шаг = толщина + промежуток, одинаково на обеих осях. */
 function katShag() {
-  var tol = mobile
-    ? Math.max(24, COL * P.katMasht / 100)
-    : Math.max(40, (window.innerHeight - 2 * PAD) * P.katMasht / 100 * P.katKrop / 100);
-  return { tol: tol, shag: tol * (1 + P.katProm / 100) };
+  var h = Math.max(40, (window.innerHeight - 2 * PAD) * P.katMasht / 100 * P.katKrop / 100);
+  return { h: h, shag: h * (1 + P.katProm / 100) };
 }
 function katMax() {
-  var shag = katShag().shag;
-  return mobile
-    ? Math.max(0, STATI.length * shag - window.innerWidth + katPole())
-    : Math.max(0, STATI.length * shag - window.innerHeight + PAD);
+  return Math.max(0, STATI.length * katShag().shag - window.innerHeight + PAD);
 }
 
 /* Копия ленты для каталога: только читаемые колонки и без адресов —
@@ -2304,7 +2217,7 @@ function katKlonSdelat() {
     var e = c.el.cloneNode(true);
     e.removeAttribute('id');
     [].forEach.call(e.querySelectorAll('[id]'), function (x) { x.removeAttribute('id'); });
-    if (!mobile) e.style.width = c.w1 + 'px';   // в мобайле меру держит CSS
+    e.style.width = c.w1 + 'px';
     k.appendChild(e);
   }
   return k;
@@ -2325,26 +2238,10 @@ function katPokazat() {
     if (c.maska) StendMaska.pokazat(c.maska, 1, { sdvig: 0, izing: function (t) { return t; } });
   }
 }
-/* ГДЕ ВСТАНЕТ ТИТУЛ КОПИИ и какая точка ленты обязана стоять в середине
-   экрана. На десктопе это сумма покойных мер: длина ленты СЧИТАЕТСЯ, а до
-   середины титула — ещё полэкрана, потому что титул занимает экран целиком.
-   В мобайле высоту набора знает только браузер, поэтому длина СНИМАЕТСЯ —
-   один раз на сборку каталога, не в кадре (П3, то же исключение, что и у
-   замера набора); середина титула берётся его собственной высотой, а не
-   экраном: в мобайле титул экрана не занимает. */
-function katDlina(klon) {
-  if (mobile) {
-    /* Титул ищется по роду колонки, а не по её месту: перед ним может стоять
-       буфер, и тогда первой в копии окажется пустота. Меры берутся у самого
-       титула — offsetTop у него и у копии считается от одного и того же
-       предка, поэтому вычитать ничего не надо. */
-    var t = klon.querySelector('.title');
-    var l = klon.offsetTop;
-    return { l: l, c: t ? t.offsetTop + t.offsetHeight / 2 : l };
-  }
+function katShirina() {                        // ширина копии = где встанет титул
   var w = 0;
   for (var j = 0; j < cols.length; j++) if (!katSzhat(cols[j])) w += cols[j].w1 + GUT;
-  return { l: w, c: w + window.innerWidth / 2 };
+  return w;
 }
 
 /* СОСЕДНЯЯ СТАТЬЯ СОБИРАЕТСЯ В ТЕНИ. Строка каталога — не картинка статьи,
@@ -2359,11 +2256,7 @@ function sobratVTeni(st) {
   var bylo = { st: STATYA, cols: cols, wins: wins, strip: strip, ten: TEN };
   STATYA = st; cols = []; wins = []; strip = mesto; TEN = true;
   build(); layout(); katPokazat();
-  /* Мера соседа на десктопе считается прямо тут, в тени: она сумма покойных
-     мер и места сборки не спрашивает. В мобайле её надо снять с готового
-     ряда, поэтому там она берётся позже — сборка в тени детали не мерит. */
-  var klon = katKlonSdelat();
-  var res = { klon: klon, m: mobile ? null : katDlina(klon) };
+  var res = { klon: katKlonSdelat(), w: katShirina() };
   STATYA = bylo.st; cols = bylo.cols; wins = bylo.wins;
   strip = bylo.strip; TEN = bylo.ten;
   mesto.remove();
@@ -2373,6 +2266,7 @@ function sobratVTeni(st) {
 /* Строки каталога: у каждой статьи своя, у текущей ею работает сама лента. */
 function katSobrat() {
   katPokazat();
+  katKlonW = katShirina();
   var svoy = katKlonSdelat();
   if (katKolco) katKolco.remove();
   katKolco = svoy.cloneNode(true);
@@ -2383,35 +2277,14 @@ function katSobrat() {
     if (STATI[i] === STATYA) { katRyad.push(null); continue; }
     var k = sobratVTeni(STATI[i]);
     var ryad = el('div', 'ryad'), para = el('div', 'para');
-    para.appendChild(k.klon.cloneNode(true));  // конец статьи — перед титулом
-    para.appendChild(k.klon);                  // начало — после него
-    if (mobile) para.style.width = COL + 'px';  // мера ряда = мера колонки
+    para.appendChild(k.klon.cloneNode(true));  // конец статьи — слева от титула
+    para.appendChild(k.klon);                  // начало — справа
     ryad.appendChild(para);
     ryad.dataset.st = STATI[i].slug;
     katSlot.appendChild(ryad);
-    katRyad.push({ el: ryad, m: k.m, vtor: k.klon });
-  }
-  /* Замеры мобайла — последним ходом, когда все ряды уже стоят в документе:
-     до этого мерить нечего. Один проход на сборку каталога, не в кадре. */
-  katMoya = katDlina(katKolco);
-  if (mobile) for (var r = 0; r < katRyad.length; r++) {
-    if (katRyad[r]) katRyad[r].m = katDlina(katRyad[r].vtor);
+    katRyad.push({ el: ryad, w: k.w });
   }
 }
-/* МЕРА СНЯТА — ЗНАЧИТ ЕЁ НАДО ПОДТВЕРЖДАТЬ. Считанное число живёт само,
-   снятое устаревает: приходит гарнитура, встаёт схема — и длина ленты
-   становится другой. Пересобирать ради этого каталог незачем, ряды те же;
-   перемерить надо только их длину. Отсюда правило: где на десктопе длина
-   пересчитывается каждый кадр даром, в мобайле она снимается заново на
-   каждой перекладке — и только там. */
-function katPromerit() {
-  if (!mobile || !katKolco) return;
-  katMoya = katDlina(katKolco);
-  for (var r = 0; r < katRyad.length; r++) {
-    if (katRyad[r] && katRyad[r].vtor) katRyad[r].m = katDlina(katRyad[r].vtor);
-  }
-}
-
 /* Вернулись в статью — кольцо снимается: иначе за последним буфером
    лежала бы вторая копия статьи, и лента уезжала бы в неё. */
 function katKolcoSnyat() {
@@ -2438,56 +2311,16 @@ function adres(kat, slug) {
 }
 function katAdres(v) { adres(v, STATYA.slug); }
 function katPusk(v, bezAdresa) {
+  if (mobile) return;
   v = v ? 1 : 0;
   if (v === katCel) return;
-  // откуда уезжаем: на десктопе прокрутка ленты, в мобайле прокрутка документа
-  if (v) { katS0 = mobile ? (window.pageYOffset || 0) : strip.scrollLeft; ride = null; }
+  if (v) { katS0 = strip.scrollLeft; ride = null; }
   katCel = v; katOt = katK; katT0 = performance.now(); katDvig = true;
   if (!bezAdresa) katAdres(v);
 }
 
-/* КАТАЛОГ В МОБАЙЛЕ — ТОТ ЖЕ ЗАКОН НА ПЕРЕСТАВЛЕННЫХ ОСЯХ. Вдоль чтения
-   теперь вертикаль, поперёк — горизонталь; величины те же.
-   Одна точка ленты ведёт всё и по вертикали: она едет от места, где стоял
-   читатель, к середине титула копии и обязана всё время стоять в середине
-   экрана. При q = 0 перенос равен −katS0 при масштабе 1 — ровно та картинка,
-   которую давала прокрутка документа, поэтому подмена не видна.
-   По горизонтали своя лента садится в свой ряд каталога.
-   Ничто не сходит на нет (см. katSzhat), поэтому здесь переход — чистый
-   перенос: ни одного размера, посчитанного в кадре. */
-function katTickMob(q, s, mash, moy, g, vw, vh) {
-  /* Точка, стоящая в середине экрана, — доля между двумя своими концами:
-     при q = 0 это середина того экрана, где читатель остановился, при q = 1
-     середина титула копии. Ни одного слагаемого сверх этих двух: половина
-     экрана уже сидит внутри katS0-конца и второй раз не прибавляется. */
-  var A = katS0 + vh / 2, C = A + (katMoya.c - A) * q;
-  if (q > 0) {
-    strip.style.transformOrigin = '0 0';
-    strip.style.transform =
-      'translate(' + (q * (moy * g.shag - katSdvig)).toFixed(2) + 'px,'
-      + (vh / 2 - C * s).toFixed(2) + 'px) scale(' + s.toFixed(4) + ')';
-  } else if (strip.style.transform) {
-    /* Тело разморожено снятым классом — ставим прокрутку туда, где она была.
-       Чтение scrollHeight между двумя ходами — принудительный пересчёт: без
-       него браузер вернул бы прокрутку по старой, ещё замершей раскладке. */
-    strip.style.transform = '';
-    void document.documentElement.scrollHeight;
-    window.scrollTo(0, katS0);
-  }
-  for (var r = 0; r < katRyad.length; r++) {
-    var rr = katRyad[r];
-    if (!rr) continue;
-    var x = katPole() * s + r * g.shag - katSdvig + (1 - q) * vw * 0.35;
-    rr.el.style.width = g.tol.toFixed(1) + 'px';
-    rr.el.style.transform = 'translateX(' + x.toFixed(2) + 'px)';
-    rr.el.style.opacity = q;
-    rr.el.firstChild.style.transform =
-      'translateY(' + (vh / 2 - (rr.m ? rr.m.c : 0) * mash).toFixed(2) + 'px) scale('
-      + mash.toFixed(4) + ')';
-  }
-}
-
 function katTick() {
+  if (mobile) return;
   var now = performance.now();
   if (katDvig) {
     var t = P.katMs > 0 ? (now - katT0) / P.katMs : 1;
@@ -2503,13 +2336,9 @@ function katTick() {
   krest.style.pointerEvents = q > 0.5 ? 'none' : '';
 
   if (!katSlot) { katSlot = el('div'); katSlot.id = 'ryady'; document.body.appendChild(katSlot); }
-  /* Пересборка идёт только на ВХОДЕ (katCel > 0). На выходе ряды доживают
-     переход теми же, какими были: собирать заново то, что сейчас погаснет,
-     значит положить сборку всех статей ровно в тот кадр, где идёт движение. */
-  if (q > 0 && katCel > 0 && (katGryaz || !katKolco)) { katSobrat(); katGryaz = false; }
+  if (q > 0 && (katGryaz || !katKolco)) { katSobrat(); katGryaz = false; }
   if (q === 0) { katKolcoSnyat(); }
-  var moy = nomerStati(STATYA);              // в каком ряду стоит своя лента
-  if (mobile) { katTickMob(q, s, mash, moy, katShag(), vw, vh); return; }
+  var moy = nomerStati(STATYA);              // в какой строке стоит своя лента
 
   /* 1. нечитаемые колонки сходят на нет; заодно считается ширина ленты —
         она же координата титула копии, приставленной в хвост */
@@ -2538,7 +2367,7 @@ function katTick() {
     if (!katRaspah) { katRaspah = true; strip.classList.add('raspah'); strip.scrollLeft = 0; }
     strip.style.transformOrigin = '0 0';
     strip.style.transform = 'translate(' + (vw / 2 - X * s).toFixed(2) + 'px,'
-      + (q * (moy * g.shag - katSdvig)).toFixed(2) + 'px) scale(' + s.toFixed(4) + ')';
+      + (q * (moy * g.shag - katY)).toFixed(2) + 'px) scale(' + s.toFixed(4) + ')';
   } else {
     if (katRaspah) { katRaspah = false; strip.classList.remove('raspah'); }
     strip.style.transform = '';
@@ -2549,12 +2378,12 @@ function katTick() {
   for (var r = 0; r < katRyad.length; r++) {
     var rr = katRyad[r];
     if (!rr) continue;
-    var y = PAD * s + r * g.shag - katSdvig + (1 - q) * vh * 0.35;
-    rr.el.style.height = g.tol.toFixed(1) + 'px';
+    var y = PAD * s + r * g.shag - katY + (1 - q) * vh * 0.35;
+    rr.el.style.height = g.h.toFixed(1) + 'px';
     rr.el.style.transform = 'translateY(' + y.toFixed(2) + 'px)';
     rr.el.style.opacity = q;
     rr.el.firstChild.style.transform =
-      'translateX(' + (vw / 2 - rr.m.c * mash).toFixed(2) + 'px) scale('
+      'translateX(' + (vw / 2 - (rr.w + vw / 2) * mash).toFixed(2) + 'px) scale('
       + mash.toFixed(4) + ')';
   }
 }
@@ -2573,8 +2402,8 @@ function katOtkryt(slug) {
   strip.textContent = ''; cols.length = 0; wins.length = 0;
   katKolco = null;
   build(); layout(); katPokazat();
+  katKlonW = katShirina();
   katKolco = katKlonSdelat(); strip.appendChild(katKolco);
-  katMoya = katDlina(katKolco);    // лента другая — и титул копии встанет иначе
   if (katRyad[idx]) katRyad[idx].el.style.display = 'none';
   katGryaz = true;                 // строки пересоберутся к следующему разу
   katS0 = 0;                       // статья открывается с титула
@@ -2582,30 +2411,8 @@ function katOtkryt(slug) {
   katCel = 0; katOt = katK; katT0 = performance.now(); katDvig = true;
   adres(false, slug);
 }
-/* КАТАЛОГ ЛИСТАЕТСЯ ПАЛЬЦЕМ. В статье вертикаль ведёт сам документ; в
-   каталоге он замер, а статьи стоят поперёк чтения — значит и тянуть их
-   надо поперёк. Ход идёт за пальцем один в один: кривой тут вести нечего,
-   это не появление, а прямое движение руки. Порог отделяет тягу от
-   нажатия — рука, сдвинувшая ряды, статью не открывает. // без ручки */
-var katPal = null, katTyanul = 0, KAT_POROG = 8;
-document.addEventListener('pointerdown', function (e) {
-  if (!mobile || !katK || katDvig) return;
-  if (e.target.closest && (e.target.closest('.st-panel') || e.target.closest('.st-gear'))) return;
-  katPal = { x: e.clientX, y: e.clientY, s: katSdvig };
-  katTyanul = 0;
-});
-document.addEventListener('pointermove', function (e) {
-  if (!katPal) return;
-  var dx = katPal.x - e.clientX;
-  katTyanul = Math.max(katTyanul, Math.abs(dx), Math.abs(katPal.y - e.clientY));
-  katSdvig = Math.max(0, Math.min(katMax(), katPal.s + dx));
-});
-document.addEventListener('pointerup', function () { katPal = null; });
-document.addEventListener('pointercancel', function () { katPal = null; katTyanul = 0; });
-
 document.addEventListener('click', function (e) {
   if (!katK || katDvig) return;
-  if (katTyanul > KAT_POROG) { katTyanul = 0; return; }   // это была тяга, не выбор
   if (e.target.closest && (e.target.closest('.st-panel') || e.target.closest('.st-gear'))) return;
   var r = e.target.closest && e.target.closest('.ryad');
   if (r && r.dataset.st) { katOtkryt(r.dataset.st); return; }
@@ -2708,12 +2515,10 @@ measure();
 var rz = 0;
 window.addEventListener('resize', function () {
   if (rz) return;                       // тянут за угол окна — считаем раз в кадр
-  rz = requestAnimationFrame(function () {
-    rz = 0; layout(); measure(); katPromerit();
-  });
+  rz = requestAnimationFrame(function () { rz = 0; layout(); measure(); });
 });
-window.addEventListener('load', function () { layout(); gotoHash(startHash); measure(); katPromerit(); });
-document.fonts && document.fonts.ready.then(function () { layout(); measure(); katPromerit(); });
+window.addEventListener('load', function () { layout(); gotoHash(startHash); measure(); });
+document.fonts && document.fonts.ready.then(function () { layout(); measure(); });
 </script>
 </body>
 </html>

@@ -92,6 +92,7 @@ window.GORIZONT_STATI['prostranstvo'] = {
   ],
   per: {
     "title": { date: "12 August /2026", text: "Space as the Invisible Instrument of Design" },
+    "02 – 00": { text: "Space" },
     "02 – 01": { text: "Space is one of the most underrated instruments a designer has. And it is being underrated precisely now, when working with space has turned out to be one of the few things in which a human confidently outdoes artificial intelligence." },
     "02 – 02": { text: "The reason is simple: AI has no eyes. It does not see design — it computes it. Objects, functions, relations: everything countable it holds beautifully. But the emptiness between objects is not data to it; it is the absence of data. Which is why space is the first thing to sag in a generated layout. It “does not work.”" },
     "02 – 03": { text: "What does “work” mean here? Let us go back to basics. In classical terminology the emptiness around a form is called the counterform — everything left on the format once the form is in place: background, air, gaps. If the background takes no part in the composition, the counterform is passive. If the emptiness takes part in the composition as one of its elements, the counterform is called active. The idea of the active counterform — of an emptiness that participates — took shape towards the end of the nineteenth century and came into full force in the twentieth: the International Style, the Swiss school." },
