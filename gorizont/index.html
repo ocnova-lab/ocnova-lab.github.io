@@ -175,6 +175,18 @@
 колонки. Выключка индекса работает меткой начала: по ленте видно, где
 раздел начинается, не читая текста.
 
+ДВА ЯЗЫКА. Русский — оригинал статьи, английский — перевод с него; в
+макете стоит английский, поэтому им лента и открывается. Перевод НЕ
+переписывает материал: он лежит отдельным файлом (gorizont-ru.js) и
+ключуется индексом фрагмента — «01 – 05» для текста, врезки и заголовка
+раздела, «cap-04» для подписи, «title» для титула. Чего в переводе нет,
+берётся из основного файла: язык меняет набор, а не устройство ленты.
+Поэтому же смена языка — это перекладка, а не подмена строк: русский
+абзац другой длины требует другого числа порций, и лента обязана
+пересчитаться. Читателя после пересчёта возвращают на тот же фрагмент.
+Кнопка языка стоит рядом с шестернёй панели и берёт её же вид: свой орган
+управления стенд не заводит. Адрес ?lang=ru|en, выбор помнится.
+
 АДРЕСА. Индекс колонки — адрес фрагмента: «01 – 05» → #01-05, картинки →
 #img-07, подписи → #cap-07. Клик по индексу копирует ссылку. Любую ручку
 панели можно задать в адресе: ?col=300&figFit=step&dbg=1. ?panel=1 открывает
@@ -430,6 +442,12 @@
   #krest:hover { border-color: var(--ink); }
   #krest svg { display: block; width: 13px; height: 13px; }
   body.mob #krest { display: none; }
+
+  /* Кнопка языка — рядом с шестернёй и её же видом: орган управления берётся
+     у панели, свой стенд не заводит (свод, алфавит). Служебная геометрия. */
+  .lang-btn { left: 56px;
+              font: 600 11px/1 -apple-system, "Helvetica Neue", Arial, sans-serif;
+              letter-spacing: .04em; }
 </style>
 </head>
 <body>
@@ -446,6 +464,7 @@
 <div id="toast">ссылка скопирована</div>
 
 <script src="/gorizont-data.js"></script>
+<script src="/gorizont-ru.js"></script>
 <script src="/panel.js"></script>
 <!-- органы панели из библиотеки /panel-lib (каталог: стенды.0снова.рф/panel-lib) -->
 <script src="/panel-lib/segment.js"></script>
@@ -559,6 +578,31 @@ if (/[?&]tiho=0/.test(location.search)) TIHO0 = false;
 TIHO = TIHO0;
 
 var DATA  = window.GORIZONT || [];
+/* ── ДВА ЯЗЫКА ────────────────────────────────────────────────────────
+   Русский — оригинал статьи, английский — перевод; в макете стоит
+   английский, им лента и открывается. Перевод лежит отдельно и ключуется
+   индексом фрагмента, поэтому материал не раздваивается: чего в переводе
+   нет, берётся из основного файла. */
+var RU = window.GORIZONT_RU || {};
+var LANG_KEY = 'gorizont-lang';
+var LANG = 'en';
+try { if (localStorage.getItem(LANG_KEY) === 'ru') LANG = 'ru'; } catch (e) {}
+var lm = location.search.match(/[?&]lang=(ru|en)/);
+if (lm) LANG = lm[1];
+/* Ключ перевода — тот же адрес фрагмента, которым живут ссылки. */
+function klyuchRU(d) {
+  if (d.t === 'title') return 'title';
+  if (d.t === 'cap') return 'cap-' + d.to;
+  return d.n || '';
+}
+/* Слово берётся из перевода, если он есть; иначе из материала. */
+function slovo(d, pole) {
+  if (LANG === 'ru') {
+    var r = RU[klyuchRU(d)];
+    if (r && r[pole] != null) return r[pole];
+  }
+  return d[pole];
+}
 var strip = document.getElementById('strip');
 var rail  = document.querySelector('#rail i');
 var toast = document.getElementById('toast');
@@ -818,30 +862,30 @@ function build() {
 
       case 'title':
         c = el('div', 'col title');
-        c.appendChild(idxLine(d.date, id));
-        c.appendChild(el('h1', null, d.text));
+        c.appendChild(idxLine(slovo(d, 'date'), id));
+        c.appendChild(el('h1', null, slovo(d, 'text')));
         break;
 
       case 'lead':
         c = el('div', 'col flow lead-col');
         c.appendChild(idxLine(d.n, id));
-        c.appendChild(el('p', 'lead', d.text));
-        c.appendChild(el('div', 'by', d.by));
+        c.appendChild(el('p', 'lead', slovo(d, 'text')));
+        c.appendChild(el('div', 'by', slovo(d, 'by')));
         break;
 
       case 'head':
         c = el('div', 'col flow head-col');
         c.appendChild(idxLine(d.n, id));
-        c.appendChild(el('p', 'lead', d.text));
+        c.appendChild(el('p', 'lead', slovo(d, 'text')));
         // вторая строка под заголовком раздела — та же строчная метка, что
         // и строка автора под врезкой: один стиль на одну роль
-        if (d.pod) c.appendChild(el('div', 'by', d.pod));
+        if (d.pod) c.appendChild(el('div', 'by', slovo(d, 'pod')));
         break;
 
       case 'cap':
         c = el('div', 'col flow cap-col');
         c.appendChild(idxLine(d.arrow, id));
-        c.appendChild(el('p', 'cap', d.text));
+        c.appendChild(el('p', 'cap', slovo(d, 'text')));
         if (d.thumb) c.appendChild(Object.assign(img(d.thumb, '', 50, 50), { className: 'thumb' }));
         break;
 
@@ -884,7 +928,7 @@ function build() {
       default:
         c = el('div', 'col flow');
         c.appendChild(idxLine(d.n, id));
-        c.appendChild(el('p', 'main', d.text));
+        c.appendChild(el('p', 'main', slovo(d, 'text')));
         c.dataset.nabor = '1';        // перенабирается только тело статьи
     }
     // вторая часть индекса «00» — колонка открывает раздел; её индекс
@@ -897,10 +941,10 @@ function build() {
       // перенабор — только моноширинному телу: неразрывный пробел там
       // ровно той же ширины, и разбивка строк не едет
       txtEl: c.dataset.nabor ? c.querySelector('p.main') : null,
-      txt: c.dataset.nabor ? d.text : '', pn: -1, hold: 0, tick: 0, shown: null,
+      txt: c.dataset.nabor ? slovo(d, 'text') : '', pn: -1, hold: 0, tick: 0, shown: null,
       // границы слов — раз на колонку: текст в ней не меняется, меняется
       // только то, какие слова выбраны вспышкой
-      slova: c.dataset.nabor ? slovaIz(d.text) : null,
+      slova: c.dataset.nabor ? slovaIz(slovo(d, 'text')) : null,
       // дескрипторы колонки: индекс, подпись, строка автора — тот же перебор
       // титул живёт маской целиком, перебор его не трогает
       dsc: c.classList.contains('title') ? [] :
@@ -2106,7 +2150,43 @@ function setLive(el) {
   requestAnimationFrame(watch);
 })();
 
+/* ══ КНОПКА ЯЗЫКА ═════════════════════════════════════════════════════
+   Смена языка — ПЕРЕКЛАДКА, а не подмена строк. Русский абзац другой длины
+   требует другого числа порций, картинка — другого пролёта, а высота
+   набора известна только браузеру: пересчитать это подменой текста нельзя.
+   Лента собирается заново, и читателя возвращают на тот фрагмент, где он
+   стоял, — адрес фрагмента для того и заведён.
+   Орган управления берётся у панели (.st-gear), свой стенд не заводит. */
+function perestroit() {
+  var yak = lastHash;
+  strip.textContent = '';
+  cols.length = 0; wins.length = 0;
+  katKolco = null; katGryaz = true;          // копии каталога сняты с прежнего языка
+  build();
+  layout();
+  if (yak && document.getElementById(yak)) gotoHash(yak);
+  else { cur = tgt = 0; strip.scrollLeft = 0; }
+  measure();
+}
+var langBtn = el('button', 'st-gear lang-btn');
+langBtn.type = 'button';
+langBtn.setAttribute('aria-label', 'Язык ленты');
+function langMetka() {                       // на кнопке — язык, в который ведёт
+  langBtn.textContent = LANG === 'ru' ? 'EN' : 'RU';
+  langBtn.title = LANG === 'ru' ? 'Read in English' : 'Читать по-русски';
+}
+langBtn.addEventListener('click', function () {
+  LANG = LANG === 'ru' ? 'en' : 'ru';
+  try { localStorage.setItem(LANG_KEY, LANG); } catch (e) {}
+  strip.lang = LANG;
+  langMetka();
+  perestroit();
+});
+document.body.appendChild(langBtn);
+langMetka();
+
 /* ── пуск ── */
+strip.lang = LANG;
 build();
 layout();
 // зашли прямо по адресу каталога — встаём в него сразу, без перехода:
