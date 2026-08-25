@@ -424,7 +424,9 @@
            border: 1px solid var(--hair); background: var(--bg);
            color: var(--ink); cursor: pointer;
            display: grid; place-items: center;
-           transition: border-color .18s, opacity .18s; }
+           /* прозрачность ведёт доля перехода, а не переход CSS: двое на
+              одном свойстве не уживаются // без ручки */
+           transition: border-color .18s; }
   #krest:hover { border-color: var(--ink); }
   #krest svg { display: block; width: 13px; height: 13px; }
   body.mob #krest { display: none; }
@@ -1925,10 +1927,19 @@ function katKlonSdelat() {
    обязана взять его показанным), потом считается ширина копии, потом
    собираются кольцо статьи и строки соседей. */
 function katSobrat(n) {
+  /* Копия обязана снять ленту ПОКАЗАННОЙ. Текст в колонке за экраном стоит
+     несобранным — неразрывными пробелами, — а титул и врезки могут быть
+     уведены маской. Копия этого не знает и унесёт с собой пустоту, поэтому
+     перед съёмом лента доводится до покоя вручную: порядок кадра тут не
+     помощник, съём идёт в том же кадре, что и решение открыть каталог. */
   for (var i = 0; i < cols.length; i++) {
-    if (cols[i].d.t === 'title' && cols[i].maska) {
-      StendMaska.pokazat(cols[i].maska, 1, { sdvig: 0, izing: function (t) { return t; } });
+    var c = cols[i];
+    if (c.txtEl && c.shown !== c.txt) { c.txtEl.textContent = c.txt; c.shown = c.txt; }
+    if (c.dsc) for (var k = 0; k < c.dsc.length; k++) {
+      var dd = c.dsc[k];
+      if (dd.shown !== dd.txt) { dd.el.textContent = dd.txt; dd.shown = dd.txt; }
     }
+    if (c.maska) StendMaska.pokazat(c.maska, 1, { sdvig: 0, izing: function (t) { return t; } });
   }
   katKlonW = 0;
   for (var j = 0; j < cols.length; j++) if (!katSzhat(cols[j])) katKlonW += cols[j].w1 + GUT;
@@ -2074,7 +2085,11 @@ function setLive(el) {
   // В каталоге лента — картинка: текст стоит набранным, вспышка молчит,
   // маски показаны. Это ровно то, чем живёт «меньше движения», поэтому
   // отдельного режима заводить незачем — берётся тот же.
-  TIHO = TIHO0 || katK > 0;
+  // Смотрим на НАМЕРЕНИЕ (katCel), а не на достигнутую долю: доля растёт в
+  // конце кадра, и на первом кадре после нажатия она ещё ноль. Копии
+  // каталога снимаются именно там — по доле они забирали бы колонки
+  // за экраном несобранными, то есть пустыми.
+  TIHO = TIHO0 || katK > 0 || katCel > 0;
   nabor();
   vspyshka();
   maska();
