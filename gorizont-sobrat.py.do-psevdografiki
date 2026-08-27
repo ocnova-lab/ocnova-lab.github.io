@@ -12,8 +12,6 @@
   ![[файл|мера]]     → картинка; несколько подряд — стопка
   *подпись*          → подпись к предыдущей картинке
   | таблица |        → узкая идёт колонкой, широкая пропускается
-  ``` код ```        → откладывается: псевдографика в колонке рассыпается
-  ├─┴─ схема         → то же: строка с символами рамок — схема, не абзац
   прочее             → абзац
 
 Пролёт картинки выводится из её пропорции: вертикальная и квадратная — одна
@@ -30,7 +28,6 @@ HR = u'/Users/sergeigurov/Desktop/основа/Хранилище/'
 STENDY = u'/Users/sergeigurov/stendy/'
 # таблица шире этого числа знаков в самой длинной строке считается широкой
 SHIROKAYA = 90
-PROPUSK = []   # что сборщик отложил: решение о таких блоках принимается в макете
 
 
 # Разделы, которые к статье не относятся: рабочие заметки автора.
@@ -121,7 +118,6 @@ def razobrat(t):
        а иногда за картинкой сразу идёт текст. Абзацем считается то, что
        осталось между этими находками."""
     kuski, tekst, gruppa, tab = [], [], [], []
-    ograda, psevdo = [None], [0]   # строк внутри ``` и строк с символами рамок
 
     def sdat_tekst():
         if not tekst: return
@@ -148,18 +144,6 @@ def razobrat(t):
 
     for stroka in t.split('\n'):
         s1 = stroka.strip()
-        # огороженный код и псевдографика — не текст: в колонке одной меры их
-        # строки переносятся и рисунок рассыпается на обрывки. Откладываются
-        # целиком; что с ними делать, решается в макете
-        if s1.startswith('```'):
-            sdat_tekst(); sdat_gruppu()
-            if ograda[0] is None: ograda[0] = 0
-            else: PROPUSK.append(u'код в ограде, %d строк' % ograda[0]); ograda[0] = None
-            continue
-        if ograda[0] is not None:
-            ograda[0] += 1; continue
-        if re.search(u'[\u2500-\u257f]', s1):
-            sdat_tekst(); sdat_gruppu(); psevdo[0] += 1; continue
         # цитата — рабочая заметка автора, черта — разделитель черновика:
         # ни то ни другое не статья
         if s1.startswith('>') or re.match(r'^[-*_]{3,}$', s1):
@@ -189,7 +173,6 @@ def razobrat(t):
         sdat_gruppu()
         tekst.append(stroka)
     sdat_tekst(); sdat_gruppu(); sdat_tablicu()
-    if psevdo[0]: PROPUSK.append(u'псевдографика вне ограды, %d строк' % psevdo[0])
     return kuski
 
 
@@ -567,6 +550,4 @@ for st in STATI:
         '%s %d' % (k, v) for k, v in sorted(c.items()))))
     print(u'  переводов %d' % len(per))
     for p in prop: print(u'  пропущено: %s' % p)
-    for p in PROPUSK: print(u'  отложено: %s' % p)
-    del PROPUSK[:]
     print(u'  → %s' % f)

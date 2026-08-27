@@ -764,7 +764,6 @@ function flag(v) { return v !== 0 && v !== '0' && v !== false && v !== ''; }
    Ручки межколонника, поля и кеглей названы «при базовой колонке»: они задают
    значение при модуле 100 %, а на экране показывают своё × модуль. */
 var COL = 340, GUT = 34, PAD = 25, U = 1;
-var LINEYKA = 17 + 11;   // линейка вариантов при базовой колонке: отбивка + высота, как в CSS .lineyka
 function setka(vw, mob) {
   // в мобайле колонка не считается долей: она и есть экран минус поля
   COL = mob ? Math.max(200, Math.round(vw - 40))
@@ -1290,10 +1289,7 @@ function place(c) {
     return;
   }
   if (d.t === 'fig') {
-    // высота, в которую картинка обязана влезть, считает всё, что стоит
-    // с ней в колонке: индекс сверху и линейку вариантов снизу — иначе
-    // линейка ложится на нижний край экрана и режется им
-    var room = Math.max(60, ctx.avail - ctx.lab - (d.varianty ? Math.round(LINEYKA * ctx.u) : 0));
+    var room = Math.max(60, ctx.avail - ctx.lab);
     stavit(figW(d.span, d.w, d.h, room));
     /* Окно ограничивается по высоте только в режиме прокрутки: в остальных
        картинка и так помещается, и полная высота окна отодвинула бы вниз
@@ -2257,14 +2253,6 @@ StendPanel.build({
    ?katalog=1 — путь с папкой на простом файловом сервере не открыть. */
 var katK = 0, katCel = 0, katOt = 0, katT0 = 0, katDvig = false;
 var katS0 = 0, katSdvig = 0, katSled = false, katGryaz = true;
-/* ЗАМЕР ПОД ТРАНСФОРМОМ — НЕ ЗАМЕР. Открывая статью из каталога, движок
-   собирает и раскладывает её, пока лента ещё уменьшена и сдвинута: все
-   коробки, снятые в этот миг (варианты сетки, окна стопок), приходят в
-   масштабе каталога и остаются такими до следующей перекладки — наведение
-   на сетку Герстнера промахивалось ровно после прихода из каталога. Флаг
-   просит одну перекладку в покое, когда переход дошёл до нуля и трансформ
-   снят. // без ручки */
-var katPerelozhit = false;
 var katSlot = null, katKolco = null, katRaspah = false;
 /* katSdvig — сдвиг вдоль оси, ПОПЕРЁК которой лежат ленты: на десктопе он
    вертикальный (ряды стоят вниз), в мобайле горизонтальный (ряды вбок).
@@ -2485,7 +2473,6 @@ function katTickMob(q, s, mash, moy, g, vw, vh) {
     strip.style.transform = '';
     void document.documentElement.scrollHeight;
     window.scrollTo(0, katS0);
-    if (katPerelozhit) { katPerelozhit = false; relayout(); }
   }
   for (var r = 0; r < katRyad.length; r++) {
     var rr = katRyad[r];
@@ -2556,7 +2543,6 @@ function katTick() {
     if (katRaspah) { katRaspah = false; strip.classList.remove('raspah'); }
     strip.style.transform = '';
     cur = tgt = katS0; strip.scrollLeft = katS0;
-    if (katPerelozhit) { katPerelozhit = false; relayout(); }
   }
   /* 4. соседние статьи всплывают снизу. У каждой своя ширина ленты, значит
         и свой сдвиг: титул копии обязан встать в середину экрана. */
@@ -2591,7 +2577,6 @@ function katOtkryt(slug) {
   katMoya = katDlina(katKolco);    // лента другая — и титул копии встанет иначе
   if (katRyad[idx]) katRyad[idx].el.style.display = 'none';
   katGryaz = true;                 // строки пересоберутся к следующему разу
-  katPerelozhit = true;            // коробки сняты под трансформом — перемерить в покое
   katS0 = 0;                       // статья открывается с титула
   strip.lang = LANG;
   katCel = 0; katOt = katK; katT0 = performance.now(); katDvig = true;

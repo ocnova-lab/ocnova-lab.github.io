@@ -52,9 +52,7 @@
     var toki = [];
     ishod.split(/\n|\u2028/).forEach(function (kus, k) {
       if (k) toki.push('\n');
-      // неразрывный пробел — не разделитель: им набор держит предлог при
-      // слове и тире при слове; \s его ловит, а резать по нему нельзя
-      kus.split(/[^\S\u00a0]+/).filter(Boolean).forEach(function (w) { toki.push(w); });
+      kus.split(/\s+/).filter(Boolean).forEach(function (w) { toki.push(w); });
     });
     if (!toki.length) return [];
     el.textContent = '';
@@ -117,14 +115,6 @@
         s.transform = y ? 'translate3d(0,' + y.toFixed(2) + '%,0)' : '';
         stroki[i]._y = y;
       }
-      /* СПРЯТАНА — ЗНАЧИТ НЕТ. Уведённая на 101 % строка стоит в 0,8 px от края
-         маски, а маска лежит на дробной координате: интерлиньяж выведен из
-         модуля и целым не бывает. Компоновщик округляет край клипа до пиксела,
-         и в этот зазор просачивается волосяная полоска ножек букв. Поэтому
-         на нуле строка не просто сдвинута, а снята с отрисовки; на любой
-         доле выше нуля — снова видима. // без ручки */
-      var skryt = q <= 0;
-      if (stroki[i]._skryt !== skryt) { s.visibility = skryt ? 'hidden' : ''; stroki[i]._skryt = skryt; }
     }
   }
 
