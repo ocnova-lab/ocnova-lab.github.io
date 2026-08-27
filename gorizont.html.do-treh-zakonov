@@ -91,19 +91,6 @@
 тянет за собой весь набор и мера строки в знаках не плывёт. Кегль титула —
 коридор. Пиксели остались в границах коридоров, в волосяных линиях датчиков
 хода и в служебной геометрии панели.
-  ЦЕЛЫЙ ИНТЕРЛИНЬЯЖ ПОД МАСКОЙ (2026-08-28). Модуль делает все меры
-  дробными, и маска строки ложилась на дробную координату — компоновщик
-  округлял край клипа и отдавал волосяной шов. Интерлиньяж строк, живущих
-  под маской (титул, дата, врезка, дескрипторы), и отбивка под датой титула
-  выводятся из кегля и ручки и округляются до целого пиксела: маска стоит
-  на целой координате, округлять нечего. Тело статьи не трогается — оно
-  не маскируется, а его ритм задан макетом.
-
-ПОСАДКА (2026-08-28). Колонка, к которой ведёт адрес или притяжение, встаёт
-не на край экрана, а на полмежколонника от него: половина межколонника
-принадлежит колонке — так же, как в colAt курсор над межколонником отдан
-ближней колонке. Без поля первая буква упиралась в край окна. В мобайле
-поля нет: там колонка и так стоит в полях ленты.
 
 ЗАМЕР (П3). Координаты колонок считаются из пролётов и снимаются один раз
 за раскладку (массив stops) — в прокрутке геометрия не читается. Единственный
@@ -352,7 +339,7 @@
   /* Титул занимает экран целиком, поэтому боковые поля даёт он сам:
      без них строка упирается в края там, где мера шире экрана. */
   .col.title { text-align: center; padding-left: var(--gut); padding-right: var(--gut); }
-  .col.title .idx { margin-bottom: var(--ttl-otbivka, calc(43px * var(--u))); }
+  .col.title .idx { margin-bottom: calc(43px * var(--u)); }
   /* мера титула: длину строки держит текст, а не соседи по ленте */
   .col.title h1 { max-width: calc(var(--ttl-mera, 26) * 1ch); margin: 0 auto; }
   .col.title h1 {
@@ -598,7 +585,7 @@ var DEFAULTS = {
   lag: 80,         // инерция, %
   snap: false,     // притяжение к краю колонки
   wake: 150,       // пауза, после которой колонка отдаёт колесо себе, мс
-  naborPut: 100,   // путь набора, % прохода колонки (её ширина + межколонник); 0 — выключено
+  naborPath: 620,  // путь набора: за сколько пикселов хода текст собирается, 0 — выключено
   naborFront: 25,  // фронт перебора, % длины строки
   naborTick: 70,   // перещёлк знака, мс
   naborLatch: false, // защёлка: набранное не рассыпается обратно
@@ -1192,11 +1179,6 @@ function layout() {
     root.style.setProperty('--' + n[0] + '-lh', (n[2] / 100).toFixed(4));
     root.style.setProperty('--' + n[0] + '-tr', (n[3] / 100).toFixed(4) + 'em');
   });
-  // целый интерлиньяж под маской: врезка, дескрипторы (дата титула, индексы,
-  // подписи) и отбивка под датой — в настоящих пикселах, округлённых
-  root.style.setProperty('--lead-lh', Math.round(P.leadSize * u * P.leadLead / 100) + 'px');
-  root.style.setProperty('--dsc-lh', Math.round(P.dscSize * u * P.dscLead / 100) + 'px');
-  root.style.setProperty('--ttl-otbivka', Math.round(43 * u) + 'px');
   root.style.setProperty('--pad', PAD + 'px');
   root.style.setProperty('--ttl-mera', P.ttlMera);
   root.style.setProperty('--var-sila', (P.varSila / 100).toFixed(3));
@@ -1285,13 +1267,6 @@ var ctx = null;
 
 /* Одна колонка. Вынесено отдельно: когда колонка оживает под курсором,
    перекладывать всю ленту незачем — меняется она одна. */
-/* Кегль титула и его интерлиньяж ставятся вместе: интерлиньяж выводится
-   из кегля и ручки и округляется до целого пиксела — строки титула живут
-   под маской, и маска обязана стоять на целой координате. */
-function ttlStavit(e, kegl) {
-  e.style.setProperty('--ttl', kegl.toFixed(1) + 'px');
-  e.style.setProperty('--ttl-lh', Math.round(kegl * P.ttlLead / 100) + 'px');
-}
 function place(c) {
   if (!ctx) return;
   var d = c.d, e = c.el;
@@ -1306,7 +1281,8 @@ function place(c) {
   if (d.t === 'title') {
     stavit(ctx.titleW);
     // кегль титула — модулем, внутри коридора в настоящих пикселах
-    ttlStavit(e, Math.max(P.ttl[0], Math.min(P.ttl[1], P.ttlSize * ctx.u)));
+    e.style.setProperty('--ttl',
+      Math.max(P.ttl[0], Math.min(P.ttl[1], P.ttlSize * ctx.u)).toFixed(1) + 'px');
     return;
   }
   if (d.t === 'tabl') {                  // таблица шириной ровно в колонку
@@ -1392,10 +1368,6 @@ function raskhod() {
   }
   measure();
 }
-/* Поле посадки: половина межколонника принадлежит колонке (см. colAt), и
-   колонка по адресу встаёт на него от края, а не впритык. В мобайле поля
-   нет — там колонка стоит в полях ленты. // без ручки: выведено из межколонника */
-function pole() { return mobile ? 0 : GUT / 2; }
 function yakorX(id) {
   for (var i = 0; i < stops.length; i++) if (stops[i].id === id) return stops[i].y;
   return null;
@@ -1439,11 +1411,14 @@ function layoutMob(vw) {
          одного захода. Замер один на раскладку, не в кадре (П3, то же
          исключение, что и у высоты набора). */
       var kegl = Math.max(P.ttl[0], Math.min(P.ttl[1], P.ttlSize * U));
-      ttlStavit(e, kegl);
+      e.style.setProperty('--ttl', kegl.toFixed(1) + 'px');
       var h1 = e.querySelector('h1');
       if (h1) {
         var dano = h1.clientWidth, nado = h1.scrollWidth;
-        if (nado > dano + 0.5 && dano > 0) ttlStavit(e, Math.max(9, kegl * dano / nado));
+        if (nado > dano + 0.5 && dano > 0) {
+          e.style.setProperty('--ttl',
+            Math.max(9, kegl * dano / nado).toFixed(1) + 'px');
+        }
       }
     }
   });
@@ -1455,15 +1430,6 @@ function layoutMob(vw) {
    с правого края экрана. Поэтому набор идёт ровно тогда, когда текст
    приходит справа; колонка, входящая слева (ход назад), давно набрана и
    эффекта не получает — зона набора живёт у правого края, и только там.
-
-   ПУТЬ НАБОРА — ПРОХОД КОЛОНКИ (2026-08-28). Раньше путь был числом в
-   пикселах (620) и не знал ширины колонки: на 1440 колонка входила целиком
-   за 440 px хода и ещё 180 px стояла с недобранным хвостом у правого края.
-   Теперь путь выводится из самой колонки: её ширина плюс межколонник —
-   вошла целиком вместе со своим межколонником, значит набрана. Широкая
-   колонка (пролёт в две-три) получает путь по своей ширине. Ручка «Путь
-   набора, % прохода колонки» даёт долю этого пути: 100 — ровно проход,
-   меньше — набор кончается раньше, больше — тянется за край.
 
    Несобранные буквы стоят неразрывными пробелами той же ширины, а настоящие
    пробелы остаются пробелами: в моноширинном наборе разбивка строк и высота
@@ -1731,13 +1697,6 @@ function varyTick() {
   }
 }
 
-/* Доля набранного — по входу колонки: путь равен её проходу (ширина плюс
-   межколонник), помноженному на ручку. Вошла целиком — набрана. */
-function naborDolya(c, vw, sl) {
-  var put = (c.w1 + GUT) * P.naborPut / 100;
-  var p = put > 0 ? (vw - (c.l - sl)) / put : 1;
-  return p < 0 ? 0 : p > 1 ? 1 : p;
-}
 function nabor() {
   if (TIHO) {                       // «меньше движения»: текст стоит набранным
     for (var t = 0; t < cols.length; t++) {
@@ -1750,14 +1709,15 @@ function nabor() {
     }
     return;
   }
-  if (mobile || !P.naborPut) return;
+  if (mobile || !P.naborPath) return;
   var vw = window.innerWidth, sl = strip.scrollLeft;
   var tick = Math.floor(performance.now() / Math.max(20, P.naborTick));
   var win = P.naborFront / 100;
   for (var i = 0; i < cols.length; i++) {
     var c = cols[i];
     if (!c.txtEl) continue;
-    var p = naborDolya(c, vw, sl);
+    var p = (vw - (c.l - sl)) / P.naborPath;
+    p = p < 0 ? 0 : p > 1 ? 1 : p;
     if (P.naborLatch && c.pn === 1) p = 1;
     // перещёлк замирает, когда доля перестала меняться: движения нет — нет перебора
     if (p === c.pn) { if (c.hold < 20) c.hold++; } else { c.hold = 0; c.pn = p; }
@@ -1849,7 +1809,7 @@ function vspyshka() {
     var c = cols[i];
     if (!c.txtEl || !c.slova || !c.slova.length) continue;
     // колонка ещё набирается входом — узел не наш, его ведёт nabor()
-    var pin = P.naborPut ? naborDolya(c, vw, sl) : 1;
+    var pin = P.naborPath ? (vw - (c.l - sl)) / P.naborPath : 1;
     if (pin < 1) continue;
     // за краем экрана перебирать нечего, но собрать обратно надо: колонка
     // могла уехать влево посреди вспышки и осталась бы рассыпанной
@@ -1869,7 +1829,8 @@ function naborDsc(tick, win) {
   for (var i = 0; i < cols.length; i++) {
     var c = cols[i];
     if (!c.dsc || !c.dsc.length) continue;
-    var p = naborDolya(c, vw, sl);
+    var p = (vw - (c.l - sl)) / P.naborPath;
+    p = p < 0 ? 0 : p > 1 ? 1 : p;
     for (var k = 0; k < c.dsc.length; k++) {
       var dd = c.dsc[k];
       var out = p >= 1 ? dd.txt : flapText(dd.txt, c.i * 7 + k * 3, p, c.tick, win);
@@ -2017,8 +1978,8 @@ strip.addEventListener('scroll', function () {
 function snap() {
   var best = null, bd = 1e9;
   stops.forEach(function (st) {
-    var d = Math.abs(st.l - pole() - cur);        // покой — с полем посадки
-    if (d < bd) { bd = d; best = st.l - pole(); }
+    var d = Math.abs(st.l - cur);
+    if (d < bd) { bd = d; best = st.l; }
   });
   if (best != null && bd > 1 && bd < COL) rideTo(best);
 }
@@ -2070,7 +2031,6 @@ function gotoHash(h, glide) {
   if (mobile) { t.scrollIntoView({ behavior: glide ? 'smooth' : 'auto' }); return; }
   var x = yakorX(h);
   if (x == null) x = t.offsetLeft;
-  x -= pole();
   if (glide) { rideTo(x); return; }
   cur = tgt = hold(x); strip.scrollLeft = cur; measure();
 }
@@ -2120,7 +2080,7 @@ StendPanel.build({
     ['figFit', 'Выше экрана', 'segment', [
       ['free', 'уже'], ['step', 'пролёт'], ['scroll', 'ход']]],
     ['h', 'Перенабор'],
-    ['naborPut', 'Путь набора, % прохода колонки', 0, 300, 5],
+    ['naborPath', 'Путь набора, px', 0, 2000, 20],
     ['naborFront', 'Фронт перебора, %', 0, 100, 1],
     ['naborTick', 'Перещёлк знака, мс', 20, 300, 5],
     ['naborLatch', '', 'toggle', ['Защёлкивать набранное', 'Отпускать набранное назад']],
@@ -2199,7 +2159,7 @@ StendPanel.build({
     colDolya: 'Column: share of screen, %', col: 'Column, px',
     mod: 'Type: module, %', gut: 'Gutter, px', pad: 'Top and bottom margin, px',
     figFit: 'Taller than screen',
-    naborPut: 'Typing: path, % of column pass', naborFront: 'Typing: front, %',
+    naborPath: 'Typing: path, px', naborFront: 'Typing: front, %',
     naborTick: 'Typing: glyph flip, ms',
     naborFoto: 'Caption image shift, %', vybeg: 'Stack run-out, % of height',
     varSila: 'Grid variants: strength, %', varMs: 'Grid variants: fade-in, ms',
@@ -2236,7 +2196,7 @@ StendPanel.build({
     dscSize: 'Дескриптор — индексы над колонками, подписи к картинкам, строка автора: служебный слой набора.',
     figFit: 'Что делать, когда картинка в высоту экрана не влезает. «Уже» — ширина сходит с шага колонки, зато картинка видна целиком. «Пролёт» — кратность держится, картинка целая, но мельче. «Ход» — ширина как в макете, лишнее уходит в вертикальную прокрутку колонки.',
     wake: 'Сколько лента должна простоять, чтобы колонка с картинками под курсором забрала себе колесо и крутилась по вертикали. Пока едем — такие колонки пролетают мимо.',
-    naborPut: 'Путь набора в долях прохода колонки — её ширины с межколонником. 100 — колонка набрана ровно тогда, когда вошла целиком; меньше — раньше, больше — хвост тянется за край. Колонка входит справа — набирается; входящая слева давно набрана. 0 — перенабор выключен.',
+    naborPath: 'За сколько пикселов хода текст успевает набраться, считая от правого края экрана. Колонка входит справа — набирается; входящая слева давно набрана. 0 — перенабор выключен.',
     naborFront: 'Ширина фронта, на котором буквы перещёлкиваются случайными знаками, в долях длины строки. 0 — буквы просто проявляются без перебора.',
     naborTick: 'Как часто перещёлкивается знак на фронте. Перебор замирает, когда лента встала.',
     naborLatch: 'Набранное больше не рассыпается при ходе назад.',
@@ -2688,7 +2648,7 @@ function setLive(el) {
   var s = [P.colDolya, String(P.col), String(P.mod), P.gut, P.pad, P.mob, P.figFit, P.dbg, P.dbgbuf,
            P.ttlLead, P.ttlTrack, P.leadSize, P.leadLead, P.leadTrack,
            P.mainSize, P.mainLead, P.mainTrack, P.dscSize, P.dscLead, P.dscTrack,
-           P.naborPut, P.maskaPath, P.ttlPath, P.fotoPath,
+           P.naborPath, P.maskaPath, P.ttlPath, P.fotoPath,
            P.gapBig, P.gapMid, P.gapSml,
            P.bg, P.ink, String(P.ttl), P.ttlSize, P.ttlMera].join(',');
   if (s !== sig) { sig = s; layout(); }
