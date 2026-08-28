@@ -669,27 +669,19 @@ var DEFAULTS = {
   katProm: 7,      // каталог: промежуток между строками, % строки
   katTusk: 50,     // каталог: непрозрачность ненаведённых статей, %
   katTuskMs: 220,  // каталог: подсветка догоняет наведение за, мс
-  /* Три движения перехода, у каждого своя пара «длительность + кривая» —
-     ОТДЕЛЬНО НА ВХОД И НА ВЫХОД: возвращаются иначе, чем уходят. */
-  katUmVhMs: 280,  // уменьшение на месте: вход, мс
-  katUmVhEase: 'плавный',
-  katUmVhBez: [0.65, 0, 0.35, 1],
-  katUmVyMs: 240,  // уменьшение: выход, мс
-  katUmVyEase: 'плавный',
-  katUmVyBez: [0.65, 0, 0.35, 1],
-  katNzVhMs: 300,  // отмотка к титулу: вход, мс
-  katNzVhEase: 'торможение',
-  katNzVhBez: [0.33, 1, 0.68, 1],
-  katNzVyMs: 260,  // отмотка: выход, мс
-  katNzVyEase: 'плавный',
-  katNzVyBez: [0.65, 0, 0.35, 1],
-  katSoVhMs: 180,  // приход соседей: вход, мс
-  katSoVhEase: 'торможение',
-  katSoVhBez: [0.33, 1, 0.68, 1],
-  katSoVyMs: 140,  // уход соседей: выход, мс
-  katSoVyEase: 'разгон',
-  katSoVyBez: [0.32, 0, 0.67, 0],
+  /* Три движения перехода — три пары «длительность + кривая». Доли фаз не
+     назначаются отдельно: их задаёт само время, поэтому «сделать уменьшение
+     вдвое длиннее» — это одна ручка, а не две. Общий ход = сумма трёх. */
+  katUmMs: 280,    // каталог: уменьшение на месте, мс
+  katUmEase: 'плавный',
+  katUmBez: [0.65, 0, 0.35, 1],
+  katNazadMs: 300, // каталог: отмотка к титулу, мс
+  katNazadEase: 'торможение',
+  katNazadBez: [0.33, 1, 0.68, 1],
+  katSosMs: 180,   // каталог: приход соседей, мс
   katSosPut: 35,   // каталог: соседи приходят с, % экрана
+  katSosEase: 'торможение',
+  katSosBez: [0.33, 1, 0.68, 1],
   ride: 390,       // проезд к фрагменту и по клавишам, мс
   rideEase: 'плавный',
   rideBez: [0.65, 0, 0.35, 1],
@@ -2242,25 +2234,13 @@ StendPanel.build({
     ['katProm', 'Каталог: промежуток, % строки', 0, 60, 1],
     ['katTusk', 'Каталог: ненаведённые, %', 0, 100, 5],
     ['katTuskMs', 'Каталог: подсветка, мс', 0, 900, 20],
-    /* Три движения перехода — три отдельных кластера, и в каждом вход и выход
-       парами. В одном списке восемнадцать ручек не ищутся: кластер отделяет
-       движение от движения, а пара «мс + кривая» стоит рядом, а не врозь. */
-    ['h', 'Каталог · уменьшение'],
-    ['katUmVhMs', 'Вход, мс', 0, 1500, 20],
-    ['katUmVhEase', 'Кривая входа', 'ease'],
-    ['katUmVyMs', 'Выход, мс', 0, 1500, 20],
-    ['katUmVyEase', 'Кривая выхода', 'ease'],
-    ['h', 'Каталог · отмотка'],
-    ['katNzVhMs', 'Вход, мс', 0, 1500, 20],
-    ['katNzVhEase', 'Кривая входа', 'ease'],
-    ['katNzVyMs', 'Выход, мс', 0, 1500, 20],
-    ['katNzVyEase', 'Кривая выхода', 'ease'],
-    ['h', 'Каталог · соседи'],
-    ['katSoVhMs', 'Вход, мс', 0, 1500, 20],
-    ['katSoVhEase', 'Кривая входа', 'ease'],
-    ['katSoVyMs', 'Выход, мс', 0, 1500, 20],
-    ['katSoVyEase', 'Кривая выхода', 'ease'],
-    ['katSosPut', 'Путь прихода, % экрана', 0, 100, 5],
+    ['katUmMs', 'Каталог · уменьшение, мс', 0, 1500, 20],
+    ['katUmEase', 'Каталог · кривая уменьшения', 'ease'],
+    ['katNazadMs', 'Каталог · отмотка, мс', 0, 1500, 20],
+    ['katNazadEase', 'Каталог · кривая отмотки', 'ease'],
+    ['katSosMs', 'Каталог · соседи, мс', 0, 1500, 20],
+    ['katSosPut', 'Каталог · соседи: путь, % экрана', 0, 100, 5],
+    ['katSosEase', 'Каталог · кривая соседей', 'ease'],
     ['h', 'Ход'],
     ['wheel', 'Колесо, %', 20, 300, 5],
     ['wake', 'Колесо колонке после паузы, мс', 0, 1500, 10],
@@ -2323,13 +2303,10 @@ StendPanel.build({
     katMasht: 'Catalogue: scale, %', katKrop: 'Catalogue: row, % of strip',
     katProm: 'Catalogue: gap, % of row',
     katTusk: 'Catalogue: unhovered, %', katTuskMs: 'Catalogue: highlight, ms',
-    katUmVhMs: 'In, ms', katUmVhEase: 'In curve', katUmVyMs: 'Out, ms', katUmVyEase: 'Out curve',
-    katNzVhMs: 'In, ms', katNzVhEase: 'In curve', katNzVyMs: 'Out, ms', katNzVyEase: 'Out curve',
-    katSoVhMs: 'In, ms', katSoVhEase: 'In curve', katSoVyMs: 'Out, ms', katSoVyEase: 'Out curve',
-    katSosPut: 'Arrival path, % of screen',
-    'h:Каталог · уменьшение': 'Catalogue · shrink',
-    'h:Каталог · отмотка': 'Catalogue · rewind',
-    'h:Каталог · соседи': 'Catalogue · neighbours',
+    katUmMs: 'Catalogue · shrink, ms', katUmEase: 'Catalogue · shrink curve',
+    katNazadMs: 'Catalogue · rewind, ms', katNazadEase: 'Catalogue · rewind curve',
+    katSosMs: 'Catalogue · neighbours, ms', katSosPut: 'Catalogue · neighbours: path, % of screen',
+    katSosEase: 'Catalogue · neighbours curve',
     katEase: 'Catalogue: transition curve',
     wheel: 'Wheel, %', wake: 'Wheel to column after pause, ms',
     lag: 'Inertia, %', ride: 'Ride to fragment, ms', rideEase: 'Ride curve',
@@ -2383,19 +2360,13 @@ StendPanel.build({
     katMasht: 'Во сколько раз каталог уменьшает ленту. 25 % взято с макета: колонка 86 при 340, межколонник 8 при 30.',
     katKrop: 'Строка каталога — окно на уменьшенную ленту. Сколько ленты она показывает: 100 % — всю, вместе с воздухом под коротким текстом; меньше — строка подрезается снизу и статьи стоят плотнее. Подрезка идёт окном и раскладку не трогает. В мобайле крой не участвует: он снимает воздух поперёк ленты, а поперёк неё там стоит вся колонка целиком.',
     katProm: 'Промежуток между статьями, в долях самой строки: расстояние выведено из строки, а не назначено пикселами.',
-    katUmVhMs: 'Лента съёживается НА МЕСТЕ — там, где читатель её оставил, никуда не уезжая. Здесь же сходят на нет картинки, подписи и буферы. На входе это движение первое.',
-    katUmVhEase: 'Кривая уменьшения при входе в каталог.',
-    katUmVyMs: 'Обратный рост при выходе в статью. На выходе это движение последнее: сперва уходят соседи, потом лента отматывается назад, и только потом растёт.',
-    katUmVyEase: 'Кривая роста при выходе.',
-    katNzVhMs: 'Отмотка назад к середине титула и посадка ленты в свой ряд. Куда бы читатель ни ушёл, каталог возвращает его к заголовку.',
-    katNzVhEase: 'Кривая отмотки при входе.',
-    katNzVyMs: 'Обратная отмотка при выходе — лента возвращается туда, где читатель её оставил.',
-    katNzVyEase: 'Кривая отмотки при выходе.',
-    katSoVhMs: 'Соседние статьи приходят к своим местам. Они не наезжают на едущую ленту: движение начинается, когда предыдущее дошло.',
-    katSoVhEase: 'Кривая прихода соседей.',
-    katSoVyMs: 'Уход соседей при выходе в статью. На выходе это движение первое — очередь разворачивается сама.',
-    katSoVyEase: 'Кривая ухода соседей.',
-    katSosPut: 'С какого расстояния соседи приходят и куда уходят, в долях экрана. Ряды выше своего идут сверху, ниже — снизу.',
+    katUmMs: 'Первое движение: лента съёживается НА МЕСТЕ — там, где читатель её оставил, никуда не уезжая. Здесь же сходят на нет картинки, подписи и буферы. 0 — уменьшение мгновенное.',
+    katUmEase: 'Кривая первого движения — уменьшения на месте.',
+    katNazadMs: 'Второе движение: отмотка назад к середине титула и посадка ленты в свой ряд. Куда бы читатель ни ушёл, каталог возвращает его к заголовку.',
+    katNazadEase: 'Кривая второго движения — отмотки.',
+    katSosMs: 'Третье движение: соседние статьи приходят к своим местам. Они не наезжают на едущую ленту, а ждут, пока она встанет. Весь переход длится столько, сколько три движения вместе.',
+    katSosPut: 'С какого расстояния соседи приходят, в долях экрана. Ряды выше своего идут сверху, ниже — снизу.',
+    katSosEase: 'Кривая третьего движения — прихода соседей.',
     katTusk: 'Насколько гаснут статьи, на которые не наведён курсор. 100 — не гаснут вовсе, тогда подсветки нет.',
     katTuskMs: 'За сколько подсветка догоняет наведение. 0 — щелчком.',
     ride: 'Сколько едет лента, когда её зовут клавишей, адресом фрагмента или притяжением. 0 — сразу.',
@@ -2426,7 +2397,7 @@ StendPanel.build({
    работает. На боевом адресе /gorizont/katalog переписан на /gorizont
    правилом в vercel.json; локально (файл .html) адрес живёт запросом
    ?katalog=1 — путь с папкой на простом файловом сервере не открыть. */
-var katK = 0, katCel = 0, katDvig = false;
+var katK = 0, katCel = 0, katOt = 0, katT0 = 0, katDvig = false;
 var katS0 = 0, katSdvig = 0, katSled = false, katGryaz = true;
 /* ЗАМЕР ПОД ТРАНСФОРМОМ — НЕ ЗАМЕР. Открывая статью из каталога, движок
    собирает и раскладывает её, пока лента ещё уменьшена и сдвинута: все
@@ -2441,13 +2412,6 @@ var katSlot = null, katKolco = null, katKolcoTtl = null, katRaspah = false;
    положение догоняет её с отставанием. Инерция одна на весь стенд — своей
    ручки каталогу не заводится, он берёт «Инерция, %». */
 var katSdvigCel = 0;
-/* ПОСАДКА — не листание, и ведёт её не догон. Открывая статью из каталога,
-   мы подменяем строку лентой в геометрии строки: лента встаёт ровно туда, где
-   стояла строка, и на разницу до середины смещается посадка. Дальше её вклад
-   гаснет вместе с долей отмотки — статья ПРИЕЗЖАЕТ в середину тем же
-   движением, которым лента разворачивается обратно в статью. Догон тут не
-   годится: у ленты он настроен без инерции и съел бы весь путь за кадр. */
-var katPosadka = 0;
 /* katSdvig — сдвиг вдоль оси, ПОПЕРЁК которой лежат ленты: на десктопе он
    вертикальный (ряды стоят вниз), в мобайле горизонтальный (ряды вбок).
    katMoya — где встанет титул копии своей ленты и какая её точка обязана
@@ -2511,41 +2475,18 @@ function katTusklost(rr, pod, r) {
 }
 
 /* Доля внутри фазы: k, растянутое с отрезка [lo, hi] на весь 0…1. */
-/* ТРИ ДВИЖЕНИЯ — ТРИ СВОИ ДОЛИ (2026-08-29).
-   Раньше их вела одна доля перехода, а границы фаз считались от общего хода.
-   Это держалось, пока вход и выход были одинаковы. Как только у них разные
-   длительности, общая доля начинает врать: на развороте посреди перехода
-   границы фаз прыгают, и картинка дёргается на ровном месте.
-   Поэтому у каждого движения своя доля. Она едет к цели со своей
-   длительностью и своей кривой, а порядок держит ОЧЕРЕДЬ: следующее
-   начинает, когда предыдущее дошло. На вход очередь «уменьшение → отмотка →
-   соседи», на выход она разворачивается сама — «соседи → отмотка →
-   уменьшение». Разворот с любого места честный: каждая доля продолжает с
-   того, где её застали, и никуда не прыгает. */
-var KATD = [{ q: 0, ot: 0, t0: 0 },    // 0 — уменьшение на месте
-            { q: 0, ot: 0, t0: 0 },    // 1 — отмотка к титулу
-            { q: 0, ot: 0, t0: 0 }];   // 2 — приход соседей
-var KATIMYA = ['Um', 'Nz', 'So'];
-function katRuch(i, vhod, chto) { return P['kat' + KATIMYA[i] + (vhod ? 'Vh' : 'Vy') + chto]; }
-function katHod(now) {
-  var vhod = katCel > 0;
-  var por = vhod ? [0, 1, 2] : [2, 1, 0];
-  var idet = false, zanyato = false;
-  for (var i = 0; i < 3; i++) {
-    var j = por[i], m = KATD[j];
-    if (m.q === katCel) { m.t0 = 0; continue; }
-    if (zanyato) { idet = true; continue; }        // ждёт своей очереди
-    if (!m.t0) { m.t0 = now; m.ot = m.q; }
-    var ms = Math.max(0, katRuch(j, vhod, 'Ms'));
-    var p = ms > 0 ? (now - m.t0) / ms : 1;
-    if (p >= 1) { m.q = katCel; m.t0 = 0; }
-    else {
-      m.q = m.ot + (katCel - m.ot) * evalEase(katRuch(j, vhod, 'Ease'), katRuch(j, vhod, 'Bez'), p);
-      zanyato = true; idet = true;
-    }
-  }
-  katDvig = idet;
-  katK = Math.max(KATD[0].q, KATD[1].q, KATD[2].q);
+function faza(k, lo, hi) {
+  var d = hi - lo;
+  // фаза нулевой длительности проходится мгновенно — но не в покое: при k = 0
+  // движения ещё нет, при k = 1 оно уже целиком позади
+  if (d <= 0) return k <= 0 ? 0 : (k >= hi ? 1 : 0);
+  var p = (k - lo) / d;
+  return p < 0 ? 0 : p > 1 ? 1 : p;
+}
+/* Весь ход перехода — сумма трёх движений. Границы фаз задаёт время, а не
+   отдельные числа: доля каждой фазы это её длительность в общем ходе. */
+function katVsego() {
+  return Math.max(0, P.katUmMs) + Math.max(0, P.katNazadMs) + Math.max(0, P.katSosMs);
 }
 /* ГДЕ СТОИТ СВОЯ ЛЕНТА В КАТАЛОГЕ. Никуда не уезжает: она уменьшается к
    середине экрана и там и остаётся — читатель не теряет то, что читал.
@@ -2740,20 +2681,8 @@ function katPusk(v, bezAdresa) {
   v = v ? 1 : 0;
   if (v === katCel) return;
   // откуда уезжаем: на десктопе прокрутка ленты, в мобайле прокрутка документа
-  if (v) {
-    katS0 = mobile ? (window.pageYOffset || 0) : strip.scrollLeft;
-    ride = null;
-    /* СБОРКА ДО ДВИЖЕНИЯ. Каталог собирает соседние статьи по-настоящему —
-       строит и раскладывает каждую. Делать это первым кадром перехода значит
-       положить всю работу ровно туда, где идёт движение: первый кадр длинный,
-       и переход начинается рывком. Собираем на нажатии, до старта. */
-    if (!katSlot) { katSlot = el('div'); katSlot.id = 'ryady'; document.body.appendChild(katSlot); }
-    if (katGryaz || !katKolco) { katSobrat(); katGryaz = false; }
-  }
-  katCel = v;
-  // каждое движение продолжит с того места, где его застали: доли не сбрасываются
-  for (var i = 0; i < 3; i++) { KATD[i].t0 = 0; KATD[i].ot = KATD[i].q; }
-  katDvig = true;
+  if (v) { katS0 = mobile ? (window.pageYOffset || 0) : strip.scrollLeft; ride = null; }
+  katCel = v; katOt = katK; katT0 = performance.now(); katDvig = true;
   if (!bezAdresa) katAdres(v);
 }
 
@@ -2775,7 +2704,7 @@ function katTickMob(q, qUm, qOt, qSos, s, mash, moy, g, vw, vh) {
   if (q > 0) {
     strip.style.transformOrigin = '0 0';
     strip.style.transform =
-      'translate(' + (vw / 2 * (1 - s) - qOt * (katSdvig + katPosadka)).toFixed(2) + 'px,'
+      'translate(' + (vw / 2 * (1 - s) - qOt * katSdvig).toFixed(2) + 'px,'
       + (vh / 2 - C * s).toFixed(2) + 'px) scale(' + s.toFixed(4) + ')';   // запас — только на десктопе
   } else if (strip.style.transform) {
     /* Тело разморожено снятым классом — ставим прокрутку туда, где она была.
@@ -2785,7 +2714,6 @@ function katTickMob(q, qUm, qOt, qSos, s, mash, moy, g, vw, vh) {
     strip.style.opacity = '';
     void document.documentElement.scrollHeight;
     window.scrollTo(0, katS0);
-    katSdvigCel = katSdvig = katPosadka = 0;
     if (katPerelozhit) { katPerelozhit = false; relayout(); }
   }
   var pod = katPodKursorom(qSos, g, moy, s);
@@ -2811,13 +2739,29 @@ function katTick() {
   // шаг времени для догона подсветки: кадр может быть любой длины
   katTuskT = katTuskPrev ? Math.min(100, now - katTuskPrev) : 16;
   katTuskPrev = now;
-  if (katDvig) katHod(now);
+  if (katDvig) {
+    var vsego = katVsego();
+    var t = vsego > 0 ? (now - katT0) / vsego : 1;
+    if (t >= 1) { t = 1; katDvig = false; }
+    // общий ход ЛИНЕЙНЫЙ: кривую каждое движение накладывает своё, иначе две
+    // кривые легли бы одна на другую и ручка фазы перестала бы значить своё
+    katK = katOt + (katCel - katOt) * t;
+  }
   if (katK === 0 && !katSled) return;        // в статье каталог кадра не тратит
   katSled = katK > 0;                        // ещё проход — вернуть всё на место
   var q = katK, vw = window.innerWidth, vh = window.innerHeight;
   var mash = P.katMasht / 100;
-  // доли трёх движений: их ведёт katHod, каждую своим временем и кривой
-  var qUm = KATD[0].q, qOt = KATD[1].q, qSos = KATD[2].q;
+  /* ТРИ ДВИЖЕНИЯ ОДНОЙ ДОЛИ: уменьшение на месте → отмотка к титулу → приход
+     соседей. Границы задаёт их собственное время, а кривую каждое накладывает
+     своё — на свою долю, а не на общую. Переход при этом остаётся одним
+     состоянием с параметром: обратимым и прерываемым, и на выходе движения
+     идут задом наперёд сами. */
+  var vsegoMs = katVsego();
+  var fUm = vsegoMs > 0 ? P.katUmMs / vsegoMs : 0;
+  var fOt = vsegoMs > 0 ? (P.katUmMs + P.katNazadMs) / vsegoMs : 0;
+  var qUm = evalEase(P.katUmEase, P.katUmBez, faza(q, 0, fUm));
+  var qOt = evalEase(P.katNazadEase, P.katNazadBez, faza(q, fUm, fOt));
+  var qSos = evalEase(P.katSosEase, P.katSosBez, faza(q, fOt, 1));
   var s = 1 + (mash - 1) * qUm;
   document.body.classList.toggle('kat', q > 0);
   krest.style.opacity = 1 - q;
@@ -2888,16 +2832,13 @@ function katTick() {
     if (!katRaspah) { katRaspah = true; strip.classList.add('raspah'); strip.scrollLeft = 0; }
     strip.style.transformOrigin = '0 0';
     strip.style.transform = 'translate(' + (vw / 2 - X * s).toFixed(2) + 'px,'
-      + (vh / 2 * (1 - s) - qOt * (katSdvig + katPosadka) + qUm * katZapas(mash)).toFixed(2)
+      + (vh / 2 * (1 - s) - qOt * katSdvig + qUm * katZapas(mash)).toFixed(2)
       + 'px) scale(' + s.toFixed(4) + ')';
   } else {
     if (katRaspah) { katRaspah = false; strip.classList.remove('raspah'); }
     strip.style.transform = '';
     strip.style.opacity = '';
     cur = tgt = katS0; strip.scrollLeft = katS0;
-    // вернулись в статью — каталог забывает и листание, и посадку: при
-    // следующем входе своя статья снова встаёт в середину
-    katSdvigCel = katSdvig = katPosadka = 0;
     if (katPerelozhit) { katPerelozhit = false; relayout(); }
   }
   /* 4. Соседи приходят последней фазой и с ТОЙ СТОРОНЫ, где стоят: ряды выше
@@ -2929,7 +2870,7 @@ krest.addEventListener('click', function () { katPusk(true); });
 function katOtkryt(slug) {
   var st = statyaPo(slug);
   if (st === STATYA) { katPusk(false); return; }
-  var idx = nomerStati(st), moyBylo = nomerStati(STATYA);
+  var idx = nomerStati(st);
   STATYA = st;
   strip.textContent = ''; cols.length = 0; wins.length = 0;
   katKolco = null;
@@ -2942,21 +2883,11 @@ function katOtkryt(slug) {
   if (katRyad[idx]) katRyad[idx].el.style.display = 'none';
   katGryaz = true;                 // строки пересоберутся к следующему разу
   katPerelozhit = true;            // коробки сняты под трансформом — перемерить в покое
-  /* ПОДМЕНА В ТОЙ ЖЕ ГЕОМЕТРИИ — И НИ ПИКСЕЛА МГНОВЕННО. Строка каталога
-     стояла на своём месте в стопке, а своя лента встаёт в середину: если
-     просто обнулить сдвиг, статья прыгнет на разницу и бесшовность порвётся.
-     Поэтому каталог сдвигается ровно на эту разницу — подменяется одинаковое
-     на одинаковое, — а цель сдвига ставится в ноль, и статья ПРИЕЗЖАЕТ в
-     середину тем же законом догона, которым каталог листается. Движение
-     обязано быть видно: мгновенных перемещений в переходе не бывает. */
-  katPosadka = -(idx - moyBylo) * katShag().shag;
+  katSdvigCel = katSdvig = 0;      // каталог встаёт на новую статью: она в середине
   katS0 = 0;                       // статья открывается с титула
   strip.lang = LANG;
-  katCel = 0;
-  for (var i = 0; i < 3; i++) { KATD[i].t0 = 0; KATD[i].ot = KATD[i].q; }
-  katDvig = true;
+  katCel = 0; katOt = katK; katT0 = performance.now(); katDvig = true;
   adres(false, slug);
-  katTick();                       // трансформ каталога — в том же кадре, без вспышки
 }
 /* КАТАЛОГ ЛИСТАЕТСЯ ПАЛЬЦЕМ. В статье вертикаль ведёт сам документ; в
    каталоге он замер, а статьи стоят поперёк чтения — значит и тянуть их
@@ -3079,11 +3010,7 @@ build();
 layout();
 // зашли прямо по адресу каталога — встаём в него сразу, без перехода:
 // переход показывает, ОТКУДА пришли, а тут приходить неоткуда
-if (katAdresEst()) {
-  katCel = 1; katDvig = false; katS0 = 0;
-  for (var kd = 0; kd < 3; kd++) { KATD[kd].q = KATD[kd].ot = 1; KATD[kd].t0 = 0; }
-  katK = 1;
-}
+if (katAdresEst()) { katK = katCel = katOt = 1; katDvig = false; katS0 = 0; }
 gotoHash(startHash);
 measure();
 var rz = 0;
