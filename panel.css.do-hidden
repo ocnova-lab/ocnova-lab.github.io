@@ -88,11 +88,6 @@
   display: flex; align-items: center; gap: 10px;
   min-height: 40px; padding: 5px 12px;
 }
-/* СПРЯТАНО — ЗНАЧИТ НЕТ. Атрибут hidden даёт display:none стилем браузера,
-   и любой явный display его перебивает: строка с display:flex остаётся на
-   месте, сколько её ни прячь. Стенду это нужно, когда одни ручки показаны,
-   а другие спрятаны переключателем. */
-.st-panel [hidden] { display: none !important; }
 .st-panel .card > .row + .row,
 .st-panel .card > canvas + .row { border-top: 0.5px solid var(--st-hairline); }
 .st-panel label { flex: 1; color: var(--st-text); cursor: help; }

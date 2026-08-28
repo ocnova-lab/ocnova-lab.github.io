@@ -326,10 +326,6 @@
       }
       var host = curCard || panel;
       var row = document.createElement('div'); row.className = 'row';
-      /* Ключ на самой строке: стенду бывает нужно показать одни ручки и
-         спрятать другие — переключателем, а не отдельной панелью. Искать
-         строку по подписи нельзя, подписи повторяются и переводятся. */
-      row.dataset.k = d[0];
       var lab = document.createElement('label'); nadpis(lab, d[0], d[1]);
       bindTip(lab, d[0]);
       row.appendChild(lab);
@@ -410,9 +406,7 @@
         repaints.push(ed.redraw);
         row.appendChild(sel);
         host.appendChild(row);
-        // редактор кривой — отдельный элемент рядом со строкой: прячется вместе с ней
-        ed.cv.dataset.k = easeKey + ':bez';
-        host.appendChild(row === ed.cv ? row : ed.cv);
+        host.appendChild(ed.cv);
         // редактор свёрнут по умолчанию: квадраты кривых — пол-панели;
         // клик по подписи строки раскрывает и прячет
         ed.cv.hidden = true;
