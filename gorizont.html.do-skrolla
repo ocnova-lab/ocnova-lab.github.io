@@ -2056,7 +2056,12 @@ strip.addEventListener('wheel', function (e) {
   var kx = e.deltaMode === 1 ? 100 / 6 : e.deltaMode === 2 ? innerWidth : 1;
   var ky = e.deltaMode === 1 ? 100 / 6 : e.deltaMode === 2 ? innerHeight : 1;
   var dx = e.deltaX * kx, dy = e.deltaY * ky;
-  if (katK > 0) return;                 // в каталоге колесо слушает документ
+  if (katK > 0) {                       // в каталоге колесо листает статьи
+    e.preventDefault();
+    var pr = katPredely(katShag(), nomerStati(STATYA), P.katMasht / 100);
+    katSdvig = Math.max(pr.min, Math.min(pr.max, katSdvig + (Math.abs(dy) >= Math.abs(dx) ? dy : dx)));
+    return;
+  }
   var sc = e.target.closest && e.target.closest('.scroller');
   if (sc && awake(sc) && Math.abs(dy) >= Math.abs(dx)) {
     var top = sc.scrollTop <= 0, bot = sc.scrollTop >= sc.scrollHeight - sc.clientHeight - 1;
@@ -2065,20 +2070,6 @@ strip.addEventListener('wheel', function (e) {
   e.preventDefault();
   var d = Math.abs(dx) > Math.abs(dy) ? dx : dy;
   push(d * P.wheel / 100);
-}, { passive: false });
-
-/* КОЛЕСО В КАТАЛОГЕ СЛУШАЕТ ДОКУМЕНТ, а не ленту. В каталоге лента отдана
-   под указатель (pointer-events: none), колесо приходит на слой рядов — и до
-   ленты событие просто не доходит: слушателя на ней там не слышно вовсе.
-   Щелчок колеса тот же, что у ленты: «Колесо, %» одно на весь стенд. */
-document.addEventListener('wheel', function (e) {
-  if (!katK) return;
-  if (e.target.closest && (e.target.closest('.st-panel') || e.target.closest('.st-gear'))) return;
-  e.preventDefault();
-  var kx = e.deltaMode === 1 ? 100 / 6 : e.deltaMode === 2 ? innerWidth : 1;
-  var ky = e.deltaMode === 1 ? 100 / 6 : e.deltaMode === 2 ? innerHeight : 1;
-  var dx = e.deltaX * kx, dy = e.deltaY * ky;
-  katSdvigCel += (Math.abs(dy) >= Math.abs(dx) ? dy : dx) * P.wheel / 100;
 }, { passive: false });
 
 document.addEventListener('pointermove', function (e) { mx = e.clientX; my = e.clientY; });
@@ -2100,14 +2091,6 @@ function snap() {
 
 window.addEventListener('keydown', function (e) {
   if (mobile || (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName))) return;
-  if (katK > 0) {                       // в каталоге стрелки листают статьи, шаг — ряд
-    var sh = katShag().shag;
-    if (e.key === 'ArrowDown' || e.key === 'PageDown') { katSdvigCel += sh; e.preventDefault(); }
-    else if (e.key === 'ArrowUp' || e.key === 'PageUp') { katSdvigCel -= sh; e.preventDefault(); }
-    else if (e.key === 'Home') { katSdvigCel = -1e6; e.preventDefault(); }   // отсечётся пределами
-    else if (e.key === 'End') { katSdvigCel = 1e6; e.preventDefault(); }
-    return;
-  }
   var step = window.innerWidth * 0.9;
   if (e.key === 'ArrowRight' || e.key === 'PageDown') { rideTo(cur + step); e.preventDefault(); }
   else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { rideTo(cur - step); e.preventDefault(); }
@@ -2408,10 +2391,6 @@ var katS0 = 0, katSdvig = 0, katSled = false, katGryaz = true;
    снят. // без ручки */
 var katPerelozhit = false;
 var katSlot = null, katKolco = null, katKolcoTtl = null, katRaspah = false;
-/* Каталог листается тем же законом, что и лента: колесо ставит ЦЕЛЬ, а
-   положение догоняет её с отставанием. Инерция одна на весь стенд — своей
-   ручки каталогу не заводится, он берёт «Инерция, %». */
-var katSdvigCel = 0;
 /* katSdvig — сдвиг вдоль оси, ПОПЕРЁК которой лежат ленты: на десктопе он
    вертикальный (ряды стоят вниз), в мобайле горизонтальный (ряды вбок).
    katMoya — где встанет титул копии своей ленты и какая её точка обязана
@@ -2775,14 +2754,6 @@ function katTick() {
   if (q === 0) { katKolcoSnyat(); }
   var moy = nomerStati(STATYA);              // в каком ряду стоит своя лента
   var g = katShag();
-  /* Листание: цель держится в пределах, положение её догоняет. Отсечка стоит
-     тут, а не в колесе, — пределы зависят от масштаба и от того, в какой
-     статье читатель, и в кадре они всегда свежие. */
-  var pr = katPredely(g, moy, mash);
-  katSdvigCel = Math.max(pr.min, Math.min(pr.max, katSdvigCel));
-  var lagK = TIHO ? 1 : 1 - P.lag / 100;
-  katSdvig += (katSdvigCel - katSdvig) * (lagK <= 0 ? 1 : lagK);
-  if (Math.abs(katSdvigCel - katSdvig) < 0.5) katSdvig = katSdvigCel;
   if (mobile) { katTickMob(q, qUm, qOt, qSos, s, mash, moy, g, vw, vh); return; }
 
   /* 1. Нечитаемые колонки сходят на нет — в фазе уменьшения, вместе с самой
@@ -2883,7 +2854,6 @@ function katOtkryt(slug) {
   if (katRyad[idx]) katRyad[idx].el.style.display = 'none';
   katGryaz = true;                 // строки пересоберутся к следующему разу
   katPerelozhit = true;            // коробки сняты под трансформом — перемерить в покое
-  katSdvigCel = katSdvig = 0;      // каталог встаёт на новую статью: она в середине
   katS0 = 0;                       // статья открывается с титула
   strip.lang = LANG;
   katCel = 0; katOt = katK; katT0 = performance.now(); katDvig = true;
@@ -2905,8 +2875,8 @@ document.addEventListener('pointermove', function (e) {
   if (!katPal) return;
   var dx = katPal.x - e.clientX;
   katTyanul = Math.max(katTyanul, Math.abs(dx), Math.abs(katPal.y - e.clientY));
-  // палец ведёт один в один: цель и положение идут вместе, догонять нечего
-  katSdvigCel = katSdvig = katPal.s + dx;
+  var pr = katPredely(katShag(), nomerStati(STATYA), P.katMasht / 100);
+  katSdvig = Math.max(pr.min, Math.min(pr.max, katPal.s + dx));
 });
 document.addEventListener('pointerup', function () { katPal = null; });
 document.addEventListener('pointercancel', function () { katPal = null; katTyanul = 0; });
