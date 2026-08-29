@@ -1352,13 +1352,6 @@ function layout() {
   katGryaz = true;                        // перекладка — копии каталога устарели
   cols.forEach(function (c) { c.katD = undefined; });
   cols.forEach(function (c) {
-    if (c.d.t !== 'title') return;
-    /* Путь ухода титула: своя высота плюс верхнее поле ленты — столько надо
-       поднять, чтобы он ушёл за верхний край экрана целиком. Замер один за
-       раскладку, не в кадре (П3). */
-    c.uhodPut = PAD + c.el.offsetHeight;
-  });
-  cols.forEach(function (c) {
     c.raskrY = null;
     if (c.d.t !== 'figs' || !c.sc || !c.raskr.length) return;
     var r0 = korobka(c.sc), st = c.sc.scrollTop;
@@ -1655,21 +1648,6 @@ function flapText(target, seed, p, tick, win) {
    разных появления по одному закону — доля считается от того, насколько
    колонка вошла с правого края. Строки режутся заново после каждой
    перекладки: разбивка зависит от ширины, а её знает только браузер. */
-/* ДВОЕ НА ОДНОМ СВОЙСТВЕ НЕ УЖИВАЮТСЯ (грабля 3). Титульную колонку двигают
-   две вещи: посадка на общую базовую в каталоге и уход за верхний край в
-   статье. Слагаемые считают разные функции, а пишет их одна — и последней,
-   когда оба уже посчитаны. */
-function ttlPrimenit() {
-  for (var i = 0; i < cols.length; i++) {
-    var c = cols[i];
-    if (c.d.t !== 'title') continue;
-    var y = (c.katY || 0) + (c.uhodY || 0);
-    var tr = y ? 'translateY(' + y.toFixed(2) + 'px)' : '';
-    if (c.ttlTr !== tr) { c.el.style.transform = tr; c.ttlTr = tr; }
-    return;
-  }
-}
-
 function maskaRezat() {
   for (var i = 0; i < cols.length; i++) {
     var c = cols[i];
@@ -1702,22 +1680,11 @@ function maskaTtl(vw, sl) {
   var vyhod = (katK > 0 || !P.ttlPath || levo >= 0) ? 1 : Math.max(0, 1 + levo / P.ttlPath);
   var vhod = (TIHO || !P.ttlMs) ? 1
     : Math.min(1, (performance.now() - T0) / P.ttlMs);
-  /* ПРИХОД — МАСКОЙ, УХОД — ЗА КРАЙ (2026-08-29).
-     Маска на строку хороша для прихода: он идёт по ВРЕМЕНИ, всегда доходит до
-     конца, и разрез посреди глифов живёт доли секунды — читается как набор.
-     Уход шёл той же маской, но он идёт по ПОЛОЖЕНИЮ ленты: остановился на
-     полпути — и строка так и стоит разрезанной поперёк букв, посреди страницы.
-     Защёлкой это не лечится: щелчок — мгновенное перемещение, а движение
-     обязано быть видно (П9).
-     Поэтому уход больше не маска. Титул уезжает наверх ЦЕЛИКОМ, а режет его
-     верхний край экрана — тот самый край, за который уходит всё остальное.
-     Разрез тогда всегда на границе, а не посреди набора, и сколько строк в
-     титуле — две, три, четыре — не имеет значения: край у них общий. */
-  StendMaska.pokazat(c.maska, vhod, {
+  StendMaska.pokazat(c.maska, Math.min(vhod, vyhod), {
     sdvig: P.maskaSdvig / 100,
+    storona: vyhod < 1 ? 'sverh' : 'sniz',
     izing: function (q) { return evalEase(P.maskaEase, P.maskaBez, q); }
   });
-  c.uhodY = -(1 - evalEase(P.maskaEase, P.maskaBez, vyhod)) * (c.uhodPut || 0);
 }
 
 function maska() {
@@ -2957,13 +2924,15 @@ function katTick() {
      свою величину. В каталоге дата это метка статьи, и мельчить её незачем;
      растёт она вверх от своего низа, поэтому отбивка до титула не съедается. */
   if (ttlKol) {
-    // перенос титульной колонки пишет ttlPrimenit — здесь только слагаемое
-    ttlKol.katY = (ttlKol.ttlSdvig || 0) * qUm;
+    var tsd = (ttlKol.ttlSdvig || 0) * qUm;
+    var tr = qUm > 0 ? 'translateY(' + tsd.toFixed(2) + 'px)' : '';
     var sc = qUm > 0 ? 'scale(' + (1 / s).toFixed(4) + ')' : '';
+    ttlKol.el.style.transform = tr;
     var dat = ttlKol.el.querySelector('.idx');
     if (dat) dat.style.transform = sc;
+    // титул кольца живёт в том же переменном масштабе, что и своя лента
     if (katKolcoTtl) {
-      katKolcoTtl.style.transform = ttlKol.katY ? 'translateY(' + ttlKol.katY.toFixed(2) + 'px)' : '';
+      katKolcoTtl.style.transform = tr;
       var kd = katKolcoTtl.querySelector('.idx');
       if (kd) kd.style.transform = sc;
     }
@@ -3121,7 +3090,6 @@ function setLive(el) {
   raskrytie();
   varyTick();
   katTick();
-  ttlPrimenit();     // перенос титула — одним писателем, после обоих слагаемых
   var now = performance.now();
   if (!rested()) { setLive(null); lastLook = 0; }
   else if (now - lastLook > 90) {
