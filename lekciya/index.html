@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Лекция — алгоритмические сетки</title>
+<link rel="stylesheet" href="/panel.css" />
+<style>
+  /* ══════════════════════════════════════════════════════════════════
+     СТЕНД «ЛЕКЦИЯ» — статья и презентация одним документом.
+     Материал: lekciya-data.js (собран из статьи про алгоритмические
+     сетки сборщиком lekciya-sobrat.js), картинки — gorizont-img/.
+
+     ЗАКОН
+
+     Две оси, и каждая занята одним делом.
+       ГОРИЗОНТАЛЬ — адрес: часть лекции. Клавиши ← →, клик по краевым
+       полям, защёлка в конце разворота. Никогда не читают.
+       ВЕРТИКАЛЬ — чтение: разворот части. Никогда не адресует.
+       Приём со склада: «Порог длины скролла разводит уровни навигации» —
+       короткий жест читает, жест за упором переводит на следующую часть.
+
+     Несущий — 3. Доли и Коридор.
+       Смотрит: на окно. Реагирует: плавно.
+       Объявленный модуль один — КОЛОНКА ТЕКСТА: доля окна (ручка
+       «Колонка, % ширины»). Из неё выведено всё остальное:
+         --u   = колонка / 360, зажат коридором «Модуль: коридор, %»;
+         кегли, отбивки и зазоры множатся на --u, поэтому мера строки
+         в знаках не плывёт, а одна ручка тянет за собой весь набор;
+         линия дескрипторов = центр + колонка/2 + зазор + доля колонки;
+         тезис = от левого поля до этой линии — рифма, а не совпадение;
+         цитата = доля ОКНА (она не в колонке живёт, а поперёк неё).
+
+     14. Защёлка ◌ (КАНДИДАТ — стенд первый прецедент).
+       Смотрит: на скролл. Реагирует: щелчком.
+       Разворот дочитан до упора — дальнейший ход копится в запас;
+       набрался запас («Защёлка: запас, % экрана») — переход к следующей
+       части. Обратный ход на самом верху уводит к предыдущей.
+       Порог существует, чтобы переход был намерением, а не инерцией
+       последнего толчка: без него лента уезжала бы на выбеге.
+
+     1. Перелом — единственный и качественный: в мобайле дескрипторы
+       сходят с силовой линии и встают под своим абзацем, колонка
+       занимает всё поле. Порог — ручка, не @media.
+
+     ДВА УРОВНЯ ЧТЕНИЯ (приём «Оригинал — Копия»).
+       Тезис живёт дважды: крупно на обложке части (по нему ищут) и
+       перед своим фрагментом в развороте (по нему вспоминают). Первое
+       чтение идёт по тексту, второе и дальше — по тезисам. Тумблер
+       «Сценический режим» гасит разворот целиком: на проекторе остаётся
+       обложка и тезисы, текст остаётся у читающего.
+
+     ЧИСЛА (П2). Пиксели остались в границах коридоров, в волосяных
+     линиях, в поле экрана и в служебной геометрии панели. Кегли, зазоры
+     и отбивки заданы при базовой колонке 360 и множатся на --u.
+
+     ЗАМЕР (П3). Единственный замер — где в набранном абзаце оказалась
+     сноска: до отрисовки этого не знает никто. Замер идёт раз на
+     раскладку (ресайз, правка ручки), не в кадре прокрутки.
+
+     ПАРАМЕТРЫ АДРЕСА
+       ?chast=N   открыть часть N (1…10)
+       ?stop=мс   стоп-кадр: движение замирает через N мс
+       ?reset=1   сброс ручек, ?theme=nothing — вторая тема панели
+     ══════════════════════════════════════════════════════════════════ */
+
+  @font-face { font-family: "Even Mono"; font-weight: 400; font-style: normal;
+    src: url("/fonts/EvenMono-Regular.woff2") format("woff2"),
+         url("/fonts/EvenMono-Regular.woff") format("woff"); font-display: swap; }
+  @font-face { font-family: "JetBrains Mono"; font-weight: 400; font-style: normal;
+    src: url("/fonts/JetBrainsMono-Regular.woff2") format("woff2"); font-display: swap; }
+  @font-face { font-family: "JetBrains Mono"; font-weight: 700; font-style: normal;
+    src: url("/fonts/JetBrainsMono-Bold.woff2") format("woff2"); font-display: swap; }
+  @font-face { font-family: "Editorial New"; font-weight: 400; font-style: normal;
+    src: url("/fonts/EditorialNew-Regular.woff") format("woff"); font-display: swap; }
+  @font-face { font-family: "Editorial New"; font-weight: 700; font-style: normal;
+    src: url("/fonts/EditorialNew-Bold.woff") format("woff"); font-display: swap; }
+  @font-face { font-family: "Dent Display"; font-weight: 400; font-style: normal;
+    src: url("/fonts/DentDisplay-Regular.woff2") format("woff2"),
+         url("/fonts/DentDisplay-Regular.woff") format("woff"); font-display: swap; }
+  @font-face { font-family: "Pragmatica Next"; font-weight: 100 900; font-style: normal;
+    src: url("/fonts/PragmaticaNextVF.woff") format("woff"); font-display: swap; }
+
+  :root {
+    /* ставятся из JS: --pole поле экрана, --col колонка текста,
+       --u модуль (колонка / 360), --dw ширина дескриптора,
+       --dz зазор до дескриптора, --lin правая линия дескрипторов */
+    --pole: 30px; --col: 360px; --u: 1; --dw: 180px; --dz: 20px;
+    --bg: #ffffff; --ink: #111111; --akc: #1b2db3;
+    --hair: color-mix(in srgb, var(--ink) 22%, var(--bg));
+    --f-text: "Even Mono", ui-monospace, monospace;
+    --f-tezis: "Even Mono", ui-monospace, monospace;
+    --f-desk: "JetBrains Mono", ui-monospace, monospace;
+    --f-cit: "Even Mono", ui-monospace, monospace;
+    --f-pod: "Editorial New", Times, serif;
+    --f-obl: "Even Mono", ui-monospace, monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: var(--f-text);
+    overflow: hidden; overscroll-behavior: none;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── две оси ───────────────────────────────────────────────────────
+     #lenta едет по X (адрес), .stopka внутри части — по Y (чтение). */
+  #scena { position: fixed; inset: 0; overflow: hidden; }
+  /* лента прижата к сцене целиком (inset: 0), едет только transform'ом */
+  #lenta { position: absolute; inset: 0; display: flex; will-change: transform; }
+  .chast { flex: 0 0 100vw; width: 100vw; height: 100%; position: relative;
+           overflow: hidden; }
+  /* стопка стоит в начале своей части, вертикаль ведёт transform */
+  .stopka { position: absolute; left: 0; top: 0; width: 100%; will-change: transform; }
+
+  /* ── обложка части: первый экран, один тезис ── */
+  .oblozhka { height: 100vh; position: relative; }
+  .oblozhka .nomer {
+    /* координаты: левое верхнее поле экрана, обе из ручки «Поле экрана» */
+    position: absolute; left: var(--pole); top: var(--pole);
+    font-family: var(--f-desk); font-size: calc(var(--desk-fs) * var(--u));
+    letter-spacing: .04em;
+  }
+  /* Заголовок части стоит на той же силовой линии, что и тезис: от левого
+     поля до правой границы дескрипторов. Место по вертикали — доля
+     экрана (ручка «Обложка: линия, % высоты»). */
+  .oblozhka h2 {
+    /* координаты: левое поле по горизонтали, доля высоты экрана по вертикали */
+    position: absolute; left: var(--pole); top: var(--obl-top, 26%);
+    width: calc(50% + var(--col) / 2 + var(--dz) + var(--dw) - var(--pole));
+    font-family: var(--f-obl); font-weight: 400;
+    font-size: calc(var(--obl-fs) * var(--u));
+    line-height: var(--obl-lh); letter-spacing: -.02em;
+  }
+  .oblozhka .hint {
+    /* координаты: левое поле + место шестерёнки панели (служебная геометрия) */
+    position: absolute; left: calc(var(--pole) + 46px); bottom: var(--pole);
+    font-family: var(--f-desk); font-size: calc(var(--desk-fs) * var(--u));
+    opacity: .55;
+  }
+
+  /* ── разворот: второй слой, наезжает снизу ── */
+  .razvorot { position: relative; padding-bottom: 60vh; }
+
+  /* колонка текста стоит по центру окна, дескрипторы — справа от неё */
+  .abzac {
+    width: var(--col); margin: 0 auto;
+    font-size: calc(var(--text-fs) * var(--u));
+    line-height: var(--text-lh); letter-spacing: var(--text-tr);
+    white-space: pre-line;
+    padding-bottom: calc(var(--text-fs) * var(--u) * var(--text-lh));
+  }
+  .abzac a { color: inherit; text-decoration: underline; text-underline-offset: .18em; }
+  .kod { font-family: var(--f-desk); font-size: .88em; }
+
+  /* Сноска — капсула ростом в строчную букву (1ex): она встаёт в строку,
+     не разгоняя интерлиньяж. Радиус ручкой; на одной цифре выходит круг,
+     на двух — прямоугольник со скруглением. */
+  .sn {
+    display: inline-flex; align-items: center; justify-content: center;
+    height: calc(1ex * var(--sn-rost)); min-width: calc(1ex * var(--sn-rost));
+    padding: 0 .32ex; margin-left: .2em;
+    border-radius: var(--sn-r); background: var(--akc); color: var(--bg);
+    font-family: var(--f-desk); font-size: calc(var(--sn-fs) * 1em);
+    line-height: 1; letter-spacing: 0; vertical-align: baseline;
+    cursor: pointer; user-select: none;
+  }
+
+  /* Дескриптор выведен абсолютом, координаты объявлены законом:
+       left = центр окна + половина колонки + зазор
+       top  = базовая линия своей сноски, сдвинутая очередью вниз,
+              чтобы соседи не наезжали (ставится из JS)
+     Ширина — доля колонки (ручка «Дескриптор: доля колонки, %»). */
+  .desk {
+    /* координаты: left выведен формулой выше, top ставит очередь замера */
+    position: absolute; left: calc(50% + var(--col) / 2 + var(--dz));
+    width: var(--dw);
+    font-family: var(--f-desk); font-size: calc(var(--desk-fs) * var(--u));
+    line-height: var(--desk-lh); letter-spacing: -.01em;
+  }
+  /* цифра, пропуск, текст — одной строкой набора: капсула та же, что в
+     тексте, поэтому сноска и дескриптор читаются как одна вещь */
+  .desk .cap {
+    display: inline-flex; align-items: center; justify-content: center;
+    height: calc(1ex * var(--sn-rost)); min-width: calc(1ex * var(--sn-rost));
+    padding: 0 .32ex; margin-right: var(--desk-propusk);
+    border-radius: var(--sn-r); background: var(--akc); color: var(--bg);
+    font-size: calc(var(--sn-fs) * 1em); line-height: 1;
+    vertical-align: baseline;
+  }
+  .desk.gorit { color: var(--akc); }
+
+  /* ── мобайл: единственный перелом ──
+     Дескриптор сходит с силовой линии и встаёт под своим абзацем — он и в
+     разметке стоит там же, меняется только способ постановки. */
+  body.uzko .desk { position: static; width: var(--col); margin: 0 auto;
+                    padding-bottom: calc(var(--desk-fs) * var(--u)); }
+  body.uzko .tezis, body.uzko .oblozhka h2 { width: var(--col); }
+  body.uzko .oblozhka h2 { left: var(--pole); }
+  body.bez-desk .desk { display: none; }
+
+  /* Тезис: от левого поля до правой линии дескрипторов. Ширина —
+     разность двух объявленных величин, а не подобранное число. */
+  .tezis {
+    margin-left: var(--pole);
+    width: calc(50% + var(--col) / 2 + var(--dz) + var(--dw) - var(--pole));
+    font-family: var(--f-tezis); font-weight: var(--tezis-w, 400);
+    font-size: calc(var(--tezis-fs) * var(--u));
+    line-height: var(--tezis-lh); letter-spacing: -.025em;
+    padding: calc(var(--tezis-ot) * var(--u)) 0 calc(var(--tezis-ot) * var(--u) * .5);
+  }
+
+  /* Цитата живёт поперёк колонки, поэтому её мера — доля ОКНА. */
+  .citata {
+    width: var(--cit-w); margin: 0 auto; text-align: center;
+    font-family: var(--f-cit); font-size: calc(var(--cit-fs) * var(--u));
+    line-height: var(--cit-lh); letter-spacing: -.015em;
+    padding: calc(var(--cit-ot) * var(--u)) 0;
+  }
+
+  .pod {
+    width: var(--col); margin: 0 auto; text-align: center;
+    font-family: var(--f-pod); font-weight: var(--pod-w, 700);
+    font-size: calc(var(--pod-fs) * var(--u)); line-height: 1.2;
+    padding-top: calc(var(--pod-sv) * var(--u));
+    padding-bottom: calc(var(--pod-sn) * var(--u));
+  }
+
+  /* ── картинки ──
+     Ширина и место считаются в JS (доля окна, потолок по высоте экрана,
+     якорь слева / по центру / справа) — там же и вывод координат. */
+  .figbox { position: relative; padding: calc(var(--fig-ot) * var(--u)) 0; }
+  .figbox .ramka { display: block; }
+  .figbox img, .figbox .draw { display: block; width: 100%; height: auto; }
+  .figbox .draw svg { display: block; width: 100%; height: auto; color: var(--ink); }
+  .ryad { display: flex; gap: var(--fig-shov); align-items: flex-start; }
+  .ryad > * { flex: 1 1 0; min-width: 0; }
+  .podpis {
+    font-family: var(--f-desk); font-size: calc(var(--desk-fs) * var(--u));
+    line-height: var(--desk-lh); letter-spacing: -.01em;
+    width: var(--dw); padding-top: calc(10px * var(--u)); white-space: pre-line;
+  }
+
+  /* ── адрес: где я в лекции (фиксирован, не едет с лентой) ── */
+  #adres {
+    /* координаты: поле экрана со всех трёх сторон; адрес не едет с лентой */
+    position: fixed; top: var(--pole); left: var(--pole); right: var(--pole);
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-family: var(--f-desk); font-size: calc(var(--desk-fs) * var(--u));
+    letter-spacing: .02em; pointer-events: none; z-index: 5;
+  }
+  #adres .imya { opacity: .55; }
+  #adres .schet { display: flex; gap: .8em; align-items: baseline; }
+  #hod { position: fixed; left: 0; right: 0; bottom: 0; height: 2px;
+         background: transparent; z-index: 5; pointer-events: none; }
+  #hod i { display: block; height: 100%; width: 0; background: var(--akc); }
+
+  /* краевые поля клика: горизонталь листается и мышью */
+  /* краевые поля: во всю высоту, ширина — доля окна из ручки «Клик-поле» */
+  .kray { position: fixed; top: 0; bottom: 0; width: var(--klik); z-index: 4;
+          cursor: pointer; }
+  .kray.l { left: 0; } .kray.r { right: 0; }
+
+  /* ── титул лекции: нулевая часть ── */
+  .titul { height: 100vh; display: flex; flex-direction: column;
+           justify-content: center; align-items: center; text-align: center;
+           padding: 0 var(--pole); }
+  .titul h1 {
+    font-family: var(--f-obl); font-weight: 400; white-space: pre-line;
+    font-size: calc(var(--obl-fs) * var(--u)); line-height: var(--obl-lh);
+    letter-spacing: -.025em; max-width: calc(var(--col) * 2.4);
+  }
+  .titul .meta { font-family: var(--f-desk);
+                 font-size: calc(var(--desk-fs) * var(--u));
+                 padding-bottom: calc(30px * var(--u)); letter-spacing: .04em; }
+
+  /* СЦЕНИЧЕСКИЙ РЕЖИМ. На проекторе остаётся то, по чему говорят:
+     обложка, тезисы, цитаты и картинки. Мелкий набор и дескрипторы
+     уходят — их читают с сорока сантиметров, а не с пяти метров.
+     Отбивка тезиса при этом своя, долей экрана: тезисы идут по одному. */
+  body.scena .abzac, body.scena .desk, body.scena .podpis { display: none; }
+  body.scena .tezis { padding: calc(var(--scena-ot) * 1vh) 0; }
+</style>
+</head>
+<body>
+<div id="scena"><div id="lenta"></div></div>
+<div id="adres"><span class="imya"></span><span class="schet"></span></div>
+<div id="hod"><i></i></div>
+<div class="kray l"></div><div class="kray r"></div>
+
+<script src="/panel.js"></script>
+<script src="/panel-lib/palitra.js"></script>
+<script src="/panel-lib/toggle.js"></script>
+<script src="/panel-lib/segment.js"></script>
+<script src="/panel-lib/koridor.js"></script>
+<script src="/panel-lib/skroll.js"></script>
+<script src="/lekciya-data.js"></script>
+<script>
+(function () {
+'use strict';
+
+var D = window.LEKCIYA;
+var Q = new URLSearchParams(location.search);
+var STOP = Q.has('stop') ? Math.max(0, +Q.get('stop') || 0) : null;
+var zamerlo = false;                       // стоп-кадр: движение выключено
+
+/* ── изинги (слот панели: пресет или своя кривая) ───────────────── */
+var EASES = {
+  'линейный':   function (t) { return t; },
+  'разгон':     function (t) { return t * t * t; },
+  'торможение': function (t) { return 1 - Math.pow(1 - t, 3); },
+  'плавный':    function (t) { return t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; },
+};
+var BEZ_APPROX = {
+  'линейный': [0.25, 0.25, 0.75, 0.75], 'разгон': [0.32, 0, 0.67, 0],
+  'торможение': [0.33, 1, 0.68, 1], 'плавный': [0.65, 0, 0.35, 1],
+};
+function bezY(b, t) {
+  var x1 = b[0], y1 = b[1], x2 = b[2], y2 = b[3], s = t;
+  for (var i = 0; i < 8; i++) {
+    var x = 3 * (1 - s) * (1 - s) * s * x1 + 3 * (1 - s) * s * s * x2 + s * s * s;
+    var dx = 3 * (1 - s) * (1 - s) * x1 + 6 * (1 - s) * s * (x2 - x1) + 3 * s * s * (1 - x2);
+    if (Math.abs(dx) < 1e-6) break;
+    s -= (x - t) / dx; if (s < 0) s = 0; if (s > 1) s = 1;
+  }
+  return 3 * (1 - s) * (1 - s) * s * y1 + 3 * (1 - s) * s * s * y2 + s * s * s;
+}
+function evalEase(name, bez, t) {
+  if (t <= 0) return 0; if (t >= 1) return 1;
+  if (name === 'bezier') return bezY(bez, t);
+  return (EASES[name] || EASES['плавный'])(t);
+}
+
+/* ── алфавит гарнитур (свод, раздел 2) ──────────────────────────── */
+var GARNITURY = {
+  even:       '"Even Mono", ui-monospace, monospace',
+  jet:        '"JetBrains Mono", ui-monospace, monospace',
+  editorial:  '"Editorial New", Times, serif',
+  dent:       '"Dent Display", "Even Mono", monospace',
+  pragmatica: '"Pragmatica Next", "Even Mono", monospace',
+  times:      'Times, "Times New Roman", serif',
+};
+var SPISOK_GARNITUR = [['even', 'Even Mono'], ['jet', 'JetBrains Mono'],
+  ['editorial', 'Editorial New'], ['dent', 'Dent Display'],
+  ['pragmatica', 'Pragmatica Next'], ['times', 'Times']];
+
+/* ── ручки ───────────────────────────────────────────────────────── */
+var DEFAULTS = Object.assign({
+  pole: 30, kolonka: 25, kolKoridor: [300, 560], modul: [70, 150],
+  textFs: 18, textLh: 165, textTr: 1, textFace: 'even',
+  deskFs: 11, deskDolya: 50, deskZazor: 20, deskShov: 16,
+  deskPropusk: 100, deskLh: 145, deskFace: 'jet',
+  snR: 20, snFs: 55, snRost: 100,
+  tezisFs: 50, tezisLh: 106, tezisOt: 60, tezisFace: 'even',
+  citFs: 35, citLh: 128, citDolya: 60, citOt: 80, citFace: 'even',
+  podFs: 22, podSv: 100, podSn: 40, podFace: 'editorial',
+  oblFs: 62, oblLh: 106, oblTop: 26, oblFace: 'even',
+  figDolya: 100, figPotolok: 88, figShov: 20, figOt: 60,
+  zashelka: 45, zashelkaPauza: 320, zashelkaNazad: true,
+  proezdX: 620, proezdXEase: 'плавный', proezdXBez: [0.65, 0, 0.35, 1],
+  klik: 7, perelom: 760,
+  scena: false, scenaOt: 26, deskVidny: true, adresViden: true,
+  palette: 'belaya', bg: '#ffffff', ink: '#111111', akc: '#1b2db3',
+}, StendSkroll.ZNACHENIYA);
+
+var P = Object.assign({}, DEFAULTS);
+try { Object.assign(P, JSON.parse(localStorage.getItem('lekciya-params') || '{}')); } catch (e) {}
+Object.keys(DEFAULTS).forEach(function (k) {           // адрес правит ручки
+  if (Q.has(k)) {
+    var v = Q.get(k);
+    P[k] = typeof DEFAULTS[k] === 'number' ? +v
+         : typeof DEFAULTS[k] === 'boolean' ? v !== '0' : v;
+  }
+});
+
+/* ── материал → разметка ────────────────────────────────────────── */
+function ekr(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+/* сноска в тексте помечена ⟦N⟧ сборщиком; `код` и ссылки — из статьи */
+function nabor(t) {
+  return ekr(t)
+    .replace(/`([^`]+)`/g, '<span class="kod">$1</span>')
+    .replace(/(https?:\/\/[^\s,]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>')
+    .replace(/⟦(\d+)⟧/g, '<span class="sn" data-n="$1">$1</span>');
+}
+function el(tag, cls, html) {
+  var n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (html != null) n.innerHTML = html;
+  return n;
+}
+/* Схема векторная, её линии объявлены currentColor — вставляем разметкой,
+   чтобы цвет пришёл от набора. Место держит пропорция из данных. */
+var shemy = {};
+function kartinka(g) {
+  if (/\.svg$/.test(g.src)) {
+    var box = el('span', 'draw');
+    box.style.aspectRatio = g.w + ' / ' + g.h;
+    box.dataset.src = g.src;
+    if (shemy[g.src]) { box.innerHTML = shemy[g.src]; return box; }
+    fetch(D.img + g.src).then(function (r) { return r.text(); }).then(function (t) {
+      shemy[g.src] = t;
+      [].forEach.call(document.querySelectorAll('.draw[data-src="' + g.src + '"]'),
+        function (n) { n.innerHTML = t; });
+    });
+    return box;
+  }
+  var im = document.createElement('img');
+  im.src = D.img + g.src; im.alt = ''; im.draggable = false;
+  im.width = g.w; im.height = g.h;              // место занято до загрузки
+  return im;
+}
+
+var lenta = document.getElementById('lenta');
+var chasti = [];                                // {node, stopka, razvorot, poz}
+
+function chastNode(nazvanie, nomer) {
+  var ch = el('section', 'chast');
+  var st = el('div', 'stopka');
+  ch.appendChild(st); lenta.appendChild(ch);
+  return { node: ch, stopka: st };
+}
+
+/* титул — нулевая часть: у неё нет разворота, только экран */
+(function titul() {
+  var c = chastNode();
+  var t = el('div', 'titul');
+  t.appendChild(el('div', 'meta', ekr(D.titul.pod + ' · ' + D.titul.data)));
+  t.appendChild(el('h1', null, ekr(D.titul.nazvanie)));
+  c.stopka.appendChild(t);
+  chasti.push({ node: c.node, stopka: c.stopka, razvorot: null, poz: 0 });
+})();
+
+D.chasti.forEach(function (ch, i) {
+  var c = chastNode();
+  var obl = el('div', 'oblozhka');
+  obl.appendChild(el('h2', null, ekr(ch.nazvanie)));
+  obl.appendChild(el('div', 'hint', '↓ разворот   → следующая часть'));
+  c.stopka.appendChild(obl);
+
+  var raz = el('div', 'razvorot');
+  ch.tok.forEach(function (z) {
+    if (z.t === 'tezis') { raz.appendChild(el('div', 'tezis', ekr(z.text))); return; }
+    if (z.t === 'citata') { raz.appendChild(el('div', 'citata', ekr(z.text))); return; }
+    if (z.t === 'pod') { raz.appendChild(el('div', 'pod', ekr(z.text))); return; }
+    if (z.t === 'text') {
+      var a = el('div', 'abzac', nabor(z.text));
+      a.dataset.adres = z.adres;
+      raz.appendChild(a);
+      /* дескриптор стоит в потоке сразу за своим абзацем: в мобайле он
+         так и читается, а на широком экране уезжает абсолютом на свою
+         силовую линию — порядок в разметке остаётся тем же */
+      [].forEach.call(a.querySelectorAll('.sn'), function (sn) {
+        var n = +sn.dataset.n;
+        var d = D.deskriptory.filter(function (x) { return x.n === n; })[0];
+        if (!d) return;
+        var nd = el('div', 'desk');
+        nd.dataset.n = n;
+        nd.appendChild(el('span', 'cap', String(n)));
+        nd.appendChild(document.createTextNode(' ' + d.text));
+        raz.appendChild(nd);
+      });
+      return;
+    }
+    if (z.t === 'fig' || z.t === 'ryad') {
+      var box = el('div', 'figbox');
+      var ramka = el('div', 'ramka');
+      var items = z.t === 'fig' ? [z] : z.items;
+      box.dataset.poz = z.poz || 'c';
+      box.__kartinki = items.map(function (g) { return { w: g.w, h: g.h }; });
+      if (z.t === 'fig') { ramka.appendChild(kartinka(z)); }
+      else {
+        var r = el('div', 'ryad');
+        items.forEach(function (g) {
+          var yach = el('div', 'yach');
+          yach.style.flexGrow = String(g.w / g.h);   // равная высота: доли по пропорции
+          yach.appendChild(kartinka(g));
+          r.appendChild(yach);
+        });
+        ramka.appendChild(r);
+      }
+      box.appendChild(ramka);
+      if (z.podpis) ramka.appendChild(el('div', 'podpis', ekr(z.podpis)));
+      raz.appendChild(box);
+      return;
+    }
+  });
+  c.stopka.appendChild(raz);
+  chasti.push({ node: c.node, stopka: c.stopka, razvorot: raz, poz: 0 });
+});
+
+/* ── раскладка: все числа выведены из колонки и окна ─────────────── */
+var root = document.documentElement;
+var adresEl = document.getElementById('adres');
+var hodEl = document.querySelector('#hod i');
+var W = 0, H = 0, uzko = false, colW = 0, u = 1, dw = 0, dz = 0;
+
+function zazhat(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+function raskladka() {
+  W = innerWidth; H = innerHeight;
+  uzko = W < P.perelom;                          // единственный перелом
+  /* колонка — доля окна, но мера строки в знаках не должна вырождаться:
+     коридор держит её между «не уже» и «не шире» (закон 3б) */
+  colW = uzko ? Math.max(160, W - 2 * P.pole)
+              : Math.round(zazhat(W * P.kolonka / 100, P.kolKoridor[0], P.kolKoridor[1]));
+  /* модуль набора: колонка, отнесённая к базовой (360 при окне 1440 и
+     колонке в четверть). Коридор не даёт ему выродиться на краях. */
+  u = zazhat(colW / 360, P.modul[0] / 100, P.modul[1] / 100);
+  dz = Math.round(P.deskZazor * u);
+  dw = uzko ? colW : Math.round(colW * P.deskDolya / 100);
+
+  var s = root.style;
+  s.setProperty('--pole', P.pole + 'px');
+  s.setProperty('--col', colW + 'px');
+  s.setProperty('--u', u);
+  s.setProperty('--dw', dw + 'px');
+  s.setProperty('--dz', dz + 'px');
+  s.setProperty('--cit-w', (uzko ? colW : Math.round(W * P.citDolya / 100)) + 'px');
+  s.setProperty('--bg', P.bg); s.setProperty('--ink', P.ink); s.setProperty('--akc', P.akc);
+  s.setProperty('--text-fs', P.textFs + 'px');
+  s.setProperty('--text-lh', P.textLh / 100);
+  s.setProperty('--text-tr', (P.textTr / 100) + 'em');
+  s.setProperty('--desk-fs', P.deskFs + 'px');
+  s.setProperty('--desk-lh', P.deskLh / 100);
+  s.setProperty('--desk-propusk', (P.deskPropusk / 100) + 'em');
+  s.setProperty('--sn-r', P.snR + 'px');
+  s.setProperty('--sn-fs', P.snFs / 100);
+  s.setProperty('--sn-rost', P.snRost / 100);
+  s.setProperty('--tezis-fs', (uzko ? Math.min(P.tezisFs, 34) : P.tezisFs) + 'px');
+  s.setProperty('--tezis-lh', P.tezisLh / 100);
+  s.setProperty('--tezis-ot', P.tezisOt + 'px');
+  s.setProperty('--cit-fs', (uzko ? Math.min(P.citFs, 26) : P.citFs) + 'px');
+  s.setProperty('--cit-lh', P.citLh / 100);
+  s.setProperty('--cit-ot', P.citOt + 'px');
+  s.setProperty('--pod-fs', P.podFs + 'px');
+  s.setProperty('--pod-sv', P.podSv + 'px');
+  s.setProperty('--pod-sn', P.podSn + 'px');
+  s.setProperty('--obl-fs', (uzko ? Math.min(P.oblFs, 46) : P.oblFs) + 'px');
+  s.setProperty('--obl-lh', P.oblLh / 100);
+  s.setProperty('--obl-top', P.oblTop + '%');
+  s.setProperty('--fig-ot', P.figOt + 'px');
+  s.setProperty('--fig-shov', Math.round(P.figShov * u) + 'px');
+  s.setProperty('--scena-ot', P.scenaOt);
+  s.setProperty('--klik', Math.round(W * P.klik / 100) + 'px');
+  document.body.classList.toggle('scena', !!P.scena);
+  document.body.classList.toggle('uzko', uzko);
+  document.body.classList.toggle('bez-desk', !P.deskVidny);
+  adresEl.style.display = P.adresViden ? '' : 'none';
+
+  kartinkiRaskladka();
+  requestAnimationFrame(deskriptoryRaskladka);   // замер — после набора
+  obnovitAdres();
+}
+
+/* КАРТИНКА. Ширина — доля свободного поля, потолок — высота экрана:
+   целостность картинки главнее доли, поэтому ужимается носитель.
+   Якорь ставит её к левому полю, по центру окна или к правому полю. */
+function kartinkiRaskladka() {
+  var pole = P.pole, dostupno = W - 2 * pole;
+  [].forEach.call(document.querySelectorAll('.figbox'), function (box) {
+    var k = box.__kartinki || [], n = k.length;
+    if (!n) return;
+    var shov = Math.round(P.figShov * u);
+    var maxW = uzko ? dostupno : dostupno * P.figDolya / 100;
+    var maxH = H * P.figPotolok / 100;
+    var summa = k.reduce(function (a, g) { return a + g.w / g.h; }, 0);
+    var vys = (maxW - shov * (n - 1)) / summa;   // равная высота ряда
+    if (vys > maxH) vys = maxH;
+    var shir = vys * summa + shov * (n - 1);
+    var poz = uzko ? 'c' : (box.dataset.poz || 'c');
+    var left = poz === 'l' ? pole : poz === 'r' ? W - pole - shir : (W - shir) / 2;
+    var r = box.querySelector('.ramka');
+    r.style.width = Math.round(shir) + 'px';
+    r.style.marginLeft = Math.round(left) + 'px';
+  });
+}
+
+/* ДЕСКРИПТОРЫ. Единственный замер стенда: где в набранном абзаце
+   оказалась сноска — до отрисовки этого не знает никто (П3, исключение).
+   Капсула сноски выровнена по базовой линии и ростом ровно в строчную
+   букву, поэтому её низ и есть базовая линия строки. Дескриптор садится
+   своей базовой линией на ту же высоту (щуп — П8), а очередь не даёт
+   соседям наехать: следующий встаёт не выше предыдущего низа плюс шов. */
+function bazovaya(node) {
+  var i = document.createElement('i');
+  i.style.cssText = 'display:inline-block;width:0;height:0;vertical-align:baseline';
+  node.insertBefore(i, node.firstChild);
+  var b = i.offsetTop;                    // node абсолютен, значит он и offsetParent
+  node.removeChild(i);
+  return b;
+}
+function deskriptoryRaskladka() {
+  chasti.forEach(function (c) {
+    if (!c.razvorot) return;
+    var deski = [].slice.call(c.razvorot.querySelectorAll('.desk'));
+    if (!deski.length) return;
+    if (uzko || !P.deskVidny || P.scena) {
+      deski.forEach(function (d) { d.style.top = ''; });
+      return;
+    }
+    var niz = -1e9, shov = Math.round(P.deskShov * u);
+    deski.forEach(function (d) {
+      var sn = c.razvorot.querySelector('.sn[data-n="' + d.dataset.n + '"]');
+      if (!sn) return;
+      /* капсула ростом ровно в строчную букву и сидит на базовой линии,
+         поэтому её низ — и есть базовая линия строки со сноской.
+         offsetParent у неё — .razvorot: смещение ленты в счёт не идёт. */
+      var linia = sn.offsetTop + sn.offsetHeight;
+      var y = Math.round(linia - bazovaya(d));
+      if (y < niz + shov) y = niz + shov;                     // очередь
+      d.style.top = y + 'px';
+      niz = y + d.offsetHeight;
+    });
+  });
+}
+
+/* ── ход: горизонталь — адрес, вертикаль — чтение ───────────────── */
+var tek = 0;                       // текущая часть
+var xMesto = 0, xCel = 0, proezd = null, raf = 0;
+
+function shirinaChasti() { return W; }
+function predel() {
+  var c = chasti[tek];
+  return Math.max(0, c.stopka.offsetHeight - H);
+}
+function stavitX() { lenta.style.transform = 'translate3d(' + (-xMesto) + 'px,0,0)'; }
+function kadr(t) {
+  raf = 0;
+  if (proezd && !zamerlo) {
+    var d = proezd.dlit ? (t - proezd.t0) / proezd.dlit : 1;
+    if (d >= 1) { xMesto = xCel = proezd.kuda; proezd = null; }
+    else xMesto = proezd.ot + (proezd.kuda - proezd.ot) *
+                  evalEase(P.proezdXEase, P.proezdXBez, d);
+    stavitX();
+    if (proezd) raf = requestAnimationFrame(kadr);
+  }
+}
+function hodit() { if (!raf) raf = requestAnimationFrame(kadr); }
+
+function kChasti(i, srazu) {
+  i = zazhat(i, 0, chasti.length - 1);
+  if (i === tek && !srazu) return;
+  chasti[tek].poz = S.gde();
+  tek = i;
+  xCel = i * shirinaChasti();
+  if (srazu || zamerlo || !P.proezdX) { xMesto = xCel; proezd = null; stavitX(); }
+  else { proezd = { ot: xMesto, kuda: xCel, t0: performance.now(), dlit: P.proezdX }; hodit(); }
+  S.postavit(chasti[tek].poz);
+  zapas = 0; posledniiPerehod = performance.now();
+  obnovitAdres();
+}
+
+/* вертикаль: аналоговая погоня из библиотеки (/panel-lib/skroll.js) */
+var S = StendSkroll.pusk({
+  params: P,
+  predel: predel,
+  gde: function (e) { return !(e.target && e.target.closest && e.target.closest('.st-panel')); },
+  na: function (poz) {
+    chasti[tek].stopka.style.transform = 'translate3d(0,' + (-poz) + 'px,0)';
+    var p = predel();
+    hodEl.style.width = (p > 0 ? (poz / p) * 100 : 0) + '%';
+  },
+});
+
+/* ЗАЩЁЛКА (закон 14 ◌). Разворот дочитан до упора — дальнейший ход
+   копится в запас; набрался порог — переход к следующей части. Порог
+   существует, чтобы переход был намерением, а не выбегом инерции. */
+var zapas = 0, posledniiPerehod = 0;
+addEventListener('wheel', function (e) {
+  if (zamerlo) return;
+  if (e.target && e.target.closest && e.target.closest('.st-panel')) return;
+  var v = StendSkroll.vvod(e, H);
+  var dy = Math.abs(v.x) > Math.abs(v.y) ? v.x : v.y;
+  var poz = S.gde(), pred = predel();
+  var porog = H * P.zashelka / 100;
+  if (performance.now() - posledniiPerehod < P.zashelkaPauza) return;
+  if (dy > 0 && poz >= pred - 1) zapas += dy;
+  else if (dy < 0 && poz <= 1 && P.zashelkaNazad) zapas += dy;
+  else { zapas = 0; return; }
+  if (zapas >= porog) { kChasti(tek + 1); }
+  else if (zapas <= -porog) {
+    var byl = tek;
+    kChasti(tek - 1);
+    if (tek !== byl) { S.postavit(predel()); }   // назад приходим в конец разворота
+  }
+}, { passive: true, capture: true });
+
+addEventListener('keydown', function (e) {
+  if (e.key === 'ArrowRight') { e.preventDefault(); kChasti(tek + 1); }
+  if (e.key === 'ArrowLeft') { e.preventDefault(); kChasti(tek - 1); }
+});
+document.querySelector('.kray.l').addEventListener('click', function () { kChasti(tek - 1); });
+document.querySelector('.kray.r').addEventListener('click', function () { kChasti(tek + 1); });
+
+/* сноска показывает свой дескриптор: на широком — подсветкой, в мобайле
+   дескриптор и так стоит следом за абзацем */
+document.addEventListener('click', function (e) {
+  var sn = e.target.closest && e.target.closest('.sn');
+  if (!sn) return;
+  var d = chasti[tek].razvorot &&
+          chasti[tek].razvorot.querySelector('.desk[data-n="' + sn.dataset.n + '"]');
+  if (!d) return;
+  d.classList.add('gorit');
+  setTimeout(function () { d.classList.remove('gorit'); }, 1200);
+});
+
+function obnovitAdres() {
+  var imya = tek === 0 ? D.titul.pod : D.chasti[tek - 1].nazvanie;
+  adresEl.querySelector('.imya').textContent = imya;
+  adresEl.querySelector('.schet').textContent =
+    (tek === 0 ? '00' : D.chasti[tek - 1].id) + ' / ' + D.chasti.length;
+}
+
+addEventListener('resize', function () { raskladka(); kChasti(tek, true); });
+
+/* ── панель: ручка на каждую величину, названную в задаче словами ── */
+var PANEL = StendPanel.build({
+  storageKey: 'lekciya-params',
+  params: P, defaults: DEFAULTS,
+  eases: EASES, evalEase: evalEase, bezApprox: BEZ_APPROX,
+  defs: [
+    ['h', 'Поле и колонка'],
+    ['pole', 'Поле экрана, px', 0, 160, 1],
+    ['kolonka', 'Колонка текста, % ширины', 10, 70, 1],
+    ['kolKoridor', 'Колонка: коридор, px', 'koridor', 160, 900, 10],
+    ['modul', 'Модуль: коридор, %', 'koridor', 40, 260, 5],
+    ['perelom', 'Перелом в мобайл, px', 320, 1200, 10],
+
+    ['h', 'Текст'],
+    ['textFace', 'Гарнитура', 'select', SPISOK_GARNITUR],
+    ['textFs', 'Кегль, px', 8, 48, 1],
+    ['textLh', 'Интерлиньяж, % кегля', 100, 240, 1],
+    ['textTr', 'Трекинг, % кегля', -4, 12, 0.5],
+
+    ['h', 'Тезис'],
+    ['tezisFace', 'Гарнитура', 'select', SPISOK_GARNITUR],
+    ['tezisFs', 'Кегль, px', 16, 200, 1],
+    ['tezisLh', 'Интерлиньяж, % кегля', 80, 180, 1],
+    ['tezisOt', 'Отбивка, px', 0, 400, 2],
+
+    ['h', 'Цитата'],
+    ['citFace', 'Гарнитура', 'select', SPISOK_GARNITUR],
+    ['citDolya', 'Доля экрана, %', 20, 100, 1],
+    ['citFs', 'Кегль, px', 12, 120, 1],
+    ['citLh', 'Интерлиньяж, % кегля', 90, 200, 1],
+    ['citOt', 'Отбивка, px', 0, 400, 2],
+
+    ['h', 'Подзаголовок'],
+    ['podFace', 'Гарнитура', 'select', SPISOK_GARNITUR],
+    ['podFs', 'Кегль, px', 10, 80, 1],
+    ['podSv', 'Отбивка сверху, px', 0, 400, 2],
+    ['podSn', 'Отбивка снизу, px', 0, 200, 2],
+
+    ['h', 'Сноска и дескриптор'],
+    ['deskFace', 'Гарнитура', 'select', SPISOK_GARNITUR],
+    ['deskFs', 'Кегль, px', 6, 28, 1],
+    ['deskLh', 'Интерлиньяж, % кегля', 100, 220, 1],
+    ['deskDolya', 'Доля колонки, %', 20, 140, 1],
+    ['deskZazor', 'Зазор до колонки, px', 0, 160, 1],
+    ['deskShov', 'Шов между дескрипторами, px', 0, 120, 1],
+    ['deskPropusk', 'Пропуск после цифры, % кегля', 0, 400, 10],
+    ['snR', 'Сноска: скругление, px', 0, 40, 1],
+    ['snFs', 'Сноска: кегль цифры, % строки', 25, 90, 1],
+    ['snRost', 'Сноска: рост, % строчной', 60, 260, 5],
+
+    ['h', 'Обложка части'],
+    ['oblFace', 'Гарнитура', 'select', SPISOK_GARNITUR],
+    ['oblFs', 'Кегль, px', 20, 260, 2],
+    ['oblLh', 'Интерлиньяж, % кегля', 80, 160, 1],
+    ['oblTop', 'Линия заголовка, % высоты', 0, 80, 1],
+
+    ['h', 'Картинки'],
+    ['figDolya', 'Доля ширины, %', 20, 100, 1],
+    ['figPotolok', 'Потолок высоты, % экрана', 20, 100, 1],
+    ['figShov', 'Шов в ряду, px', 0, 120, 1],
+    ['figOt', 'Отбивка, px', 0, 400, 2],
+
+    ['h', 'Части'],
+    ['proezdX', 'Проезд между частями, мс', 0, 2000, 10],
+    ['proezdXEase', 'Кривая проезда', 'ease'],
+    ['zashelka', 'Защёлка: запас, % экрана', 5, 200, 5],
+    ['zashelkaPauza', 'Защёлка: пауза, мс', 0, 1500, 20],
+    ['zashelkaNazad', '', 'toggle', ['Назад защёлкой: выкл', 'Назад защёлкой: вкл']],
+    ['klik', 'Клик-поле по краям, % ширины', 0, 20, 1],
+    ['h', 'Слои'],
+    ['scena', '', 'toggle', ['Сценический режим', 'Сценический режим: вкл']],
+    ['scenaOt', 'Сцена: отбивка тезиса, % экрана', 0, 60, 1],
+    ['deskVidny', '', 'toggle', ['Дескрипторы: скрыты', 'Дескрипторы: видны']],
+    ['adresViden', '', 'toggle', ['Адрес: скрыт', 'Адрес: виден']],
+
+    ['h', 'Цвет'],
+    ['palette', 'Палитра', 'palitra', [
+      ['belaya', 'Белая', { bg: '#ffffff', ink: '#111111', akc: '#1b2db3' }],
+      ['seraya', 'Серо-синяя', { bg: '#ffffff', ink: '#878C97', akc: '#3d4757' }],
+      ['noch', 'Ночь', { bg: '#101014', ink: '#f0f0f2', akc: '#4d8dff' }],
+    ]],
+    ['bg', 'Фон', 'color'],
+    ['ink', 'Набор', 'color'],
+    ['akc', 'Сноска', 'color'],
+  ].concat(StendSkroll.RUCHKI),
+  desc: {
+    kolonka: 'Ширина текстовой колонки долей окна. Она же модуль стенда: из неё выведены кегли, отбивки и линия дескрипторов.',
+    kolKoridor: 'Не уже и не шире: доля окна зажимается этими границами, чтобы мера строки в знаках не выродилась ни на узком экране, ни на широком.',
+    modul: 'Коридор для модуля: во сколько раз набор может стать крупнее и мельче базового, когда колонка растёт вместе с окном.',
+    deskDolya: 'Ширина дескриптора долей колонки текста. Его правый край задаёт силовую линию, по которой обрезаны тезис и обложка.',
+    snFs: 'Кегль цифры внутри капсулы долей строки.',
+    snRost: 'Рост капсулы относительно строчной буквы. 100 % — ровно в строчную, как в макете: капсула не разгоняет интерлиньяж, но цифра на мелком кегле почти не читается.',
+    zashelka: 'Сколько ещё надо прокрутить за упором, чтобы разворот отдал ход следующей части. Меньше запас — переход срабатывает на выбеге инерции.',
+    zashelkaPauza: 'Глухота сразу после перехода: пока идёт, новая защёлка не считается.',
+    figDolya: 'Доля свободного поля под картинку. Высота при этом ограничена потолком: картинка не выпадает из экрана.',
+    figPotolok: 'Потолок высоты одиночной картинки долей экрана. Целостность картинки главнее доли ширины.',
+    scena: 'Мелкий набор и дескрипторы гаснут: на проекторе остаются обложка, тезисы, цитаты и картинки. Текст остаётся у читающего.',
+    scenaOt: 'Отбивка тезиса на сцене долей экрана: чем больше, тем ближе к «один тезис — один экран».',
+    oblTop: 'Где стоит заголовок части по высоте экрана.',
+    citDolya: 'Цитата живёт поперёк колонки, поэтому её мера — доля окна, а не доля колонки.',
+  },
+  onChange: function () { raskladka(); },
+});
+
+/* ── пуск ────────────────────────────────────────────────────────── */
+raskladka();
+var start = +(Q.get('chast') || 0);
+if (start) kChasti(zazhat(start, 0, chasti.length - 1), true); else stavitX();
+if (Q.has('poz')) S.postavit(+Q.get('poz') || 0);   // место в развороте, px
+obnovitAdres();
+setTimeout(function () { raskladka(); }, 400);   // шрифты пришли — перемерить
+document.fonts && document.fonts.ready.then(function () { raskladka(); });
+
+/* СТОП-КАДР. Движения два — проезд между частями и погоня разворота;
+   оба замирают, а раскладка остаётся той же: снимок годится для сверки. */
+if (STOP != null) {
+  setTimeout(function () {
+    zamerlo = true; proezd = null; xMesto = xCel; stavitX(); S.stoyat();
+  }, STOP);
+}
+})();
+</script>
+</body>
+</html>
