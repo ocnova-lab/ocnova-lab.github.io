@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Рабочие группы — установочная</title>
+<link rel="stylesheet" href="/panel.css" />
+<!--
+  Установочная встреча рабочих групп «Основа», 1 сентября 2026.
+
+  ЗАКОН. Смотрит: на окно (ширина) и на номер текущего слайда.
+  Реагирует: щелчком — слайд встаёт целиком, промежуточных положений нет
+  (закон защёлки); внутри слайда плавно — весь набор течёт долями ширины
+  окна (закон долей). Один перелом на тесноте: ниже коридора несущая
+  вертикаль складывается под опорную горизонталь.
+
+  ПРИЁМ. «Короткая связка горизонталь — вертикаль» (опорно-несущая схема,
+  склад «Приёмы сеток»): на каждом слайде доминанта стоит на опорной
+  горизонтали, раскрывающий текст подвешен на несущую вертикаль. Взят
+  сознательно: встреча, объявляющая программу, собрана приёмом из этой же
+  программы. Второй приём — «Пустота как увеличительное стекло»: поля не
+  заполняются, значимость держится свободным полем.
+
+  АДРЕС. ?slide=N — открыть слайд N (стоп-кадр для скриншотов).
+         ?reset=1 — сбросить сохранённые настройки панели.
+  КЛАВИШИ. → ↓ пробел — вперёд, ← ↑ — назад, Home — в начало.
+-->
+<style>
+  @font-face { font-family: "Editorial New"; font-weight: 200;
+    src: url("/fonts/EditorialNew-Thin.woff") format("woff"); font-display: swap; }
+  @font-face { font-family: "Editorial New"; font-weight: 400;
+    src: url("/fonts/EditorialNew-Regular.woff") format("woff"); font-display: swap; }
+  @font-face { font-family: "Editorial New"; font-weight: 500;
+    src: url("/fonts/EditorialNew-Medium.woff") format("woff"); font-display: swap; }
+  @font-face { font-family: "Even Mono"; font-weight: 400;
+    src: url("/fonts/EvenMono-Regular.woff2") format("woff2"),
+         url("/fonts/EvenMono-Regular.woff") format("woff"); font-display: swap; }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Editorial New", Times, serif;
+    overflow: hidden;
+    transition: background .4s, color .4s;
+  }
+
+  /* ── Сетка слайда: опорная горизонталь + несущая вертикаль ──
+     Поле слева до несущей — доля ширины окна. Всё остальное течёт от него. */
+  #deck { position: fixed; inset: 0; }
+  .slide {
+    position: absolute; inset: 0;
+    display: grid;
+    grid-template-columns: calc(var(--nesushaya) * 1vw) 1fr;
+    align-content: start;
+    padding: calc(var(--opora) * 1vh) calc(var(--polya) * 1vw);
+    opacity: 0; pointer-events: none;
+    transition: opacity calc(var(--hod) * 1ms) var(--krivaya);
+  }
+  .slide.on { opacity: 1; pointer-events: auto; }
+
+  /* Метка слева на несущей: техслой, моноширинный */
+  .metka {
+    grid-column: 1;
+    font-family: "Even Mono", monospace;
+    font-size: clamp(10px, calc(var(--tekst) * .62vw), 20px);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    opacity: .45;
+    padding-top: .55em;
+  }
+  .telo { grid-column: 2; max-width: calc(var(--mera) * 1vw); }
+
+  /* Доминанта на опорной горизонтали */
+  h1 {
+    font-weight: 200;
+    font-size: clamp(28px, calc(var(--titul) * 1vw), 120px);
+    line-height: .96;
+    letter-spacing: -.02em;
+    margin-bottom: .7em;
+  }
+  h2 {
+    font-weight: 200;
+    font-size: clamp(22px, calc(var(--titul) * .58vw), 72px);
+    line-height: 1.05;
+    letter-spacing: -.015em;
+    margin-bottom: .9em;
+  }
+  p, li {
+    font-size: clamp(15px, calc(var(--tekst) * 1vw), 34px);
+    line-height: calc(var(--interlinyaz) / 100);
+    margin-bottom: .8em;
+  }
+  ul { list-style: none; }
+  li { padding-left: 1.4em; position: relative; }
+  li::before {
+    content: "—"; position: absolute; left: 0; opacity: .4;
+  }
+  em { font-style: normal; font-weight: 500; }
+  .tiho { opacity: .5; }
+  .vrezka {
+    font-family: "Even Mono", monospace;
+    font-size: clamp(12px, calc(var(--tekst) * .68vw), 24px);
+    line-height: 1.5;
+    letter-spacing: .01em;
+    opacity: .6;
+    margin-top: 1.6em;
+    padding-top: 1em;
+    border-top: 1px solid currentColor;
+  }
+  .mesto {
+    margin: .6em 0 1em;
+    aspect-ratio: 16 / 9;
+    border: 1px dashed currentColor;
+    opacity: .35;
+    display: grid; place-items: center;
+    font-family: "Even Mono", monospace;
+    font-size: clamp(12px, calc(var(--tekst) * .7vw), 24px);
+  }
+
+  /* Счётчик — служебная геометрия, пиксели законны */
+  #schet {
+    position: fixed; right: 22px; bottom: 20px;
+    font-family: "Even Mono", monospace;
+    font-size: 12px; letter-spacing: .1em;
+    opacity: .35;
+  }
+
+  /* Единственный перелом: теснота. Несущая складывается под опорную. */
+  @media (max-width: 760px) {
+    .slide { grid-template-columns: 1fr; }
+    .metka { grid-column: 1; margin-bottom: 1.2em; padding-top: 0; }
+    .telo  { grid-column: 1; max-width: none; }
+    h1 { font-size: calc(var(--titul) * 2.4vw); }
+    h2 { font-size: calc(var(--titul) * 1.5vw); }
+    p, li, .metka, .vrezka { font-size: calc(var(--tekst) * 2.6vw); }
+    .mesto { font-size: calc(var(--tekst) * 2.2vw); }
+  }
+</style>
+</head>
+<body>
+
+<div id="deck"></div>
+<div id="schet"></div>
+
+<script src="/panel.js"></script>
+<script>
+// ── Ручки раньше эффекта ─────────────────────────────────────────────────
+var P = {
+  titul: 4.4, tekst: 1.25, interlinyaz: 145, mera: 46,
+  nesushaya: 15, opora: 16, polya: 7,
+  hod: 380, krivaya: 'плавный',
+  palitra: 'svet', bg: '#efece6', ink: '#1a1a1a',
+};
+var DEFAULTS = Object.assign({}, P);
+var stopKadr = /[?&]slide=/.test(location.search);   // стоп-кадр гасит ход
+
+// Изинг-слот панели: словарь кривых плюс их безье-приближения.
+// Функции нужны редактору кривой, приближения — чтобы отдать кривую в CSS.
+var EASES = {
+  'линейный':   function (t) { return t; },
+  'разгон':     function (t) { return t * t * t; },
+  'торможение': function (t) { return 1 - Math.pow(1 - t, 3); },
+  'плавный':    function (t) { return t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; },
+};
+var BEZ_APPROX = {
+  'линейный':   [0.25, 0.25, 0.75, 0.75],
+  'разгон':     [0.32, 0, 0.67, 0],
+  'торможение': [0.33, 1, 0.68, 1],
+  'плавный':    [0.65, 0, 0.35, 1],
+};
+function evalEase(name, t) { return (EASES[name] || EASES['плавный'])(t); }
+function krivayaCSS(v) {
+  if (Array.isArray(v)) return 'cubic-bezier(' + v.join(',') + ')';
+  var b = BEZ_APPROX[v];
+  return b ? 'cubic-bezier(' + b.join(',') + ')' : 'ease';
+}
+try { Object.assign(P, JSON.parse(localStorage.getItem('ustanovochnaya-params') || '{}')); } catch (e) {}
+
+var PALITRY = {
+  svet:  { bg: '#efece6', ink: '#1a1a1a' },
+  chb:   { bg: '#ffffff', ink: '#111111' },
+  noch:  { bg: '#111114', ink: '#eceae4' },
+};
+
+function apply() {
+  if (P.palitra !== 'svoi' && PALITRY[P.palitra]) {
+    P.bg = PALITRY[P.palitra].bg; P.ink = PALITRY[P.palitra].ink;
+  }
+  var s = document.documentElement.style;
+  ['titul','tekst','interlinyaz','mera','nesushaya','opora','polya','bg','ink']
+    .forEach(function (k) { s.setProperty('--' + k, P[k]); });
+  if (!stopKadr) s.setProperty('--hod', P.hod);
+  s.setProperty('--krivaya', krivayaCSS(P.krivaya));
+}
+
+// ── Слайды ───────────────────────────────────────────────────────────────
+var SLIDES = [
+  { m: '01.09.2026', h1: 'Рабочие группы', b: `
+    <p class="tiho">Третий набор. Два потока, двадцать человек.</p>
+    <p class="tiho">Сегодня: как устроена работа, что от вас требуется и что вы получите.</p>` },
+
+  { m: 'зачем', h2: 'Как это обычно работает',
+    b: `<div class="mesto">сюда — демонстрация: картинка → нейронка → экран → тянем окно до 360</div>
+    <p>Красивый первый экран получается за минуту. Дальше вы тянете окно — и всё разваливается.</p>` },
+
+  { m: 'диагноз', h2: 'Модель придумала устройство сама', b: `
+    <p>Что тут зона, что плашка, что повторяется, а что исключение — она решила за вас. Вы узнали об этом по обломкам.</p>
+    <p>Дальше каждая «правка вида» — это спор об устройстве, замаскированный под косметику. Поэтому правки не кончаются.</p>
+    <p class="vrezka">Отсюда весь формат: договор об устройстве переносится ДО кода.</p>` },
+
+  { m: 'неделя', h2: 'Три встречи', b: `
+    <ul>
+      <li><em>Дискуссионная</em> — оба потока вместе. Тема и разбор примеров вслух.</li>
+      <li><em>Консультация</em> — свой поток, десять человек. Практика, ваши работы, вайб-кодинг.</li>
+    </ul>
+    <p>Ведёт Сергей. Михаил помогает и иногда ведёт консультацию — порядок разбора при этом не меняется.</p>
+    <p class="tiho">Записи остаются, встречу можно досмотреть.</p>` },
+
+  { m: 'расписание', h2: 'Решаем сегодня', b: `
+    <p>Дискуссионная — в будни. Консультации — на выходных, утром.</p>
+    <p class="tiho">Среда занята. Вечера субботы и воскресенья заняты.</p>
+    <p class="vrezka">Здесь же делимся на два потока.</p>` },
+
+  { m: 'задание', h2: 'Задание — всегда три строки', b: `
+    <ul>
+      <li><em>Что сделать</em> — действие, а не тема.</li>
+      <li><em>На чём</em> — какой материал берём.</li>
+      <li><em>По какому признаку поймём, что сделано.</em></li>
+    </ul>
+    <p>Третья строка самая непривычная. Она превращает «сделай красиво» в проверяемую задачу — и по ней же идёт разбор.</p>` },
+
+  { m: 'домашка', h2: 'Сдаётся за сутки', b: `
+    <ul>
+      <li>сама работа — картинка или ссылка на живую страницу;</li>
+      <li>одна фраза от себя: <em>что я сам считаю сломанным</em>.</li>
+    </ul>
+    <p>Последнее меняет разбор сильнее всего. Кто назвал слабое место сам — приходит соучастником, а не на экзамен.</p>` },
+
+  { m: 'разбор', h2: 'Как идёт разбор', b: `
+    <ul>
+      <li>Автор говорит первым. Преподаватель молчит.</li>
+      <li>Один вопрос — по теме недели, а не по всему подряд.</li>
+      <li>Одно изменение. Лучше руками на месте, чтобы разница была видна сразу.</li>
+      <li>Одна фраза: доработать это или брать следующее.</li>
+    </ul>
+    <p class="vrezka">Списка правок не будет. Список никто не делает, одну правку делают все.</p>` },
+
+  { m: 'темп', h2: 'Темп задаёт усвояемость', b: `
+    <p>К следующей теме переходим, когда группа взяла предыдущую, а не когда прошла неделя. Даты объявляются только для показов.</p>
+    <p>Программа модульная, без фиксированной даты окончания. Три части: <em>форма → пространство → время</em>.</p>
+    <p class="vrezka">Оценок и баллов нет. На показе три исхода: принято, доработать, переделать.</p>` },
+
+  { m: 'проект', h2: 'Сквозной проект', b: `
+    <p>Каждый ведёт один свой материал через все три части: лист → живая страница → работающий макет. На консультациях разбираем именно его.</p>
+    <p>Материал по умолчанию — <em>своё портфолио</em>. Довод не учебный: нейронки не видят Telegram, Behance и профили. Они видят сайты — и клиенты сегодня приходят оттуда.</p>
+    <p class="tiho">Объявляем сейчас, материал нужен с четвёртой недели. Первые недели идут на чужих примерах.</p>` },
+
+  { m: 'инструмент', h2: 'Руками, глазом и кодом', b: `
+    <p>Первая часть идёт руками: бумага, блокнот в точку, Фигма.</p>
+    <p>Код входит сразу, но в другой роли — <em>он проверяет догадку, а не заменяет глаз</em>. Разобрал чужое решение → предположил, как устроено → воспроизвёл минимальным кодом → сверил.</p>
+    <p>Домашка при этом остаётся работой рукой: референс не копируется, а переносится на свой материал. По чужой работе даже гарнитуру не прочитаешь — решать придётся самому.</p>` },
+
+  { m: 'раздатка', h2: 'Что получаете сегодня', b: `
+    <ul>
+      <li><em>Словарь</em> — наши термины, чтобы нейронка понимала их так же, как мы.</li>
+      <li><em>Свод вёрстки</em> — правила, по которым мы верстаем.</li>
+      <li><em>Панель</em> — чтобы эффект сразу получал ручки.</li>
+      <li><em>Шаблон стенда</em> и инструкция по настройке.</li>
+    </ul>
+    <p class="vrezka">Остальное придёт позже и под задачу. Выданное впрок не читают.</p>` },
+
+  { m: 'дальше', h2: 'Ближайшая неделя', b: `
+    <ul>
+      <li>Консультация — ставим окружение и публикуем первую страницу.</li>
+      <li>Домашка — три чужие работы, на каждой назвать ось контраста.</li>
+      <li>Следующая дискуссионная — <em>контраст</em>: то, вокруг чего строится вся драматургия работы.</li>
+    </ul>` },
+];
+
+// ── Сборка и защёлка ─────────────────────────────────────────────────────
+var deck = document.getElementById('deck'), schet = document.getElementById('schet');
+SLIDES.forEach(function (s) {
+  var el = document.createElement('section');
+  el.className = 'slide';
+  el.innerHTML = '<div class="metka">' + s.m + '</div><div class="telo">'
+    + (s.h1 ? '<h1>' + s.h1 + '</h1>' : '')
+    + (s.h2 ? '<h2>' + s.h2 + '</h2>' : '')
+    + s.b + '</div>';
+  deck.appendChild(el);
+});
+var els = deck.children, cur = 0;
+
+// Стоп-кадр: ?slide=N открывает слайд N и гасит ход, иначе при виртуальном
+// времени скриншотилки переход не проигрывается и кадр выходит полупрозрачным.
+var m = /[?&]slide=(\d+)/.exec(location.search);
+if (m) {
+  cur = Math.max(0, Math.min(SLIDES.length - 1, +m[1] - 1));
+  document.documentElement.style.setProperty('--hod', 0);
+}
+
+function pokazat(i) {
+  cur = Math.max(0, Math.min(SLIDES.length - 1, i));
+  for (var k = 0; k < els.length; k++) els[k].classList.toggle('on', k === cur);
+  schet.textContent = (cur + 1) + ' / ' + SLIDES.length;
+}
+addEventListener('keydown', function (e) {
+  if (['ArrowRight','ArrowDown',' ','PageDown'].indexOf(e.key) >= 0) { pokazat(cur + 1); e.preventDefault(); }
+  if (['ArrowLeft','ArrowUp','PageUp'].indexOf(e.key) >= 0)          { pokazat(cur - 1); e.preventDefault(); }
+  if (e.key === 'Home') pokazat(0);
+});
+addEventListener('click', function (e) { if (!e.target.closest('.st-panel, .st-gear')) pokazat(cur + 1); });
+
+// ── Панель ───────────────────────────────────────────────────────────────
+StendPanel.build({
+  storageKey: 'ustanovochnaya-params',
+  params: P, defaults: DEFAULTS, onChange: apply,
+  eases: EASES, evalEase: evalEase, bezApprox: BEZ_APPROX,
+  defs: [
+    ['h', 'Набор'],
+    ['titul',       'Кегль титула, % ширины',      1.5, 12,  0.1],
+    ['tekst',       'Кегль текста, % ширины',      0.5, 4,   0.05],
+    ['interlinyaz', 'Интерлиньяж, % кегля',         90, 260, 1],
+    ['mera',        'Мера строки, % ширины',        20, 80,  1],
+    ['h', 'Опорно-несущая'],
+    ['nesushaya',   'Несущая вертикаль, % ширины',   0, 40,  0.5],
+    ['opora',       'Опорная горизонталь, % высоты', 0, 45,  0.5],
+    ['polya',       'Поля, % ширины',                0, 25,  0.5],
+    ['h', 'Ход'],
+    ['hod',         'Длительность, мс',              0, 1600, 10],
+    ['krivaya',     'Кривая',                       'ease'],
+    ['h', 'Палитра'],
+    ['palitra', 'Набор', 'select', [
+      ['svet', 'Светлая'], ['chb', 'Чёрное на белом'], ['noch', 'Ночь'], ['svoi', 'Свои цвета'],
+    ]],
+    ['bg',  'Фон',   'color'],
+    ['ink', 'Текст', 'color'],
+  ],
+  desc: {
+    titul: 'Кегль считается от ширины экрана, а не в пикселях: на проекторе и на ноутбуке слайд выглядит одинаково.',
+    tekst: 'Тело набора. От него же считаются метка слева и врезка — они заданы долями этого кегля, поэтому вся мелочь едет за ним.',
+    interlinyaz: 'Расстояние между строками в долях кегля. Ниже 120 — текст на слайде начинает слипаться с трёх метров.',
+    mera: 'Ширина колонки текста. Длинная строка на проекторе теряет начало следующей: глазу далеко возвращаться.',
+    nesushaya: 'Поле слева под метку — та самая несущая вертикаль. Ноль — метка прижимается к тексту, и опорно-несущая схема разваливается в один столбец.',
+    opora: 'Где проходит опорная горизонталь: отступ сверху, на котором стоит доминанта слайда. Больше 25 — воздух сверху становится доминантой сам.',
+    polya: 'Поля слайда. Пустота работает увеличительным стеклом: чем её больше, тем весомее то, что осталось.',
+    hod: 'Длительность смены слайда. Ноль — мгновенно, без хода.',
+    krivaya: 'Характер смены: разгон, торможение или ровно. Своя кривая правится редактором.',
+    palitra: 'Ночь — для тёмного зала, чёрное на белом — если демонстрация идёт через плохой проектор.',
+  },
+});
+
+apply();
+pokazat(cur);
+</script>
+</body>
+</html>
