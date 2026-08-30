@@ -50,6 +50,8 @@
 <script src="/panel-lib/ugol.js"></script>
 <script src="/panel-lib/palitra.js"></script>
 <script src="/panel-lib/para.js"></script>
+<script src="/panel-lib/nasledovanie.js"></script>
+<script src="/panel-lib/inspektor.js"></script>
 <script>
 /* ─────────────────────────────────────────────────────────────────
    Библиотека органов управления — живой каталог ручек панели.
@@ -81,6 +83,8 @@ var ORGANY = [
   ['угол',      "[key, 'Завал оси, °', 'ugol', 0, 45]"],
   ['палитра',   "[key, 'Палитра', 'palitra', [['night', 'Ночь', { bg: '#101014' }]]]"],
   ['пара',      "[key, 'Поле, px', 'para', [['padT', 'сверху', 0, 300, 4], …]]"],
+  ['инспектор', "[key, 'Правим', 'inspektor', [['oblozhka', 'Обложка'], …]]  —  первый пункт списка = общий закон"],
+  ['наследование', "[key, 'Кегль', 'nasledovanie', 12, 48, 1]  →  StendPanel.znachenie(P, key, 'oblozhka')"],
   ['скролл',    "StendSkroll.pusk({ params: P, na: … })  —  образец: /skroll"],
 ];
 document.getElementById('spisok').innerHTML = ORGANY.map(function (o) {
@@ -98,11 +102,14 @@ var DEFAULTS = {
   pole: [40, 180], sila: 60, ostrota: 2.2,
   spring: [320, 0.35], kompoziciya: 'A',
   zaval: 12, padT: 60, padB: 120,
+  aktivnyi: '', etazhKegl: 100, etazhVozduh: 0,
+  otkloneniya: {}, // служебное: гнездо отступлений, ручка ему не нужна
 };
 var P = Object.assign({}, DEFAULTS);
 try { Object.assign(P, JSON.parse(localStorage.getItem('panel-lib-params') || '{}')); } catch (e) {}
 if (!Array.isArray(P.priemy)) P.priemy = DEFAULTS.priemy.slice();
 if (!Array.isArray(P.pole)) P.pole = DEFAULTS.pole.slice();
+if (!P.otkloneniya || typeof P.otkloneniya !== 'object') P.otkloneniya = {};
 
 var main = document.querySelector('main');
 function prilozhit() {
@@ -115,6 +122,13 @@ function prilozhit() {
   main.style.fontSize = P.size / 4.5 + 'em';
   main.style.transform = 'rotate(' + (-P.zaval / 6) + 'deg)';
   main.style.marginTop = (P.padT - P.padB) / 8 + 'px';
+  // Три этажа каталога живут одним законом; отступивший читает своё значение.
+  [['zagolovok', 'h1'], ['spisok', 'ul'], ['snoska', 'p.hint']].forEach(function (e) {
+    var el = main.querySelector(e[1]);
+    if (!el) return;
+    el.style.fontSize = StendPanel.znachenie(P, 'etazhKegl', e[0]) / 100 + 'em';
+    el.style.marginTop = StendPanel.znachenie(P, 'etazhVozduh', e[0]) + 'px';
+  });
 }
 
 StendPanel.build({
@@ -168,6 +182,11 @@ StendPanel.build({
       ['night', 'Ночь', { bg: '#101014', ink: '#f0f0f2', acc: '#4d8dff' }],
       ['white', 'Чёрное на белом', { bg: '#ffffff', ink: '#111111', acc: '#1b2db3' }],
       ['blue', 'Синий на светлом', { bg: '#e7ecf6', ink: '#1b2db3', acc: '#1b2db3' }]]],
+    ['h', 'Этажи и закон'],
+    ['aktivnyi', 'Правим', 'inspektor', [
+      ['zagolovok', 'Заголовок'], ['spisok', 'Список'], ['snoska', 'Сноска']]],
+    ['etazhKegl', 'Кегль этажа, %', 'nasledovanie', 60, 260, 1],
+    ['etazhVozduh', 'Воздух сверху, px', 'nasledovanie', 0, 80, 1],
     ['h', 'Правки'],
     ['pravki', 'Шаг назад', 'otkat'],
   ],
@@ -184,6 +203,9 @@ StendPanel.build({
     kompoziciya: 'наведи на вариант — покажет, не выбирая',
     zaval: 'угол показан углом, а не числом на дорожке',
     palette: 'профиль виден цветом, а не назван словом',
+    aktivnyi: 'сначала выбираешь, что правишь, потом крутишь; сводка считает отступления',
+    etazhKegl: 'закон один на все этажи; точка справа отмечает отступление и возвращает закон',
+    etazhVozduh: 'то же наследование для вертикального ритма этажей',
   },
   onChange: prilozhit,
 });
