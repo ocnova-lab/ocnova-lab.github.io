@@ -52,6 +52,7 @@
 <script src="/panel-lib/para.js"></script>
 <script src="/panel-lib/nasledovanie.js"></script>
 <script src="/panel-lib/inspektor.js"></script>
+<script src="/panel-lib/obyavlenie.js"></script>
 <script>
 /* ─────────────────────────────────────────────────────────────────
    Библиотека органов управления — живой каталог ручек панели.
@@ -85,6 +86,8 @@ var ORGANY = [
   ['пара',      "[key, 'Поле, px', 'para', [['padT', 'сверху', 0, 300, 4], …]]"],
   ['инспектор', "[key, 'Правим', 'inspektor', [['oblozhka', 'Обложка'], …]]  —  первый пункт списка = общий закон"],
   ['наследование', "[key, 'Кегль', 'nasledovanie', 12, 48, 1]  →  StendPanel.znachenie(P, key, 'oblozhka')"],
+  ['этажность',  "['kegl', 'Кегль', 'кегль', { k: 'этаж' }] + ['aktivnyi', 'Правим', 'этажи', { iz: … }]  —  в объявлении"],
+  ['наборы',     "nabory: { 'всё': null, 'волна': ['Волна', 'Ход'] }  —  панель показывает текущую работу; ?nabor=имя"],
   ['скролл',    "StendSkroll.pusk({ params: P, na: … })  —  образец: /skroll"],
 ];
 document.getElementById('spisok').innerHTML = ORGANY.map(function (o) {
@@ -182,14 +185,24 @@ StendPanel.build({
       ['night', 'Ночь', { bg: '#101014', ink: '#f0f0f2', acc: '#4d8dff' }],
       ['white', 'Чёрное на белом', { bg: '#ffffff', ink: '#111111', acc: '#1b2db3' }],
       ['blue', 'Синий на светлом', { bg: '#e7ecf6', ink: '#1b2db3', acc: '#1b2db3' }]]],
+  ].concat(StendPanel.izObyavleniya([
+    // этажность целиком из объявления: 'этажи' ставит инспектор, а пометка
+    // k:'этаж' собирает величину органом наследования — закон + отступления
     ['h', 'Этажи и закон'],
-    ['aktivnyi', 'Правим', 'inspektor', [
-      ['zagolovok', 'Заголовок'], ['spisok', 'Список'], ['snoska', 'Сноска']]],
-    ['etazhKegl', 'Кегль этажа, %', 'nasledovanie', 60, 260, 1],
-    ['etazhVozduh', 'Воздух сверху, px', 'nasledovanie', 0, 80, 1],
+    ['aktivnyi', 'Правим', 'этажи', { iz: [
+      ['zagolovok', 'Заголовок'], ['spisok', 'Список'], ['snoska', 'Сноска']] }],
+    ['etazhKegl', 'Кегль этажа', 'доля', { ot: 'кегль', k: 'этаж', ot0: 60, shag: 1 }],
+    ['etazhVozduh', 'Воздух сверху', 'поле', { k: 'этаж', do: 80, shag: 1 }],
+  ])).concat([
     ['h', 'Правки'],
     ['pravki', 'Шаг назад', 'otkat'],
-  ],
+  ]),
+  nabory: {
+    'все органы': null,
+    'закон и датчик': ['Закон и датчик', 'Отклик'],
+    'этажи': ['Этажи и закон'],
+    'вид': ['Свои органы', 'Ещё из библиотеки'],
+  },
   desc: {
     size: 'кегль набора долей ширины экрана — коридор, а не литерал',
     yakor: 'точка привязки одним органом вместо двух списков',

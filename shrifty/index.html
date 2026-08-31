@@ -35,10 +35,13 @@
             transition: color .12s, border-color .12s; }
   .knopka:hover { color: var(--tush); border-color: var(--tush-2); }
 
+  /* Лента — всё под шапкой: верх выведен из --shapka, замеренной раз на ресайзе. */
   #lenta { position: absolute; inset: var(--shapka) 0 0 0; overflow: auto; }
   #holst { position: relative; width: 100%; }
 
-  /* Зона наведения: цель отбора — вся карточка, мелкой мишени нет (Фиттс). */
+  /* Зона наведения: цель отбора — вся карточка целиком, мелкой мишени нет (Фиттс).
+     Место карточки даёт трансформ: колонка = индекс % колонок, ряд = индекс / колонок. */
+  /* Координаты считаются из ширины ленты до отрисовки, замера карточек нет (П3). */
   .kart { position: absolute; top: 0; left: 0; cursor: pointer;
           border-right: 0.5px solid var(--volos);
           border-bottom: 0.5px solid var(--volos);
@@ -58,6 +61,7 @@
                 overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .kart[data-net="1"] .proba { color: var(--tush-2); opacity: .45; }
 
+  /* Сообщение о пустом отборе стоит на месте первой карточки: тот же верх. */
   #pusto { position: absolute; inset: var(--shapka) 0 auto 0; padding: 40px 18px;
            font: 12px/1.6 "Even Mono", monospace; color: var(--tush-2); }
 </style>
