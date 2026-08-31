@@ -82,7 +82,7 @@ var ORGANY = [
   ['датчик',    "[key, 'Профиль', 'datchik', { fn: function (x) { … }, x: [0, 1] }]"],
   ['пружина',   "[key, 'Пружина', 'pruzhina']  →  [период мс, затухание]"],
   ['превью',    "[key, 'Композиция', 'vybor', [['A', 'Колонки']], { risovat: … }]"],
-  ['угол',      "[key, 'Завал оси, °', 'ugol', 0, 45]"],
+  ['угол',      "[key, 'Завал оси, °', 'ugol']  —  полный круг; сектор задаётся только если он есть по смыслу"],
   ['палитра',   "[key, 'Палитра', 'palitra', [['night', 'Ночь', { bg: '#101014' }]]]"],
   ['гарнитура', "[key, 'Гарнитура', 'garnitura']  —  алфавит свода + свой набор из витрины /shrifty"],
   ['пара',      "[key, 'Поле, px', 'para', [['padT', 'сверху', 0, 300, 4], …]]"],
@@ -106,7 +106,7 @@ var DEFAULTS = {
   yakor: 'c', vid: 'lesenka', setka: true, priemy: ['akcent'],
   pole: [40, 180], sila: 60, ostrota: 2.2,
   spring: [320, 0.35], kompoziciya: 'A',
-  zaval: 12, padT: 60, padB: 120, shrift: 'Editorial New',
+  zaval: 2, padT: 60, padB: 120, shrift: 'Editorial New',
   aktivnyi: '', etazhKegl: 100, etazhVozduh: 0,
   otkloneniya: {}, // служебное: гнездо отступлений, ручка ему не нужна
 };
@@ -125,7 +125,7 @@ function prilozhit() {
   main.style.paddingLeft = P.pole[0] / 8 + 'px';
   main.style.paddingRight = P.pole[1] / 8 + 'px';
   main.style.fontSize = P.size / 4.5 + 'em';
-  main.style.transform = 'rotate(' + (-P.zaval / 6) + 'deg)';
+  main.style.transform = 'rotate(' + (-P.zaval) + 'deg)';
   main.style.marginTop = (P.padT - P.padB) / 8 + 'px';
   // Три этажа каталога живут одним законом; отступивший читает своё значение.
   [['zagolovok', 'h1'], ['spisok', 'ul'], ['snoska', 'p.hint']].forEach(function (e) {
@@ -182,7 +182,7 @@ StendPanel.build({
     }],
     ['h', 'Ещё из библиотеки'],
     ['shrift', 'Гарнитура', 'garnitura'],
-    ['zaval', 'Завал оси, °', 'ugol', 0, 45],
+    ['zaval', 'Завал оси, °', 'ugol'],   // без сектора — полный круг
     ['', 'Поле, px', 'para', [['padT', 'сверху', 0, 300, 4], ['padB', 'снизу', 0, 300, 4]]],
     ['palette', 'Палитра', 'palitra', [
       ['night', 'Ночь', { bg: '#101014', ink: '#f0f0f2', acc: '#4d8dff' }],
