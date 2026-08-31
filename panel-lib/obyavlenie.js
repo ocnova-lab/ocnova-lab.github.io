@@ -32,28 +32,47 @@
 (function () {
   // Границы — медианы фактических диапазонов работающих стендов.
   // Это стартовый набор: стенд перебивает своё через ot0/do/shag.
+  /* ШАГ НЕ ХРАНИТСЯ. Принцип 8 свода: шаг равен минимальному различимому
+     глазом изменению — значит он зависит от диапазона, а не от типа. Шаг 20 мс
+     разумен на 0…3000 и груб вдесятеро на 0…300. Замер двух стендов: из 29
+     промахов таблицы 12 были только по шагу, и все — из-за хранимого числа.
+     Считаем: сотая доля диапазона, округлённая ВНИЗ до круглого (1, 2, 5).
+     Вниз, потому что стенду законно огрубить шаг под ощущение, а вот
+     доточить его до нужного — это уже чинить дефект таблицы.
+     minShag — там, где мельче не бывает по природе величины (штуки, градусы). */
+  function shagIzDiapazona(ot0, doo, minShag) {
+    var d = Math.abs(doo - ot0) / 100;
+    if (!(d > 0)) return minShag || 1;
+    var p10 = Math.pow(10, Math.floor(Math.log(d) / Math.LN10));
+    var m = d / p10;
+    var shag = (m >= 5 ? 5 : m >= 2 ? 2 : 1) * p10;
+    return Math.max(shag, minShag || 0);
+  }
+
   var TABLICA = {
     // «Длина» оказалась слишком широка: замер 54 длин показал пять разных
     // назначений с разными диапазонами. Один тип на все пять не работает —
     // в diagonal из-за этого перебивались руками две трети границ.
-    'кегль':    { organ: 'слайдер', ot0: 6, do: 48, shag: 1, edinica: 'px' },
-    'зазор':    { organ: 'слайдер', ot0: 0, do: 120, shag: 1, edinica: 'px' },
-    'поле':     { organ: 'слайдер', ot0: 0, do: 400, shag: 2, edinica: 'px' },
-    'путь':     { organ: 'слайдер', ot0: 0, do: 2000, shag: 20, edinica: 'px' },
-    'размер':   { organ: 'слайдер', ot0: 20, do: 800, shag: 5, edinica: 'px' },
-    'длина':    { organ: 'слайдер', ot0: 0, do: 160, shag: 1, edinica: 'px' }, // общий случай
-    'кернинг':  { organ: 'слайдер', ot0: -0.1, do: 0.5, shag: 0.005, edinica: 'доли кегля' },
-    'время':    { organ: 'слайдер', ot0: 0, do: 1500, shag: 20, edinica: 'мс', trebuet: 'кривая' },
+    'кегль':    { organ: 'слайдер', ot0: 6, do: 48, edinica: 'px' },
+    // Титульные кегли живут в другом порядке величин: 20…140 против 8…40.
+    'кегль крупный': { organ: 'слайдер', ot0: 12, do: 200, edinica: 'px' },
+    'зазор':    { organ: 'слайдер', ot0: 0, do: 120, edinica: 'px' },
+    'поле':     { organ: 'слайдер', ot0: 0, do: 400, edinica: 'px' },
+    'путь':     { organ: 'слайдер', ot0: 0, do: 2000, edinica: 'px' },
+    'размер':   { organ: 'слайдер', ot0: 20, do: 800, edinica: 'px' },
+    'длина':    { organ: 'слайдер', ot0: 0, do: 160, edinica: 'px' }, // общий случай
+    'кернинг':  { organ: 'слайдер', ot0: -0.1, do: 0.5, edinica: 'доли кегля' },
+    'время':    { organ: 'слайдер', ot0: 0, do: 3000, edinica: 'мс', trebuet: 'кривая' },
     // Острота идёт от нуля вверх, ход — в обе стороны от нуля. Разные вещи:
     // сваленные в один тип, они дают лишнюю перебивку на каждой оси.
-    'острота':  { organ: 'слайдер', ot0: 0, do: 1, shag: 0.05, edinica: '', trebuet: 'датчик' },
-    'ход':      { organ: 'слайдер', ot0: -1, do: 1, shag: 0.05, edinica: '', trebuet: 'датчик' },
-    'инерция':  { organ: 'слайдер', ot0: 0, do: 95, shag: 1, edinica: '%', trebuet: 'сила' },
-    'сила':     { organ: 'слайдер', ot0: 0, do: 100, shag: 5, edinica: '%' },
-    'счёт':     { organ: 'слайдер', ot0: 0, do: 12, shag: 1, edinica: '' },
-    'угол':     { organ: 'ugol', ot0: 0, do: 90, shag: 1, edinica: '°' },
-    'порог':    { organ: 'слайдер', ot0: 320, do: 1200, shag: 10, edinica: 'px' },
-    'скорость': { organ: 'слайдер', ot0: -200, do: 200, shag: 1, edinica: 'px/с' },
+    'острота':  { organ: 'слайдер', ot0: 0, do: 1, edinica: '', trebuet: 'датчик' },
+    'ход':      { organ: 'слайдер', ot0: -1, do: 1, edinica: '', trebuet: 'датчик' },
+    'инерция':  { organ: 'слайдер', ot0: 0, do: 100, edinica: '%', trebuet: 'сила' },
+    'сила':     { organ: 'слайдер', ot0: 0, do: 100, edinica: '%' },
+    'счёт':     { organ: 'слайдер', ot0: 0, do: 12, minShag: 1, edinica: '' },
+    'угол':     { organ: 'ugol', ot0: 0, do: 90, minShag: 1, edinica: '°' },
+    'порог':    { organ: 'слайдер', ot0: 320, do: 1200, edinica: 'px' },
+    'скорость': { organ: 'слайдер', ot0: -200, do: 200, edinica: 'px/с' },
     'цвет':     { organ: 'color', edinica: '' },
     'палитра':  { organ: 'palitra', edinica: '' },
     'датчик':   { organ: 'datchik', edinica: '' },
@@ -67,18 +86,18 @@
   // Доля — единственный тип, у которого границы зависят от опоры.
   // Опора обязательна: «доля» без ответа на вопрос «от чего» — это не доля.
   var OPORY = {
-    'ширина':  { ot0: 1.5, do: 16, shag: 0.1, edinica: '% ширины' },
-    'кегль':   { ot0: 0, do: 160, shag: 1, edinica: '% кегля' },
-    'высота':  { ot0: 0, do: 80, shag: 1, edinica: '% высоты' },
-    'экран':   { ot0: 0, do: 100, shag: 5, edinica: '% экрана' },
-    'строка':  { ot0: 0, do: 100, shag: 1, edinica: '% строки' },
-    'колонка': { ot0: 0, do: 200, shag: 5, edinica: '% колонки' },
-    'лента':   { ot0: 20, do: 100, shag: 5, edinica: '% ленты' },
-    'знак':    { ot0: 8, do: 60, shag: 1, edinica: 'знаков' },
-    'своё':    { ot0: 0, do: 100, shag: 1, edinica: '%' },
+    'ширина':  { ot0: 1.5, do: 70, edinica: '% ширины' },
+    'кегль':   { ot0: 0, do: 260, edinica: '% кегля' },
+    'высота':  { ot0: 0, do: 150, edinica: '% высоты' },
+    'экран':   { ot0: 0, do: 100, edinica: '% экрана' },
+    'строка':  { ot0: 0, do: 100, edinica: '% строки' },
+    'колонка': { ot0: 0, do: 300, edinica: '% колонки' },
+    'лента':   { ot0: 20, do: 100, edinica: '% ленты' },
+    'знак':    { ot0: 8, do: 60, edinica: 'знаков' },
+    'своё':    { ot0: 0, do: 300, edinica: '%' },
   };
   // Множитель — та же доля, записанная не процентом: интерлиньяж 1.26.
-  var MNOZHITEL = { ot0: 0.5, do: 3, shag: 0.02 };
+  var MNOZHITEL = { ot0: 0, do: 3 };
 
   function podpis(imya, edinica) {
     if (!edinica) return imya;
@@ -141,10 +160,10 @@
       // границами; пара — две родственные величины в одной строке.
       // Тип отвечает «что меряем», края — «сколькими числами».
       if (o.kraya === 'коридор') {
-        defs.push([klyuch, nadpis, 'koridor',
-                   o.ot0 !== undefined ? o.ot0 : baza.ot0,
-                   o.do !== undefined ? o.do : baza.do,
-                   o.shag !== undefined ? o.shag : baza.shag]);
+        var klo = o.ot0 !== undefined ? o.ot0 : baza.ot0;
+        var khi = o.do !== undefined ? o.do : baza.do;
+        defs.push([klyuch, nadpis, 'koridor', klo, khi,
+                   o.shag !== undefined ? o.shag : shagIzDiapazona(klo, khi, baza.minShag)]);
         return;
       }
       if (tip === 'пара') {
@@ -155,10 +174,10 @@
             ? (d.kak === 'доли' || d.kak === '×' ? MNOZHITEL : (OPORY[d.ot] || OPORY['своё']))
             : TABLICA[r[2]];
           if (!b) { pretenzii.push('в паре «' + imya + '» неизвестный тип: ' + r[2]); b = {}; }
-          return [r[0], r[1],
-                  d.ot0 !== undefined ? d.ot0 : b.ot0,
-                  d.do !== undefined ? d.do : b.do,
-                  d.shag !== undefined ? d.shag : b.shag];
+          var plo = d.ot0 !== undefined ? d.ot0 : b.ot0;
+          var phi = d.do !== undefined ? d.do : b.do;
+          return [r[0], r[1], plo, phi,
+                  d.shag !== undefined ? d.shag : shagIzDiapazona(plo, phi, b.minShag)];
         });
         defs.push([klyuch || '', nadpis, 'para', deti]);
         return;
@@ -179,10 +198,10 @@
                    o.do !== undefined ? o.do : baza.do]);
         return;
       }
-      defs.push([klyuch, nadpis,
-                 o.ot0 !== undefined ? o.ot0 : baza.ot0,
-                 o.do !== undefined ? o.do : baza.do,
-                 o.shag !== undefined ? o.shag : baza.shag,
+      var lo = o.ot0 !== undefined ? o.ot0 : baza.ot0;
+      var hi = o.do !== undefined ? o.do : baza.do;
+      defs.push([klyuch, nadpis, lo, hi,
+                 o.shag !== undefined ? o.shag : shagIzDiapazona(lo, hi, baza.minShag),
                  o.opcii]);
     });
 
@@ -202,7 +221,7 @@
       if (!b) { nuzhno += 1; return; }
       var vylez = (o.ot0 !== undefined && o.ot0 < b.ot0) ||
                   (o.do !== undefined && o.do > b.do) ||
-                  (o.shag !== undefined && o.shag < b.shag);
+                  false;
       vylez ? nuzhno += 1 : zrya += 1;
     });
 
