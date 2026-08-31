@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Обтекающий текст — стенд</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="/panel.css">
+<style>
+  /* палитра из макета for-vibe-code / Frame 2147225847; живёт в ручках цвета */
+  :root{
+    --paper:#f2eeec; --ink:#a28281;
+  }
+
+  /* точечный локальный шрифт: именно ОБЫЧНЫЙ Subhead, не Medium.
+     если этой гарнитуры на машине нет — честно падаем в EB Garamond */
+  @font-face{
+    font-family:'GPP Subhead';
+    src: local('Garamond Premier Pro Subhead'),
+         local('GaramondPremrPro-Subh'),
+         local('Garamond Premier Pro Subh');
+    font-weight:400;
+    font-style:normal;
+  }
+
+  *, *::before, *::after{ box-sizing:border-box; }
+  html, body{ margin:0; }
+  body{ background:var(--paper); color:var(--ink); }
+
+  /* --- композиция: слой текста --- */
+  #comp{
+    position:fixed; inset:0; z-index:1;
+    overflow:hidden;
+  }
+  .line{
+    position:absolute; left:0; width:100%;
+    text-align:center; white-space:nowrap;
+    font-family:'GPP Subhead','EB Garamond',Georgia,serif;
+    font-weight:400;
+    font-synthesis:none;
+    text-transform:lowercase;
+    letter-spacing:.2em; /* запасное до сборки; рабочую разрядку ставит P.LS */
+  }
+  .half{ display:inline-block; will-change:transform; }
+  .ch{ display:inline-block; white-space:pre; will-change:transform; }
+
+  .desc{
+    position:absolute; white-space:nowrap;
+    font-family:Georgia,'Times New Roman',serif;
+    opacity:.6; /* тон дескрипторов из макета // без ручки */
+    will-change:transform;
+  }
+  .desc a{ color:var(--ink); text-decoration:none; }
+  .desc a:hover{ text-decoration:underline; }
+
+  /* --- нижний слой: подпись и миниатюра, не движутся --- */
+  #sig, #thumb{ position:fixed; z-index:0; }
+  #sig img{ width:100%; height:100%; display:block; }
+  #thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+
+  /* --- портреты: жёсткие пиксели из P, бесконечная колонна по оси --- */
+  .pic{
+    position:fixed; left:50%; top:0; z-index:20;
+    will-change:transform;
+  }
+  .pic img{
+    width:100%; height:100%; object-fit:cover; display:block;
+    border-radius:5px; /* скругление из макета // без ручки */
+  }
+</style>
+</head>
+<body>
+
+<!-- картинки отдаются с Timeweb S3: у части российских провайдеров крупные
+     файлы с сети Vercel обрываются, HTML при этом проходит -->
+<div id="thumb" aria-hidden="true"><img src="https://s3.twcstorage.ru/9d634e96-6e71-48d8-a055-20372d76fbe5/stendy/portret-2.jpg" alt=""></div>
+<div id="sig" aria-hidden="true"><img src="https://s3.twcstorage.ru/9d634e96-6e71-48d8-a055-20372d76fbe5/stendy/podpis.svg" alt=""></div>
+
+<div id="comp" aria-label="Текст о Сергее Гурове"></div>
+
+<div class="pic"><img src="https://s3.twcstorage.ru/9d634e96-6e71-48d8-a055-20372d76fbe5/stendy/portret-1.jpg" alt="Сергей Гуров, портрет"></div>
+<div class="pic"><img src="https://s3.twcstorage.ru/9d634e96-6e71-48d8-a055-20372d76fbe5/stendy/portret-2.jpg" alt="Сергей Гуров, портрет"></div>
+<div class="pic"><img src="https://s3.twcstorage.ru/9d634e96-6e71-48d8-a055-20372d76fbe5/stendy/portret-3.jpg" alt="Сергей Гуров, портрет"></div>
+<div class="pic"><img src="https://s3.twcstorage.ru/9d634e96-6e71-48d8-a055-20372d76fbe5/stendy/portret-4.jpg" alt="Сергей Гуров, портрет"></div>
+
+<div id="spacer"></div>
+
+<script src="/panel.js"></script>
+<script src="/panel-lib/obyavlenie.js"></script>
+<script>
+(function(){
+  /* ---- макет: канва 3337 условных пикселей, всё масштабируется от неё ----
+     координаты, кегли и позиции ниже — геометрия макета // без ручки */
+  var D = 3337;             /* ширина канвы макета */
+  var TEXT_TOP = 152, LH = 83.75, FS = 67;
+  var LINES = [
+    'я Сергей Гуров.',
+    'Независимый дизайнер, исследователь дизайна, преподаватель, автор',
+    '“Метода композиционного проектирования”',
+    'и сооснователь авторских мастерских «Основа».',
+    'Уже восемь лет я учу своих учеников структуре и эстетике.',
+    'Помогаю им увидеть в структуре красоту и красоту в структуре.',
+    'Дизайн не ограничивается только формой или содержанием – хороший дизайн',
+    'это всегда произведение простоты и выразительности.',
+    'Только в этом случае дизайн становится произведением искусства,',
+    'которое имеет не только цену но, и самое',
+    'главное, ценность.'
+  ];
+  var DESC_FS = 20;
+  /* chain: 0 — левая цепочка сопряжений, 1 — правая; split — половинки уходят
+     с разными цепочками. Цепочка движется как жёсткая деталь: сопряжённые края
+     («край одного = край другого» с карты) не расклеиваются никогда */
+  /* ord — место в цепочке подчинения (0 = ведущий, дальше по стрелкам карты) */
+  var DESCR = [
+    {t:'возраст: 44 года. образование: РГПУ им. Герцена, кафедра Клинической психологии.', x:756,  y:232, chain:0, ord:0},
+    {t:'Опыт работы в дизайне: 20 лет, опыт в дизайн образовании: 8 лет.',                 x:1779, y:232, chain:1, ord:0},
+    {t:'Авторская методология',                                                            x:1557, y:316, split:true},
+    {t:'телеграмм-канал: <a href="https://t.me/molokopluss">Moloko+</a>',                  x:1303, y:401, chain:0, ord:2},
+    {t:'личный телеграмм-канал: <a href="https://t.me/gurovplus">Gurov+</a>',              x:1779, y:401, chain:1, ord:2},
+    {t:'геометрическое формообразование',                                                  x:739,  y:569, chain:0, ord:4},
+    {t:'пластическое формообразование',                                                    x:2290, y:569, chain:1, ord:4},
+    {t:'Instagram: <a href="https://instagram.com/gurovdesign">@gurovdesign</a>',          x:1073, y:905, chain:0, ord:3},
+    {t:'Behance: <a href="https://behance.net/milkwork">@milkwork</a>',                    x:2100, y:905, chain:1, ord:3}
+  ];
+  var SIG = {x:1497, y:1091, w:342, h:112};
+  var THUMB = {x:30, y:30, w:156, h:209};
+
+  /* ---- механика: все параметры живут в P, панель выводится из объявления ---- */
+  var P = {
+    CLEAR: 65,     /* зазор между картинкой и краем половинок, px */
+    FALLOFF: 120,  /* за сколько px до картинки строка начинает расходиться */
+    BULGE: 0.45,   /* пузырь: строка напротив центра картинки шире, доля раздвига */
+    MARGIN: 16,    /* поле у края экрана на полном раскрытии, px */
+    SPEED: 0.2,    /* передача: доля хода колёсика, достающаяся картинкам */
+    SOFT: 0.22,    /* оттяжка: доля пути до колёсика за кадр */
+    EASE: 0.08,    /* плавность раздвига строк: доля пути до цели за кадр */
+    LS: 0.25,      /* разрядка, доли кегля (em) */
+    CHSOFT: 0.1,   /* отклик цепочек на поле волны: доля пути за кадр */
+    CHAIN: 0.1,    /* эластичность цепочек: скорость догона подчинённого */
+    GAP: 1.125,    /* интервал колонны, доли экрана */
+    BASE: 82,      /* старт колонны при загрузке, % экрана */
+    W1: 260,       /* портреты: ширина, px (жёсткие, без масштабирования) */
+    H1: 390,       /* портреты: высота, px */
+    W2: 400,       /* вторая картинка: ширина, px */
+    H2: 320,       /* вторая картинка: высота, px */
+    PAPER: '#f2eeec', /* бумага */
+    INK: '#a28281'    /* краска */
+  };
+  var DEFAULTS = Object.assign({}, P);
+
+  var comp = document.getElementById('comp');
+  var sig = document.getElementById('sig');
+  var thumb = document.getElementById('thumb');
+  var pics = [].slice.call(document.querySelectorAll('.pic'));
+  var spacer = document.getElementById('spacer');
+  var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var mod = function(a, n){ return ((a % n) + n) % n; };
+  /* тестовый режим для скриншотов: ?static=СДВИГ рисует один кадр без цикла */
+  var qs = new URLSearchParams(location.search);
+  var staticShift = qs.has('static') ? (parseFloat(qs.get('static')) || 0) : null;
+
+  var lines = [], chains = [], centerX = 0;
+  var cycle = 1, cycleS = 1, baseY = 0, smoothS = 0;
+  var R = 200, BUF = 450, SZ = [], POS = [], RATIO = [];
+
+  function build(keep){
+    var vw = innerWidth, vh = innerHeight;
+    if (!vw || !vh) return;
+    /* фаза колонны до пересборки — чтобы правка параметра не сбивала картину */
+    var phase = keep ? mod((smoothS - cycleS)*P.SPEED, cycle) : 0;
+    centerX = vw/2;
+    var s = vw / D;
+    /* блок стоит как в макете: координаты канвы, без вертикального центрирования */
+    var pageY = function(designY){ return designY*s; };
+
+    /* размеры картинок в жёстких пикселях: на любом экране одни и те же */
+    SZ = [
+      {w: P.W1, h: P.H1},
+      {w: P.W2, h: P.H2},
+      {w: P.W1, h: P.H1},
+      {w: P.W1, h: P.H1}
+    ];
+    var maxW = 0, maxH = 0;
+    SZ.forEach(function(z){ if (z.w > maxW) maxW = z.w; if (z.h > maxH) maxH = z.h; });
+    R = maxW/2 + P.CLEAR;                 /* коридор считается от самой широкой */
+    RATIO = SZ.map(function(z){ return (z.w/2 + P.CLEAR)/R; });
+    BUF = maxH + 60;                      /* докрутка за экраном // без ручки */
+    var capFloor = (maxW/2 + 20)/R;       /* дно предохранителя // без ручки */
+    pics.forEach(function(p, k){
+      p.style.width = SZ[k].w + 'px';
+      p.style.height = SZ[k].h + 'px';
+    });
+
+    /* нижний слой: подпись и миниатюра — статичны */
+    sig.style.left = (SIG.x*s) + 'px';
+    sig.style.top = pageY(SIG.y) + 'px';
+    sig.style.width = (SIG.w*s) + 'px';
+    sig.style.height = (SIG.h*s) + 'px';
+    thumb.style.left = (THUMB.x*s) + 'px';
+    thumb.style.top = (THUMB.y*s) + 'px';
+    thumb.style.width = (THUMB.w*s) + 'px';
+    thumb.style.height = (THUMB.h*s) + 'px';
+
+    /* строки макета: разбивка фиксированная, каждая строка на своём месте */
+    comp.innerHTML = '';
+    lines = [];
+    chains = [
+      { dir:-1, members:[], cur:0, D:0 },
+      { dir: 1, members:[], cur:0, D:0 }
+    ];
+    LINES.forEach(function(text, i){
+      var div = document.createElement('div');
+      div.className = 'line';
+      div.style.top = pageY(TEXT_TOP + i*LH) + 'px';
+      div.style.height = (LH*s) + 'px';
+      div.style.lineHeight = (LH*s) + 'px';
+      div.style.fontSize = (FS*s) + 'px';
+      div.style.letterSpacing = P.LS + 'em';
+      charify(div, text);
+      comp.appendChild(div);
+    });
+    /* буквы в span поштучно — для аналогового сжатия разрядки */
+    function charify(host, text){
+      var arr = [];
+      text.split('').forEach(function(ch){
+        var c = document.createElement('span');
+        c.className = 'ch';
+        c.textContent = ch;
+        host.appendChild(c);
+        arr.push(c);
+      });
+      return arr;
+    }
+    /* разрез точно по оси: ближайшая граница между буквами, хоть посреди слова —
+       пятно текста выходит симметричным, обтекание сильнее */
+    function splitAtAxis(host, chars){
+      var split = chars.length, best = Infinity;
+      for (var i=0;i<chars.length-1;i++){
+        var a = chars[i].getBoundingClientRect(), b = chars[i+1].getBoundingClientRect();
+        var gap = (a.right + b.left)/2;
+        if (Math.abs(gap - centerX) < best){ best = Math.abs(gap - centerX); split = i+1; }
+      }
+      var L = document.createElement('span'); L.className = 'half';
+      var Rt = document.createElement('span'); Rt.className = 'half';
+      var chL = chars.slice(0, split), chR = chars.slice(split);
+      chL.forEach(function(c){ L.appendChild(c); });
+      chR.forEach(function(c){ Rt.appendChild(c); });
+      host.innerHTML = '';
+      host.appendChild(L);
+      host.appendChild(Rt);
+      return { L:L, Rt:Rt, chL:chL, chR:chR };
+    }
+    /* ход каждой буквы к якорю у картинки: промежутки у картинки сжимаются на полную
+       разрядку, к внешнему краю — на нет; буква несёт сумму сжатий между собой и якорем.
+       k — подъём градиента для длинных строк: ближние к якорю промежутки упираются
+       в естественный ход (не теснее), дальние жмутся сильнее */
+    function shiftsFor(n, innerRight, LSpx, k){
+      var out = [], j, u, acc;
+      for (j=0;j<n;j++) out.push(0);
+      if (n < 2) return out;
+      var g = [];
+      for (j=0;j<n-1;j++){
+        u = innerRight ? (j+1)/(n-1) : (n-1-j)/(n-1);
+        g.push(LSpx*Math.min(1, u*k));
+      }
+      if (innerRight){
+        acc = 0;
+        for (j=n-2;j>=0;j--){ acc += g[j]; out[j] = acc; }
+      } else {
+        acc = 0;
+        for (j=1;j<n;j++){ acc += g[j-1]; out[j] = acc; }
+      }
+      return out;
+    }
+    /* сколько сжатия нужно этой половинке, чтобы на полном раскрытии
+       не выйти за экран: подбираем подъём k под недостающий ход */
+    function liftFor(n, LSpx, need){
+      if (need <= 0 || n < 2) return 1;
+      var total = function(k){
+        var t = 0;
+        for (var j=0;j<n-1;j++) t += Math.min(1, (j+1)/(n-1)*k)*LSpx;
+        return t;
+      };
+      var lo = 1, hi = 64;
+      if (total(hi) < need) return hi;
+      for (var i=0;i<24;i++){
+        var mid = (lo+hi)/2;
+        if (total(mid) >= need) hi = mid; else lo = mid;
+      }
+      return hi;
+    }
+    var LSpx = FS*s*P.LS;
+    var CURMAX = 1 + P.BULGE, MARGIN = P.MARGIN;
+
+    /* после раскладки: режем каждую строку на две половинки точно по оси */
+    [].slice.call(comp.children).forEach(function(div){
+      var halves = splitAtAxis(div, [].slice.call(div.querySelectorAll('.ch')));
+      var L = halves.L, Rt = halves.Rt, chL = halves.chL, chR = halves.chR;
+      var lr = L.getBoundingClientRect(), rr = Rt.getBoundingClientRect();
+      var dL = Math.max(0, lr.right - (centerX - R));
+      var dR = chR.length ? Math.max(0, (centerX + R) - rr.left) : 0;
+      /* чем длиннее строка, тем сильнее сжатие: добираем ровно столько,
+         чтобы внешний край на полном раскрытии остался в экране */
+      var needL = Math.max(0, MARGIN - (lr.left - dL*CURMAX));
+      var needR = Math.max(0, (rr.right + dR*CURMAX) - (vw - MARGIN));
+      var shL = shiftsFor(chL.length, true, LSpx, liftFor(chL.length, LSpx, needL));
+      var shR = shiftsFor(chR.length, false, LSpx, liftFor(chR.length, LSpx, needR));
+      /* предохранитель: если даже полное снятие разрядки не удерживает край
+         в экране, строке ограничивается амплитуда раздвига; сжатие при этом
+         набирает полную силу на её собственном пределе (fRef) */
+      var cap = Infinity;
+      if (dL > 0) cap = Math.min(cap, (lr.left - MARGIN + (shL[0] || 0))/dL);
+      var shRlast = chR.length ? shR[chR.length-1] : 0;
+      if (dR > 0) cap = Math.min(cap, (vw - MARGIN - rr.right + shRlast)/dR);
+      var capVal = Math.max(capFloor, cap);
+      lines.push({
+        L:L, R:Rt, el:div, track:true,
+        chL:chL, chR:chR, lastF:-1,
+        shL: shL,
+        shR: shR,
+        cap: capVal,
+        fRef: Math.min(CURMAX, capVal),
+        dL: dL,
+        dR: dR,
+        cy: (lr.top + lr.bottom)/2,
+        hh: (lr.bottom - lr.top)/2,
+        cur: 0
+      });
+    });
+
+    /* дескрипторы: собираются в две жёсткие цепочки сопряжений */
+    DESCR.forEach(function(d){
+      var el = document.createElement('div');
+      el.className = 'desc';
+      el.style.left = (d.x*s) + 'px';
+      /* центр дескриптора — ровно на середине межстрочника */
+      var boundary = TEXT_TOP + Math.round((d.y - TEXT_TOP)/LH)*LH;
+      el.style.top = (pageY(boundary) - DESC_FS*1.5*s/2) + 'px';
+      el.style.fontSize = (DESC_FS*s) + 'px';
+      el.style.lineHeight = 1.5;
+      if (d.split){
+        /* половинки разрезаются по оси и уходят с разными цепочками */
+        var chars = charify(el, d.t);
+        comp.appendChild(el);
+        var hv = splitAtAxis(el, chars);
+        var lr = hv.L.getBoundingClientRect(), rr = hv.Rt.getBoundingClientRect();
+        chains[0].members.push({ el: hv.L, need: Math.max(0, lr.right - (centerX - R)), cy: (lr.top + lr.bottom)/2, ord: 1, cur: 0 });
+        chains[1].members.push({ el: hv.Rt, need: Math.max(0, (centerX + R) - rr.left), cy: (rr.top + rr.bottom)/2, ord: 1, cur: 0 });
+        return;
+      }
+      el.innerHTML = d.t;
+      comp.appendChild(el);
+      var r = el.getBoundingClientRect();
+      var need = d.chain === 0
+        ? Math.max(0, r.right - (centerX - R))
+        : Math.max(0, (centerX + R) - r.left);
+      chains[d.chain].members.push({ el: el, need: need, cy: (r.top + r.bottom)/2, ord: d.ord, cur: 0 });
+    });
+    /* ход цепочки = максимум нужд её членов; члены — в порядке подчинения */
+    chains.forEach(function(ch){
+      ch.members.sort(function(a, b){ return a.ord - b.ord; });
+      ch.D = 0;
+      ch.members.forEach(function(m){ if (m.need > ch.D) ch.D = m.need; });
+    });
+
+    /* бесконечная колонна: позиции копятся по высотам картинок */
+    POS = []; cycle = 0;
+    SZ.forEach(function(z){ POS.push(cycle); cycle += z.h + vh*P.GAP; });
+    cycleS = cycle / P.SPEED;
+    baseY = vh*P.BASE/100;
+    var startS = cycleS + phase/P.SPEED;
+    spacer.style.height = staticShift === null ? (cycleS*3 + vh) + 'px' : '0';
+    if (staticShift === null) scrollTo(0, startS);
+    smoothS = startS;
+  }
+
+  function frame(){
+    if (lines.length){
+      var sy = staticShift === null ? scrollY : cycleS + staticShift;
+      /* держим скролл в средней трети ленты: прыжок ровно на цикл невидим */
+      if (staticShift === null){
+        if (sy < cycleS*0.5){ scrollTo(0, sy + cycleS); smoothS += cycleS; sy += cycleS; }
+        else if (sy > cycleS*2.5){ scrollTo(0, sy - cycleS); smoothS -= cycleS; sy -= cycleS; }
+      }
+
+      /* оттяжка: картинки догоняют колёсико с мягким отставанием */
+      smoothS += (sy - smoothS) * (reduced || staticShift !== null ? 1 : P.SOFT);
+      if (Math.abs(sy - smoothS) < 0.1) smoothS = sy;
+
+      var imgs = [];
+      pics.forEach(function(p, k){
+        var y = mod(baseY + POS[k] - (smoothS - cycleS)*P.SPEED + BUF, cycle) - BUF;
+        p.style.transform = 'translate3d(-50%,' + y + 'px,0)';
+        imgs.push({ c: y + SZ[k].h/2, h: SZ[k].h, r: RATIO[k] });
+      });
+
+      /* поле раздвига: волна × пузырь × ширина конкретной картинки */
+      var fieldAt = function(cy, halfH){
+        var t = 0;
+        imgs.forEach(function(im){
+          var d = Math.abs(cy - im.c);
+          var H = im.h/2 + halfH;
+          var w = d <= H ? 1 : d >= H + P.FALLOFF ? 0 : 0.5 + 0.5*Math.cos((d - H)/P.FALLOFF*Math.PI);
+          if (w <= 0) return;
+          var Z = im.h/2 + P.FALLOFF + 40;
+          var cz = Math.cos(Math.min(1, d/Z)*Math.PI/2);
+          var v = w * (1 + P.BULGE*cz*cz) * im.r;
+          if (v > t) t = v;
+        });
+        return t;
+      };
+
+      lines.forEach(function(ln){
+        var t = fieldAt(ln.cy, ln.hh);
+        if (ln.cap && t > ln.cap) t = ln.cap;
+        ln.cur += (t - ln.cur)*(staticShift === null ? (reduced ? 1 : P.EASE) : 1);
+        if (Math.abs(t - ln.cur) < 0.001) ln.cur = t;
+        ln.L.style.transform = 'translate3d(' + (-ln.dL*ln.cur) + 'px,0,0)';
+        ln.R.style.transform = 'translate3d(' + ( ln.dR*ln.cur) + 'px,0,0)';
+        /* буквы стекаются к картинке: сжатие сильнее всего у коридора, у внешних
+           краёв сходит на нет; вертикальная медиана — тем же множителем */
+        if (ln.track){
+          var f = Math.min(1, ln.cur/(ln.fRef || (1 + P.BULGE)));
+          if (Math.abs(f - ln.lastF) > 0.002){
+            ln.lastF = f;
+            ln.chL.forEach(function(c, i){ c.style.transform = 'translate3d(' + ( f*ln.shL[i]) + 'px,0,0)'; });
+            ln.chR.forEach(function(c, i){ c.style.transform = 'translate3d(' + (-f*ln.shR[i]) + 'px,0,0)'; });
+          }
+        }
+      });
+      /* цепочки сопряжений: караван с эластичностью — ведущий идёт к цели,
+         каждый подчинённый догоняет своего родителя; в движении склейки
+         растягиваются, на остановке смыкаются точно по линиям сопряжения */
+      chains.forEach(function(ch){
+        var t = 0;
+        ch.members.forEach(function(m){
+          var v = fieldAt(m.cy, 10);
+          if (v > t) t = v;
+        });
+        if (t > 1) t = 1;
+        var inst = staticShift !== null || reduced;
+        /* тройное сглаживание: поле → ведущий → караван подчинённых */
+        ch.t = inst ? t : (ch.t || 0) + (t - (ch.t || 0))*P.CHSOFT;
+        var prev = ch.dir * ch.D * ch.t;
+        ch.members.forEach(function(m, i){
+          var e = inst ? 1 : (i === 0 ? P.EASE : P.CHAIN);
+          m.cur += (prev - m.cur)*e;
+          m.el.style.transform = 'translate3d(' + m.cur + 'px,0,0)';
+          prev = m.cur;
+        });
+      });
+    }
+    if (staticShift === null) requestAnimationFrame(frame);
+  }
+
+  /* ---- панель: объявление величин, орган и шкала выводятся из типа ---- */
+  /* ZAKON:NACHALO */
+  var ZAKON = [
+    ['h', 'Набор'],
+    /* отрицательная разрядка обращает волну сжатия букв — низ шкалы поднят к нулю */
+    ['LS',      'Разрядка',          'кернинг', { ot0: 0 }],
+
+    ['h', 'Картинки'],
+    /* сужение: уже 100 портрет мельче миниатюры макета, шире 600 коридор
+       перекрывает столбец текста на ноутбучной ширине */
+    ['W1',      'Портрет: ширина',   'размер',  { ot0: 100, do: 600 }],
+    ['H1',      'Портрет: высота',   'размер',  { ot0: 100, do: 600 }],
+    ['W2',      'Вторая: ширина',    'размер',  { ot0: 100, do: 600 }],
+    ['H2',      'Вторая: высота',    'размер',  { ot0: 100, do: 600 }],
+    /* сужение: дальше двух экранов пустоты волна почти не встречает строк;
+       шаг осьмушки экрана — родной модуль интервала (1.125 на сетке шага) */
+    ['GAP',     'Интервал колонны',  'доля',    { ot: 'экран', kak: 'доли', do: 2, shag: 0.125 }],
+    ['BASE',    'Старт колонны',     'доля',    { ot: 'экран' }],
+
+    ['h', 'Волна'],
+    ['CLEAR',   'Зазор у картинки',  'зазор'],
+    /* сужение: спад длиннее 400 размывает волну до незаметности */
+    ['FALLOFF', 'Спад волны',        'путь',    { do: 400 }],
+    /* пузырь — доля раздвига, не процент; выше 1.5 его душит предохранитель */
+    ['BULGE',   'Пузырь',            'сила',    { do: 1.5, edinica: '' }],
+    ['MARGIN',  'Поле у края',       'поле'],
+    /* коэффициенты погони: ноль замораживает движение навсегда — низ поднят */
+    ['EASE',    'Строки: догон',     'инерция', { ot0: 0.03, do: 0.5 }],
+    ['CHSOFT',  'Цепочки: отклик',   'инерция', { ot0: 0.02, do: 0.5 }],
+    ['CHAIN',   'Цепочки: караван',  'инерция', { ot0: 0.05, do: 0.6 }],
+
+    ['h', 'Ход'],
+    /* передаточное число, не процент; ноль рвёт геометрию ленты (деление на SPEED) */
+    ['SPEED',   'Скролл: передача',  'сила',    { ot0: 0.1, do: 2, edinica: '×' }],
+    ['SOFT',    'Скролл: догон',     'инерция', { ot0: 0.02, do: 0.3 }],
+
+    ['h', 'Цвет'],
+    ['PAPER',   'Бумага',            'цвет'],
+    ['INK',     'Краска',            'цвет']
+  ];
+  /* ZAKON:KONEC */
+
+  var OPIS = {
+    LS:      'Разрядка строк; проходящая картинка стягивает буквы, снимая её.',
+    W1:      'Ширина портретов колонны, жёсткие пиксели без масштабирования.',
+    H1:      'Высота портретов колонны.',
+    W2:      'Ширина второй картинки колонны.',
+    H2:      'Высота второй картинки колонны.',
+    GAP:     'Пауза между картинками колонны, в долях высоты экрана.',
+    BASE:    'Где по высоте экрана стоит колонна при загрузке.',
+    CLEAR:   'Коридор между картинкой и краями половинок строки.',
+    FALLOFF: 'За сколько пикселей до картинки строки начинают расходиться.',
+    BULGE:   'Насколько строка напротив центра картинки шире, в долях раздвига.',
+    MARGIN:  'Ближе этого поля к краю экрана текст не выходит на полном раскрытии.',
+    EASE:    'Доля пути до цели, которую половинка строки проходит за кадр.',
+    CHSOFT:  'Отклик цепочек дескрипторов на поле волны, доля пути за кадр.',
+    CHAIN:   'Скорость, с которой подчинённый дескриптор догоняет ведущего.',
+    SPEED:   'Сколько хода колёсика передаётся картинкам.',
+    SOFT:    'Доля пути до колёсика, которую картинки проходят за кадр.',
+    PAPER:   'Цвет фона.',
+    INK:     'Цвет текста.'
+  };
+
+  /* эти параметры эффект читает каждый кадр — пересборка макета не нужна */
+  var LIVE = { SOFT:1, EASE:1, FALLOFF:1, CHAIN:1, CHSOFT:1 };
+  var CVET = { PAPER:1, INK:1 };
+  function applyColors(){
+    document.documentElement.style.setProperty('--paper', P.PAPER);
+    document.documentElement.style.setProperty('--ink', P.INK);
+  }
+  var rbT;
+  StendPanel.build({
+    storageKey: 'obtekanie-panel-params',
+    params: P,
+    defaults: DEFAULTS,
+    defs: StendPanel.izObyavleniya(ZAKON),
+    desc: OPIS,
+    onChange: function(key){
+      if (!key || CVET[key]) applyColors();
+      if (key && (LIVE[key] || CVET[key])) return;
+      /* остальные параметры входят в геометрию макета: пересборка с удержанием фазы */
+      clearTimeout(rbT);
+      rbT = setTimeout(function(){ build(true); if (staticShift !== null) frame(); }, 150);
+    }
+  });
+  applyColors();
+
+  build();
+  frame();
+  if (document.fonts && document.fonts.ready)
+    document.fonts.ready.then(function(){ build(true); if (staticShift !== null) frame(); });
+  var rT; addEventListener('resize', function(){
+    clearTimeout(rT);
+    rT = setTimeout(function(){ build(true); if (staticShift !== null) frame(); }, 150);
+  });
+})();
+</script>
+
+</body>
+</html>
