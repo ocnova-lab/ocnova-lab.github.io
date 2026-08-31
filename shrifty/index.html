@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Витрина шрифтов</title>
+<link rel="stylesheet" href="/panel.css" />
+<style>
+  @font-face { font-family: "Even Mono"; font-weight: 400; font-style: normal;
+    src: url("/fonts/EvenMono-Regular.woff2") format("woff2"),
+         url("/fonts/EvenMono-Regular.woff") format("woff"); font-display: swap; }
+  @font-face { font-family: "Editorial New"; font-weight: 400; font-style: normal;
+    src: url("/fonts/EditorialNew-Regular.woff") format("woff"); font-display: swap; }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { overflow: hidden; overscroll-behavior: none;
+         background: var(--fon); color: var(--tush); }
+
+  /* Шапка: поиск и счёт — содержание витрины, а не настройка (в панели их нет). */
+  #shapka { position: fixed; inset: 0 0 auto 0; min-height: 46px;
+            display: flex; align-items: center; flex-wrap: wrap;
+            gap: 8px 14px; padding: 8px 18px;
+            background: var(--fon); border-bottom: 0.5px solid var(--volos);
+            font: 12px/1 "Even Mono", monospace; color: var(--tush); z-index: 5; }
+  #poisk { flex: 1 1 150px; min-width: 110px; max-width: 42%;
+           font: 13px/1 "Even Mono", monospace; color: var(--tush);
+           background: transparent; border: 0; border-bottom: 0.5px solid var(--volos);
+           padding: 6px 2px; outline: none; }
+  #poisk::placeholder { color: var(--tush-2); }
+  #schet { color: var(--tush-2); white-space: nowrap; }
+  .knopka { font: 11px/1 "Even Mono", monospace; color: var(--tush-2);
+            background: transparent; border: 0.5px solid var(--volos); border-radius: 6px;
+            padding: 6px 10px; cursor: pointer; white-space: nowrap;
+            transition: color .12s, border-color .12s; }
+  .knopka:hover { color: var(--tush); border-color: var(--tush-2); }
+
+  #lenta { position: absolute; inset: var(--shapka) 0 0 0; overflow: auto; }
+  #holst { position: relative; width: 100%; }
+
+  /* Зона наведения: цель отбора — вся карточка, мелкой мишени нет (Фиттс). */
+  .kart { position: absolute; top: 0; left: 0; cursor: pointer;
+          border-right: 0.5px solid var(--volos);
+          border-bottom: 0.5px solid var(--volos);
+          padding: var(--polia); display: flex; flex-direction: column; gap: 6px;
+          transition: background .12s; }
+  .kart:hover { background: var(--navod); }
+  .kart[data-v="1"] { background: var(--vybran); }
+  .kart .metka { font: 10px/1.3 "Even Mono", monospace; color: var(--tush-2);
+                 display: flex; gap: 8px; align-items: baseline; }
+  .kart .metka b { font-weight: 400; color: var(--tush); min-width: 0;
+                   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .kart .metka span { flex: 0 0 auto; }
+  .kart[data-v="1"] .metka b::after { content: " ✓"; }
+  .kart .proba { line-height: 1.05; overflow: hidden; white-space: nowrap;
+                 text-overflow: ellipsis; color: var(--tush); }
+  .kart .nach { font: 10px/1.4 "Even Mono", monospace; color: var(--tush-2);
+                overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .kart[data-net="1"] .proba { color: var(--tush-2); opacity: .45; }
+
+  #pusto { position: absolute; inset: var(--shapka) 0 auto 0; padding: 40px 18px;
+           font: 12px/1.6 "Even Mono", monospace; color: var(--tush-2); }
+</style>
+</head>
+<body>
+
+<div id="shapka">
+  <input id="poisk" type="search" placeholder="имя гарнитуры" autocomplete="off" />
+  <span id="schet"></span>
+  <button class="knopka" id="k-nabor">Набор</button>
+  <button class="knopka" id="k-kopiya">Скопировать набор</button>
+  <button class="knopka" id="k-chistka">Очистить</button>
+</div>
+<div id="lenta"><div id="holst"></div></div>
+<div id="pusto" hidden></div>
+
+<script src="/shrifty-data.js"></script>
+<script src="/panel.js"></script>
+<script src="/panel-lib/segment.js"></script>
+<script src="/panel-lib/toggle.js"></script>
+<script src="/panel-lib/nabor.js"></script>
+<script src="/panel-lib/palitra.js"></script>
+<script>
+/* ─────────────────────────────────────────────────────────────
+   Витрина шрифтов — все гарнитуры мака показаны своим набором,
+   чтобы гарнитура выбиралась глазом, а не назначалась вслепую.
+
+   Смотрит: на окно — сколько карточек влезает по ширине.
+   Реагирует: ступеньками (колонок целое число), внутри колонки
+              ширина течёт долей 1fr.
+   Закон: 2 «Пересчёт» (колонок сколько влезет) поверх 3а «Доли»;
+          кегль пробы и ширина карточки — коридоры из панели.
+   Приём: «Зональная интерпретация — зона наведения» — цель отбора
+          есть вся карточка целиком, отдельной мишени-звёздочки нет.
+
+   Лента длинная (2213 семейств), поэтому в DOM живёт только видимое
+   окно рядов плюс запас: карточки берутся из пула и переписываются.
+
+   Параметры адреса: ?q=текст — сразу отфильтровать, ?reset=1, ?theme=nothing
+   ───────────────────────────────────────────────────────────── */
+
+var VSE = (window.SHRIFTY || []).slice();
+
+// ── пробы ───────────────────────────────────────────────────────
+var PROBY = {
+  imya:  null,                          // само имя гарнитуры
+  ru:    'Съешь ещё этих мягких булок',
+  en:    'The quick brown fox jumps',
+  cifry: '0123456789 №12 ₽ §'
+};
+
+// ── панель ──────────────────────────────────────────────────────
+var DEFAULTS = {
+  kegl: 34, kart: 300, obrazec: 'imya', nach: false,
+  filtr: ['kir', 'est'], sort: 'az', palette: 'svet',
+  fon: '#ffffff', tush: '#111111', tush2: '#8a8a92',
+  volos: '#e4e4e8', navod: '#f4f4f6', vybran: '#eef1ff'
+};
+var P = Object.assign({}, DEFAULTS);
+try { Object.assign(P, JSON.parse(localStorage.getItem('shrifty-params') || '{}')); } catch (e) {}
+
+var NABOR = {};                          // семейство → true, отобранное
+try { NABOR = JSON.parse(localStorage.getItem('shrifty-nabor') || '{}'); } catch (e) {}
+
+var ui = StendPanel.build({
+  storageKey: 'shrifty-params',
+  params: P, defaults: DEFAULTS,
+  defs: [
+    ['h', 'Проба'],
+    ['obrazec', 'Что набрано', 'segment', [
+      ['imya', 'Имя'], ['ru', 'Кириллица'], ['en', 'Латиница'], ['cifry', 'Цифры']]],
+    ['kegl', 'Кегль пробы, px', 11, 120, 1],
+    ['nach', '', 'toggle', ['Показать начертания', 'Скрыть начертания']],
+    ['h', 'Раскладка'],
+    ['kart', 'Ширина карточки, px', 150, 700, 10],
+    ['h', 'Отбор'],
+    ['filtr', 'Показывать', 'nabor', [
+      ['kir', 'с кириллицей'], ['moi', 'только мои'],
+      ['mono', 'моноширинные'], ['est', 'только рабочие'], ['svoi', 'только набор']]],
+    ['sort', 'Порядок', 'segment', [
+      ['az', 'А→Я'], ['moi', 'Мои сверху'], ['kir', 'Кириллица сверху']]],
+    ['h', 'Вид'],
+    ['palette', 'Палитра', 'palitra', [
+      ['svet', 'Светлая', { fon: '#ffffff', tush: '#111111', tush2: '#8a8a92',
+                            volos: '#e4e4e8', navod: '#f4f4f6', vybran: '#eef1ff' }],
+      ['noch', 'Ночь',    { fon: '#101014', tush: '#f0f0f2', tush2: '#7c7c88',
+                            volos: '#26262e', navod: '#1a1a20', vybran: '#1d2340' }],
+      ['bum',  'Бумага',  { fon: '#f2efe9', tush: '#1a1814', tush2: '#8b8578',
+                            volos: '#ddd8ce', navod: '#e9e5dd', vybran: '#e3e6d8' }]]]
+  ],
+  desc: {
+    obrazec: 'Чем набрана проба: именем самой гарнитуры или общей строкой — тогда гарнитуры сравниваются на одном тексте.',
+    kegl: 'Кегль пробы. От него считается высота карточки, поэтому лента пересобирается.',
+    kart: 'Наименьшая ширина карточки. Колонок берётся столько, сколько влезает; остаток раздаётся долями.',
+    filtr: 'Кириллица — по таблице cmap самого файла. «Только рабочие» отсеивает семейства, которые в системе не поднимаются.',
+    sort: 'Мои — из ~/Library/Fonts, то есть поставленные тобой, а не системой.',
+    nach: 'Список начертаний внутри семейства — Regular, Italic, Bold и прочие.'
+  },
+  onChange: function () { primenit(); perestroit(); }
+});
+
+// ── измерения: доступность и моноширинность берём у самого шрифта ──
+var izm = document.createElement('canvas').getContext('2d');
+function shirina(semya, txt, zapas) {
+  izm.font = '48px ' + (semya ? '"' + semya.replace(/"/g, '') + '", ' : '') + zapas;
+  return izm.measureText(txt).width;
+}
+VSE = VSE.filter(function (s) { return s.semya.charAt(0) !== '.'; });
+VSE.forEach(function (s) {
+  // если ширины совпали с запасным шрифтом при двух разных запасных — семейство не поднялось
+  s.est = !(Math.abs(shirina(s.semya, 'Ижица', 'monospace') - shirina('', 'Ижица', 'monospace')) < 0.5 &&
+            Math.abs(shirina(s.semya, 'Ижица', 'serif') - shirina('', 'Ижица', 'serif')) < 0.5);
+  s.mono = s.est && Math.abs(shirina(s.semya, 'i', 'serif') - shirina(s.semya, 'M', 'serif')) < 0.5;
+});
+
+// ── отбор строк ─────────────────────────────────────────────────
+var zapros = '', SPISOK = [];
+function otobrat() {
+  var f = P.filtr || [], q = zapros.trim().toLowerCase();
+  SPISOK = VSE.filter(function (s) {
+    if (q && s.semya.toLowerCase().indexOf(q) < 0) return false;
+    if (f.indexOf('kir') >= 0 && !s.kir) return false;
+    if (f.indexOf('moi') >= 0 && s.gde.indexOf('мои') < 0) return false;
+    if (f.indexOf('mono') >= 0 && !s.mono) return false;
+    if (f.indexOf('est') >= 0 && !s.est) return false;
+    if (f.indexOf('svoi') >= 0 && !NABOR[s.semya]) return false;
+    return true;
+  });
+  var ves = { moi: function (s) { return s.gde.indexOf('мои') >= 0 ? 0 : 1; },
+              kir: function (s) { return s.kir ? 0 : 1; } }[P.sort];
+  SPISOK.sort(function (a, b) {
+    var d = ves ? ves(a) - ves(b) : 0;
+    return d || a.semya.toLowerCase().localeCompare(b.semya.toLowerCase(), 'ru');
+  });
+  var n = Object.keys(NABOR).length;
+  document.getElementById('schet').textContent =
+    SPISOK.length + ' из ' + VSE.length + (n ? '   ·   в наборе ' + n : '');
+}
+
+// ── геометрия: считается из ширины ленты, не замеряется по карточкам ──
+var lenta = document.getElementById('lenta'), holst = document.getElementById('holst');
+var pul = [], kolonok = 1, shirKart = 0, vysKart = 0, POLIA = 14;
+
+function geometriya() {
+  var W = lenta.clientWidth;
+  kolonok = Math.max(1, Math.floor(W / P.kart));
+  shirKart = W / kolonok;
+  vysKart = POLIA * 2 + 15 + Math.round(P.kegl * 1.32) + (P.nach ? 16 : 0);
+}
+
+function vysotaShapki() {           // однократный замер на ресайзе, не в цикле раскладки
+  document.documentElement.style.setProperty(
+    '--shapka', document.getElementById('shapka').offsetHeight + 'px');
+}
+
+function primenit() {
+  var s = document.documentElement.style;
+  s.setProperty('--fon', P.fon);     s.setProperty('--tush', P.tush);
+  s.setProperty('--tush-2', P.tush2); s.setProperty('--volos', P.volos);
+  s.setProperty('--navod', P.navod);  s.setProperty('--vybran', P.vybran);
+  s.setProperty('--polia', POLIA + 'px');
+}
+
+function perestroit() {
+  otobrat();
+  vysotaShapki();
+  geometriya();
+  var ryadov = Math.ceil(SPISOK.length / kolonok);
+  holst.style.height = (ryadov * vysKart) + 'px';
+  var nado = kolonok * (Math.ceil(lenta.clientHeight / vysKart) + 2);
+  while (pul.length < nado) {
+    var k = document.createElement('div');
+    k.className = 'kart';
+    k.innerHTML = '<div class="metka"><b></b><span></span></div>' +
+                  '<div class="proba"></div><div class="nach"></div>';
+    k.addEventListener('click', function () {
+      var im = this.dataset.semya;
+      if (NABOR[im]) delete NABOR[im]; else NABOR[im] = true;
+      localStorage.setItem('shrifty-nabor', JSON.stringify(NABOR));
+      narisovat(); otobrat();
+    });
+    holst.appendChild(k); pul.push(k);
+  }
+  while (pul.length > nado) holst.removeChild(pul.pop());
+  narisovat();
+  var net = SPISOK.length === 0;
+  document.getElementById('pusto').hidden = !net;
+  document.getElementById('pusto').textContent = net ? 'ничего не нашлось — сними фильтр или поправь запрос' : '';
+}
+
+function narisovat() {
+  var pervyi = Math.max(0, Math.floor(lenta.scrollTop / vysKart) - 1);
+  for (var i = 0; i < pul.length; i++) {
+    var idx = pervyi * kolonok + i, s = SPISOK[idx], k = pul[i];
+    if (!s) { k.style.display = 'none'; continue; }
+    k.style.display = '';
+    k.style.width = shirKart + 'px';
+    k.style.height = vysKart + 'px';
+    k.style.transform = 'translate(' + ((idx % kolonok) * shirKart) + 'px,' +
+                        (Math.floor(idx / kolonok) * vysKart) + 'px)';
+    k.dataset.semya = s.semya;
+    k.dataset.v = NABOR[s.semya] ? '1' : '0';
+    k.dataset.net = s.est ? '0' : '1';
+    var m = k.firstChild;
+    m.firstChild.textContent = s.semya;
+    m.lastChild.textContent = [s.kir ? 'RU' : '', s.mono ? 'моно' : '',
+                               s.gde.indexOf('мои') >= 0 ? '' : 'система',
+                               s.est ? '' : 'не поднялась'].filter(Boolean).join(' · ');
+    var pr = m.nextSibling;
+    pr.textContent = PROBY[P.obrazec] || s.semya;
+    pr.style.font = P.kegl + 'px "' + s.semya.replace(/"/g, '') + '", serif';
+    var nh = pr.nextSibling;
+    nh.hidden = !P.nach;
+    nh.textContent = P.nach ? s.nach.join(' · ') : '';
+  }
+}
+
+// ── шапка ───────────────────────────────────────────────────────
+var pole = document.getElementById('poisk');
+pole.addEventListener('input', function () { zapros = this.value; lenta.scrollTop = 0; perestroit(); });
+document.getElementById('k-nabor').addEventListener('click', function () {
+  var f = (P.filtr || []).slice(), i = f.indexOf('svoi');
+  if (i >= 0) f.splice(i, 1); else f.push('svoi');
+  P.filtr = f; ui.obnovit(); ui.save(); perestroit();
+});
+document.getElementById('k-kopiya').addEventListener('click', function () {
+  var imena = Object.keys(NABOR).sort();
+  if (!imena.length) { this.textContent = 'набор пуст'; var t = this; setTimeout(function () { t.textContent = 'Скопировать набор'; }, 1200); return; }
+  var txt = imena.map(function (n) { return "  ['" + n.replace(/'/g, "\\'") + "', '" + n + "'],"; }).join('\n');
+  navigator.clipboard.writeText('[\n' + txt + '\n]');
+  this.textContent = 'скопировано: ' + imena.length; var b = this;
+  setTimeout(function () { b.textContent = 'Скопировать набор'; }, 1400);
+});
+document.getElementById('k-chistka').addEventListener('click', function () {
+  NABOR = {}; localStorage.setItem('shrifty-nabor', '{}'); perestroit();
+});
+
+lenta.addEventListener('scroll', narisovat, { passive: true });
+addEventListener('resize', perestroit);
+
+var adres = new URLSearchParams(location.search);
+if (adres.get('q')) { zapros = adres.get('q'); pole.value = zapros; }
+
+primenit();
+perestroit();
+</script>
+</body>
+</html>

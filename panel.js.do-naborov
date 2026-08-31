@@ -285,7 +285,7 @@
         applyFold(); saveFolds();
       });
       applyFold();
-      sekcii.push({ title: title, fold: applyFold, h: h, card: card });
+      sekcii.push({ title: title, fold: applyFold });
       return card;
     }
     /* Свернуть всё разом: с десятком секций поштучное складывание — работа,
@@ -528,58 +528,6 @@
 
     // ── подвал: тема панели + сброс ──
     var foot = addSection('Панель');
-
-    /* РАБОЧИЕ НАБОРЫ. Панель из тридцати ручек показывает всё сразу, а
-       работа идёт над одним: над волной, над каталогом, над цветом. Набор —
-       именованный список секций под текущую работу; остальные секции
-       прячутся целиком (спрятано — значит нет). Выбор помнится на стенд,
-       ?nabor=имя открывает нужный сразу — этим же путём набор может
-       подставить нейронка, когда ей сказали, над чем работаем.
-
-         nabory: {
-           'всё': null,                       // null — показать все секции
-           'волна': ['Волна', 'Ход'],
-         }                                                                */
-    var vyborNabora = null;
-    if (o.nabory) {
-      var NABOR_KEY = 'stend-nabor:' + o.storageKey;
-      var imena = Object.keys(o.nabory);
-      var tekNabor = null;
-      try { tekNabor = localStorage.getItem(NABOR_KEY); } catch (e) {}
-      var izAdresa = (location.search.match(/[?&]nabor=([^&]+)/) || [])[1];
-      if (izAdresa) tekNabor = decodeURIComponent(izAdresa);
-      if (imena.indexOf(tekNabor) < 0) tekNabor = imena[0];
-
-      function primenitNabor(imya) {
-        tekNabor = imya;
-        var spisok = o.nabory[imya];
-        sekcii.forEach(function (s) {
-          if (s.title === 'Панель') return; // подвал не прячется никогда
-          var skryt = Boolean(spisok) && spisok.indexOf(s.title) < 0;
-          s.h.hidden = skryt;
-          s.card.hidden = skryt || !!folds[s.title];
-        });
-        try { localStorage.setItem(NABOR_KEY, imya); } catch (e) {}
-      }
-
-      var nrow = document.createElement('div'); nrow.className = 'row';
-      var nlab = document.createElement('label'); nadpis(nlab, 'panel:nabor', 'Набор');
-      var nsel = document.createElement('select');
-      imena.forEach(function (imya) {
-        var opt = document.createElement('option');
-        opt.value = imya; nadpis(opt, 'nabor:' + imya, imya);
-        nsel.appendChild(opt);
-      });
-      nsel.value = tekNabor;
-      nsel.addEventListener('input', function () { primenitNabor(nsel.value); });
-      nrow.appendChild(nlab); nrow.appendChild(nsel);
-      foot.appendChild(nrow);
-      primenitNabor(tekNabor);
-      vyborNabora = function (imya) {
-        if (!o.nabory[imya] && o.nabory[imya] !== null) return;
-        nsel.value = imya; primenitNabor(imya);
-      };
-    }
     var trow = document.createElement('div'); trow.className = 'row';
     var tlab = document.createElement('label'); nadpis(tlab, 'panel:theme', 'Тема');
     var tsel = document.createElement('select');
@@ -658,7 +606,6 @@
       params: P, defaults: DEFAULTS, controls: controls,
       // перерисовать все ручки после внешней правки P (откат, пресет извне)
       obnovit: function () { for (var k in controls) controls[k](); },
-      nabor: vyborNabora, // переключить рабочий набор снаружи (агент, скрипт)
     };
   }
 

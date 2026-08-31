@@ -79,6 +79,10 @@
     'кривая':   { organ: 'ease', edinica: '' },
     'двоичное': { organ: 'toggle', edinica: '' },
     'выбор':    { organ: null, edinica: '' }, // орган выбирается по числу вариантов
+    // Этажность. Лонгрид верстается этажами: закон один на всех, этаж может
+    // отступить. «этажи» ставит инспектор (кто сейчас правится), а величина
+    // с пометкой k:'этаж' собирается органом наследования вместо слайдера.
+    'этажи':    { organ: 'inspektor', edinica: '' },
     'пара':     { organ: 'para', edinica: '' }, // две родственные величины в строке
     'откат':    { organ: 'otkat', edinica: '' },
   };
@@ -187,7 +191,20 @@
         defs.push([klyuch, nadpis, organ, o.iz || [], o.opcii]);
         return;
       }
-      if (['color', 'ease', 'toggle', 'otkat', 'palitra', 'datchik'].indexOf(baza.organ) >= 0) {
+      var tipy = (typeof StendPanel !== 'undefined' && StendPanel.tipy) || {};
+      if (tip === 'этажи' && !tipy.inspektor) {
+        pretenzii.push('«этажи» (' + klyuch + ') требуют /panel-lib/inspektor.js — строка пропущена');
+        return;
+      }
+      if (o.k === 'этаж' && !tipy.nasledovanie) {
+        pretenzii.push('этажная величина ' + klyuch + ' требует /panel-lib/nasledovanie.js — собрана обычной ручкой');
+        o = Object.assign({}, o); delete o.k;
+      }
+      if (o.k === 'этаж' && tip === 'цвет') {
+        defs.push([klyuch, nadpis, 'nasledovanie', 'color']);
+        return;
+      }
+      if (['color', 'ease', 'toggle', 'otkat', 'palitra', 'datchik', 'inspektor'].indexOf(baza.organ) >= 0) {
         defs.push([klyuch, nadpis, o.organ || baza.organ, o.iz || o.podpisi, o.opcii]);
         return;
       }
@@ -198,9 +215,12 @@
       }
       var lo = o.ot0 !== undefined ? o.ot0 : baza.ot0;
       var hi = o.do !== undefined ? o.do : baza.do;
-      defs.push([klyuch, nadpis, lo, hi,
-                 o.shag !== undefined ? o.shag : shagIzDiapazona(lo, hi, baza.minShag),
-                 o.opcii]);
+      var sh = o.shag !== undefined ? o.shag : shagIzDiapazona(lo, hi, baza.minShag);
+      if (o.k === 'этаж') {
+        defs.push([klyuch, nadpis, 'nasledovanie', lo, hi, sh]);
+        return;
+      }
+      defs.push([klyuch, nadpis, lo, hi, sh, o.opcii]);
     });
 
     // Датчик на саму таблицу. Считать просто «сколько перебито» мало:
