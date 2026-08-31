@@ -49,6 +49,7 @@
 <script src="/panel-lib/vybor.js"></script>
 <script src="/panel-lib/ugol.js"></script>
 <script src="/panel-lib/palitra.js"></script>
+<script src="/panel-lib/garnitura.js"></script>
 <script src="/panel-lib/para.js"></script>
 <script src="/panel-lib/nasledovanie.js"></script>
 <script src="/panel-lib/inspektor.js"></script>
@@ -83,6 +84,7 @@ var ORGANY = [
   ['превью',    "[key, 'Композиция', 'vybor', [['A', 'Колонки']], { risovat: … }]"],
   ['угол',      "[key, 'Завал оси, °', 'ugol', 0, 45]"],
   ['палитра',   "[key, 'Палитра', 'palitra', [['night', 'Ночь', { bg: '#101014' }]]]"],
+  ['гарнитура', "[key, 'Гарнитура', 'garnitura']  —  алфавит свода + свой набор из витрины /shrifty"],
   ['пара',      "[key, 'Поле, px', 'para', [['padT', 'сверху', 0, 300, 4], …]]"],
   ['инспектор', "[key, 'Правим', 'inspektor', [['oblozhka', 'Обложка'], …]]  —  первый пункт списка = общий закон"],
   ['наследование', "[key, 'Кегль', 'nasledovanie', 12, 48, 1]  →  StendPanel.znachenie(P, key, 'oblozhka')"],
@@ -104,7 +106,7 @@ var DEFAULTS = {
   yakor: 'c', vid: 'lesenka', setka: true, priemy: ['akcent'],
   pole: [40, 180], sila: 60, ostrota: 2.2,
   spring: [320, 0.35], kompoziciya: 'A',
-  zaval: 12, padT: 60, padB: 120,
+  zaval: 12, padT: 60, padB: 120, shrift: 'Editorial New',
   aktivnyi: '', etazhKegl: 100, etazhVozduh: 0,
   otkloneniya: {}, // служебное: гнездо отступлений, ручка ему не нужна
 };
@@ -179,6 +181,7 @@ StendPanel.build({
       },
     }],
     ['h', 'Ещё из библиотеки'],
+    ['shrift', 'Гарнитура', 'garnitura'],
     ['zaval', 'Завал оси, °', 'ugol', 0, 45],
     ['', 'Поле, px', 'para', [['padT', 'сверху', 0, 300, 4], ['padB', 'снизу', 0, 300, 4]]],
     ['palette', 'Палитра', 'palitra', [
