@@ -55,9 +55,13 @@
     'порог':    { organ: 'слайдер', ot0: 320, do: 1200, shag: 10, edinica: 'px' },
     'скорость': { organ: 'слайдер', ot0: -200, do: 200, shag: 1, edinica: 'px/с' },
     'цвет':     { organ: 'color', edinica: '' },
+    'палитра':  { organ: 'palitra', edinica: '' },
+    'датчик':   { organ: 'datchik', edinica: '' },
     'кривая':   { organ: 'ease', edinica: '' },
     'двоичное': { organ: 'toggle', edinica: '' },
     'выбор':    { organ: null, edinica: '' }, // орган выбирается по числу вариантов
+    'пара':     { organ: 'para', edinica: '' }, // две родственные величины в строке
+    'откат':    { organ: 'otkat', edinica: '' },
   };
 
   // Доля — единственный тип, у которого границы зависят от опоры.
@@ -132,13 +136,41 @@
       }
       var nadpis = podpis(imya, edinica);
 
+      // Второй признак величины, найденный на том же замере: сколько у неё
+      // концов. Одиночная — слайдер; коридор — одна величина с двумя
+      // границами; пара — две родственные величины в одной строке.
+      // Тип отвечает «что меряем», края — «сколькими числами».
+      if (o.kraya === 'коридор') {
+        defs.push([klyuch, nadpis, 'koridor',
+                   o.ot0 !== undefined ? o.ot0 : baza.ot0,
+                   o.do !== undefined ? o.do : baza.do,
+                   o.shag !== undefined ? o.shag : baza.shag]);
+        return;
+      }
+      if (tip === 'пара') {
+        // Подписи внутри пары короткие и переводятся по своему тексту —
+        // единицу к ним не приписываем, она стоит в подписи всей строки.
+        var deti = (o.iz || []).map(function (r) {
+          var d = r[3] || {}, b = r[2] === 'доля'
+            ? (d.kak === 'доли' || d.kak === '×' ? MNOZHITEL : (OPORY[d.ot] || OPORY['своё']))
+            : TABLICA[r[2]];
+          if (!b) { pretenzii.push('в паре «' + imya + '» неизвестный тип: ' + r[2]); b = {}; }
+          return [r[0], r[1],
+                  d.ot0 !== undefined ? d.ot0 : b.ot0,
+                  d.do !== undefined ? d.do : b.do,
+                  d.shag !== undefined ? d.shag : b.shag];
+        });
+        defs.push([klyuch || '', nadpis, 'para', deti]);
+        return;
+      }
+
       if (tip === 'выбор') {
         // Принцип 9: закрытый короткий список — сегментер, длинный — селект.
         var organ = o.organ || (o.iz && o.iz.length <= 5 ? 'segment' : 'select');
         defs.push([klyuch, nadpis, organ, o.iz || [], o.opcii]);
         return;
       }
-      if (baza.organ === 'color' || baza.organ === 'ease' || baza.organ === 'toggle') {
+      if (['color', 'ease', 'toggle', 'otkat', 'palitra', 'datchik'].indexOf(baza.organ) >= 0) {
         defs.push([klyuch, nadpis, o.organ || baza.organ, o.iz || o.podpisi, o.opcii]);
         return;
       }
