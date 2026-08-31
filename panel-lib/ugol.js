@@ -6,10 +6,13 @@
    Слайдер под угол врёт формой: он прямой, а величина круговая, и «85°» на
    дорожке ничем не отличается от «85 чего угодно». Кольцо показывает угол углом.
 
-   Правка 2026-09-01 по замечанию Сергея: кольцо в 30 px было мишенью меньше
-   ногтя — «неудобно для руки». Круг вырос вдвое (площадь хвата — вчетверо),
-   радиус-линия ведётся от центра, конец с рукояткой; число справа осталось
-   и правится щелчком, дабл-клик по кругу возвращает исходный угол.
+   Правки 2026-09-01 по замечаниям Сергея. Круг вырос вдвое (30 → 56 px,
+   площадь хвата вчетверо). Захват относительный, как в Фигме: нажатие НЕ
+   прыгает к месту клика — берёшь угол, где он стоит, и ведёшь; раньше
+   значение слетало дважды: прыжком при захвате и переброской через границу
+   сектора (0° рядом с 360° по кругу, но не по шкале). С Shift ход грубее,
+   по 5°. Число справа правится щелчком: стрелки ±1, с Shift ±10, запятая
+   читается как точка. Дабл-клик по кругу возвращает исходный угол.
 
    Объявление:  ['ugol', 'Угол, °', 'ugol', 45, 90]        — сектор допустимого
                 ['ugol', 'Поворот, °', 'ugol', 0, 360, { shag: 5 }]
@@ -64,22 +67,31 @@
       ctx.beginPath(); ctx.arc(hx, hy, 5, 0, 6.284); ctx.fill();      // рукоятка
       val.textContent = parseFloat(P[d[0]].toFixed(2));
     }
-    function ot_myshi(e) {
+    function ugol_kursora(e) { // сырой угол указателя, 0…360
       var b = cv.getBoundingClientRect();
       var a = Math.atan2(-(e.clientY - b.top - b.height / 2), e.clientX - b.left - b.width / 2);
       var gr = a * 180 / Math.PI;
-      if (gr < 0) gr += 360;
-      gr = Math.round(gr / shag) * shag;
-      return Math.min(do_, Math.max(ot, gr));      // за сектор не выходим
+      return gr < 0 ? gr + 360 : gr;
     }
-    var tyanem = false;
+    /* Захват относительный: на нажатии значение НЕ меняется — запоминаем,
+       где рука и где угол, дальше ведём разницей. Абсолютный захват давал
+       два срыва: прыжок к месту клика и переброску через границу сектора,
+       где 0° и 360° соседи по кругу, но края по шкале. */
+    var tyanem = false, ruka0 = 0, ugol0 = 0;
     cv.addEventListener('pointerdown', function (e) {
       tyanem = true; cv.setPointerCapture(e.pointerId);
-      P[d[0]] = ot_myshi(e); risovat(); api.save();
+      ruka0 = ugol_kursora(e); ugol0 = P[d[0]];
     });
     cv.addEventListener('pointermove', function (e) {
       if (!tyanem) return;
-      P[d[0]] = ot_myshi(e); risovat(); api.save();
+      var raznica = ugol_kursora(e) - ruka0;
+      if (raznica > 180) raznica -= 360;      // через границу круга — короткой дугой
+      if (raznica < -180) raznica += 360;
+      var krupno = e.shiftKey ? Math.max(5, shag) : shag; // Shift — грубее, по 5°
+      var v = Math.round((ugol0 + raznica) / krupno) * krupno;
+      v = Math.min(do_, Math.max(ot, v));
+      if (v === ot || v === do_) { ruka0 = ugol_kursora(e); ugol0 = v; } // у упора не копим перелёт
+      if (v !== P[d[0]]) { P[d[0]] = v; risovat(); api.save(); }
     });
     cv.addEventListener('pointerup', function () { tyanem = false; });
     // дабл-клик — откат этой ручки к исходному, как у слайдеров
@@ -92,15 +104,16 @@
     // клик по числу — точный ввод (Enter/уход — принять, Esc — отмена)
     val.addEventListener('click', function () {
       var ked = document.createElement('input');
-      ked.type = 'number'; ked.className = 'val-edit'; ked.step = 'any';
+      ked.type = 'text'; ked.inputMode = 'decimal'; ked.className = 'val-edit';
       ked.value = parseFloat(P[d[0]].toFixed(2));
+      if (StendPanel.klavishi) StendPanel.klavishi(ked); // стрелки ±1, Shift ±10
       box.replaceChild(ked, val);
       ked.focus(); ked.select();
       var gotovo = false;
       function prinyat(ok) {
         if (gotovo) return; gotovo = true;
         box.replaceChild(val, ked);
-        var v = parseFloat(ked.value);
+        var v = parseFloat(String(ked.value).replace(',', '.'));
         if (ok && !isNaN(v)) { P[d[0]] = Math.min(do_, Math.max(ot, v)); api.save(); }
         risovat();
       }

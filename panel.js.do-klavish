@@ -28,19 +28,6 @@
    ──────────────────────────────────────────────────────────────────── */
 (function () {
   var THEME_KEY = 'stend-panel-theme';
-
-  // Точный ввод числа — единые клавиши для всех полей панели и органов:
-  // стрелки ±1, с Shift ±10 (как в Фигме), запятая читается как точка.
-  function klavishiChisla(ked) {
-    ked.addEventListener('keydown', function (ev) {
-      if (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown') return;
-      ev.preventDefault();
-      var v = parseFloat(String(ked.value).replace(',', '.')) || 0;
-      var shag = ev.shiftKey ? 10 : 1;
-      ked.value = parseFloat((v + (ev.key === 'ArrowUp' ? shag : -shag)).toFixed(4));
-    });
-  }
-  function chislo(v) { return parseFloat(String(v).replace(',', '.')); }
   // Реестр органов управления (библиотека /panel-lib): StendPanel.tip('имя', fn).
   // fn(row, d, P, api) строит строку панели; api = {save, host, bindTip, accent, repaints, controls}
   var TIPY = {};
@@ -496,16 +483,15 @@
       // клик по числу — точный ввод с клавиатуры (Enter/уход — принять, Esc — отмена)
       val.addEventListener('click', function () {
         var ked = document.createElement('input');
-        ked.type = 'text'; ked.inputMode = 'decimal'; ked.className = 'val-edit';
+        ked.type = 'number'; ked.className = 'val-edit'; ked.step = 'any';
         ked.value = parseFloat((P[d[0]] * mul).toFixed(4));
-        klavishiChisla(ked);
         row.replaceChild(ked, val);
         ked.focus(); ked.select();
         var done = false;
         function commit(ok) {
           if (done) return; done = true;
           if (ok) {
-            var v = chislo(ked.value);
+            var v = parseFloat(ked.value);
             if (!isNaN(v)) {
               v = Math.max(parseFloat(inp.min), Math.min(parseFloat(inp.max), v));
               P[d[0]] = v / mul;
@@ -680,7 +666,6 @@
 
   window.StendPanel = {
     build: build,
-    klavishi: klavishiChisla, // стрелки ±1 / Shift ±10 / запятая — для полей органов
     tip: function (imya, fn) { TIPY[imya] = fn; return this; },
     tipy: TIPY,
   };

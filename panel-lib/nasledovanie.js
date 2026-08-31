@@ -162,15 +162,16 @@
     // Клик по числу — точный ввод (Enter или уход принимают, Esc отменяет).
     if (val) val.addEventListener('click', function () {
       var ked = document.createElement('input');
-      ked.type = 'number'; ked.className = 'val-edit'; ked.step = 'any';
+      ked.type = 'text'; ked.inputMode = 'decimal'; ked.className = 'val-edit';
       ked.value = parseFloat(inp.value);
+      if (StendPanel.klavishi) StendPanel.klavishi(ked); // стрелки ±1, Shift ±10, запятая
       box.replaceChild(ked, val);
       ked.focus(); ked.select();
       var gotovo = false;
       function prinyat(ok) {
         if (gotovo) return; gotovo = true;
         box.replaceChild(val, ked);
-        var v = parseFloat(ked.value);
+        var v = parseFloat(String(ked.value).replace(',', '.'));
         if (ok && !isNaN(v)) zapisat(Math.max(lo, Math.min(hi, v)) / n.mul);
         else narisovat();
       }
