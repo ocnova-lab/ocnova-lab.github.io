@@ -84,7 +84,19 @@
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       var f = otklik(P[d[0]][0], P[d[0]][1]);
       var okno = P[d[0]][0] * 3.2;                       // три периода — видно и отскок, и покой
-      var lo = -0.35, hi = 1.5;
+      /* Окно по вертикали подгоняется под саму кривую: слабое затухание
+         забрасывает пружину выше, и зашитая рамка её резала (правка
+         2026-09-01 — «чтобы кривая всегда помещалась в превью»). Меряем
+         размах отклика и дышим рамкой, а не карточкой: высота карточки
+         постоянна, иначе панель дёргалась бы при каждом движении ползунка. */
+      var razmah_lo = 0, razmah_hi = 1;
+      for (var pr = 0; pr < 110; pr++) {
+        var vv = f(okno * pr / 109);
+        if (vv < razmah_lo) razmah_lo = vv;
+        if (vv > razmah_hi) razmah_hi = vv;
+      }
+      var zapas = (razmah_hi - razmah_lo) * 0.1;
+      var lo = razmah_lo - zapas, hi = razmah_hi + zapas;
       function ekran(v) { return VYS - (v - lo) / (hi - lo) * VYS; }
       ctx.clearRect(0, 0, w, VYS);
       ctx.strokeStyle = 'rgba(255,255,255,.14)'; ctx.lineWidth = 1;
