@@ -217,24 +217,6 @@
    целиком, а не к отдельной ручке */
 .st-panel .st-verh { display: flex; align-items: center; gap: 8px;
   margin: 0 0 10px; }
-
-/* СТРОКА СОСТОЯНИЯ. Из суженного вида нельзя выпасть незаметно: пропавшие
-   ручки читаются как поломка, если не сказано, что они спрятаны. Строка
-   прибита к верху (sticky) — она отвечает «где я» в любой точке прокрутки
-   и держит выход. Фон непрозрачный: под ней едут карточки. */
-.st-panel .st-sost { position: sticky; top: -12px; z-index: 3;
-  display: flex; align-items: center; gap: 8px;
-  margin: -12px -14px 10px; padding: 9px 14px;
-  background: var(--st-glass-2, rgba(30,30,32,.96));
-  border-bottom: 0.5px solid var(--st-hairline);
-  font-size: 11px; color: var(--st-text-2); }
-.st-panel .st-sost b { font-weight: 500; color: var(--st-text); }
-.st-panel .st-sost.uzko b { color: var(--st-accent); }
-.st-panel .st-sost-x { margin-left: auto; border: 0; background: transparent;
-  color: var(--st-text-2); font: inherit; font-size: 14px; line-height: 1;
-  padding: 2px 4px; cursor: pointer; border-radius: 5px; }
-.st-panel .st-sost-x:hover { color: var(--st-text); background: var(--st-card); }
-.st-panel .st-sost-x[hidden] { display: none; }
 .st-panel .st-yaz { display: flex; border: 1px solid var(--st-line, rgba(255,255,255,.18));
   border-radius: 7px; overflow: hidden; }
 .st-panel .st-yaz-b { border: 0; background: transparent; color: inherit;

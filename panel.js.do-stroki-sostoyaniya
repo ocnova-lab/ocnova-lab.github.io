@@ -250,7 +250,7 @@
       'всё по умолчанию': 'all at defaults', 'Параметры:': 'Parameters:',
       'своя (безье)': 'custom (bezier)', 'линейный': 'linear',
       'разгон': 'ease-in', 'торможение': 'ease-out', 'плавный': 'ease-in-out',
-      'квадрат': 'quad', 'Свернуть всё': 'Collapse all', 'Все законы': 'All laws',
+      'квадрат': 'quad', 'Свернуть всё': 'Collapse all',
       'Развернуть всё': 'Expand all', 'Язык панели': 'Panel language'
     };
     var EN = o.en || {}, ENDESC = o.enDesc || {};
@@ -347,36 +347,6 @@
     verh.appendChild(yaz); verh.appendChild(sver);
     panel.appendChild(verh);
     metkaSver();
-
-    /* ── СТРОКА СОСТОЯНИЯ ──────────────────────────────────────────────
-       Отвечает на «где я» и держит выход. Сужение вида — это ВИД, а не
-       правка: выход ничего не меняет в макете, поэтому он бесплатный и
-       без подтверждений. Прибита к верху панели: в прокрутке на семьдесят
-       ручек состояние обязано быть видно из любой точки.
-       Заполняется ниже, когда известны наборы и секции. */
-    var sost = document.createElement('div');
-    sost.className = 'st-sost';
-    var sostText = document.createElement('span');
-    var sostX = document.createElement('button');
-    sostX.type = 'button'; sostX.className = 'st-sost-x';
-    sostX.textContent = '\u2715';
-    sostX.title = 'показать все законы (Esc)';
-    sostX.hidden = true;
-    sost.appendChild(sostText); sost.appendChild(sostX);
-    panel.appendChild(sost);
-    var obnovitSostoyanie = function () {};
-    // «23 ручек» читается как машинный вывод; строка состояния — текст,
-    // который читают глазами каждый раз, и склонение тут не мелочь
-    function ruchek(n) {
-      var d10 = n % 10, d100 = n % 100;
-      if (d10 === 1 && d100 !== 11) return n + ' ручка';
-      if (d10 >= 2 && d10 <= 4 && (d100 < 10 || d100 >= 20)) return n + ' ручки';
-      return n + ' ручек';
-    }
-    // после «из» число уходит в родительный: «19 из 71 ручки», «19 из 23 ручек»
-    function izRuchek(n) {
-      return n + (n % 10 === 1 && n % 100 !== 11 ? ' ручки' : ' ручек');
-    }
 
     // ── сборка строк по defs ──
     var controls = {};
@@ -560,17 +530,6 @@
       paintFill(inp);
     });
 
-    if (!o.nabory) {
-      obnovitSostoyanie = function () {
-        var n = 0;
-        sekcii.forEach(function (s) {
-          if (s.title !== 'Панель') n += s.card.querySelectorAll('.row').length;
-        });
-        sostText.innerHTML = '<b>' + T('panel:vse', 'Все законы') + '</b> · ' + ruchek(n);
-      };
-    }
-    obnovitSostoyanie();
-
     /* Органы из библиотеки строят свои подписи сами, до языка панели им
        дела нет. Чтобы он доставал и их, всё, что уже стоит в панели и не
        взято на учёт, берётся по своему русскому тексту: перевод ищется по
@@ -607,12 +566,6 @@
       if (izAdresa) tekNabor = decodeURIComponent(izAdresa);
       if (imena.indexOf(tekNabor) < 0) tekNabor = imena[0];
 
-      // Полный набор — тот, что ничего не прячет: к нему ведёт выход.
-      var polnyi = imena.filter(function (i) { return o.nabory[i] === null; })[0] || imena[0];
-      // Куда возвращает выход. Обычно к полному; временное сужение (клик по
-      // месту в будущем) кладёт сюда набор, который был до него.
-      var vozvrat = null;
-
       function primenitNabor(imya) {
         tekNabor = imya;
         var spisok = o.nabory[imya];
@@ -623,44 +576,7 @@
           s.card.hidden = skryt || !!folds[s.title];
         });
         try { localStorage.setItem(NABOR_KEY, imya); } catch (e) {}
-        obnovitSostoyanie();
       }
-
-      /* Выход отменяет сужение целиком и НИЧЕГО не меняет в макете.
-         Место прокрутки сохраняется: панель на семьдесят ручек — ты в ней
-         где-то стоял, и возврат в начало был бы наказанием за любопытство. */
-      function vyhod() {
-        if (tekNabor === polnyi && !vozvrat) return;
-        var mesto = panel.scrollTop;
-        nsel.value = vozvrat || polnyi;
-        primenitNabor(nsel.value);
-        vozvrat = null;
-        panel.scrollTop = mesto;
-      }
-      sostX.addEventListener('click', vyhod);
-      // Esc — рефлекс; в поле ввода он занят отменой правки числа
-      document.addEventListener('keydown', function (e) {
-        if (e.key !== 'Escape' || panel.hidden) return;
-        var a = document.activeElement;
-        if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) return;
-        vyhod();
-      });
-
-      obnovitSostoyanie = function () {
-        var vsego = 0, vidno = 0;
-        sekcii.forEach(function (s) {
-          if (s.title === 'Панель') return;
-          var n = s.card.querySelectorAll('.row').length;
-          vsego += n;
-          if (!s.h.hidden) vidno += n;
-        });
-        var uzko = tekNabor !== polnyi;
-        sost.classList.toggle('uzko', uzko);
-        sostX.hidden = !uzko;
-        sostText.innerHTML = uzko
-          ? '<b>' + tekNabor + '</b> · ' + vidno + ' из ' + izRuchek(vsego)
-          : '<b>' + T('panel:vse', 'Все законы') + '</b> · ' + ruchek(vsego);
-      };
 
       var nrow = document.createElement('div'); nrow.className = 'row';
       var nlab = document.createElement('label'); nadpis(nlab, 'panel:nabor', 'Набор');
@@ -679,7 +595,6 @@
         if (!o.nabory[imya] && o.nabory[imya] !== null) return;
         nsel.value = imya; primenitNabor(imya);
       };
-      vyborNabora.vyhod = vyhod;
     }
     var trow = document.createElement('div'); trow.className = 'row';
     var tlab = document.createElement('label'); nadpis(tlab, 'panel:theme', 'Тема');
