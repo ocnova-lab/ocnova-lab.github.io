@@ -33,12 +33,24 @@
   // Границы — медианы фактических диапазонов работающих стендов.
   // Это стартовый набор: стенд перебивает своё через ot0/do/shag.
   var TABLICA = {
-    'длина':    { organ: 'слайдер', ot0: 0, do: 160, shag: 1, edinica: 'px' },
+    // «Длина» оказалась слишком широка: замер 54 длин показал пять разных
+    // назначений с разными диапазонами. Один тип на все пять не работает —
+    // в diagonal из-за этого перебивались руками две трети границ.
+    'кегль':    { organ: 'слайдер', ot0: 6, do: 48, shag: 1, edinica: 'px' },
+    'зазор':    { organ: 'слайдер', ot0: 0, do: 120, shag: 1, edinica: 'px' },
+    'поле':     { organ: 'слайдер', ot0: 0, do: 400, shag: 2, edinica: 'px' },
+    'путь':     { organ: 'слайдер', ot0: 0, do: 2000, shag: 20, edinica: 'px' },
+    'размер':   { organ: 'слайдер', ot0: 20, do: 800, shag: 5, edinica: 'px' },
+    'длина':    { organ: 'слайдер', ot0: 0, do: 160, shag: 1, edinica: 'px' }, // общий случай
+    'кернинг':  { organ: 'слайдер', ot0: -0.1, do: 0.5, shag: 0.005, edinica: 'доли кегля' },
     'время':    { organ: 'слайдер', ot0: 0, do: 1500, shag: 20, edinica: 'мс', trebuet: 'кривая' },
+    // Острота идёт от нуля вверх, ход — в обе стороны от нуля. Разные вещи:
+    // сваленные в один тип, они дают лишнюю перебивку на каждой оси.
     'острота':  { organ: 'слайдер', ot0: 0, do: 1, shag: 0.05, edinica: '', trebuet: 'датчик' },
+    'ход':      { organ: 'слайдер', ot0: -1, do: 1, shag: 0.05, edinica: '', trebuet: 'датчик' },
     'инерция':  { organ: 'слайдер', ot0: 0, do: 95, shag: 1, edinica: '%', trebuet: 'сила' },
     'сила':     { organ: 'слайдер', ot0: 0, do: 100, shag: 5, edinica: '%' },
-    'счёт':     { organ: 'слайдер', ot0: 1, do: 12, shag: 1, edinica: '' },
+    'счёт':     { organ: 'слайдер', ot0: 0, do: 12, shag: 1, edinica: '' },
     'угол':     { organ: 'ugol', ot0: 0, do: 90, shag: 1, edinica: '°' },
     'порог':    { organ: 'слайдер', ot0: 320, do: 1200, shag: 10, edinica: 'px' },
     'скорость': { organ: 'слайдер', ot0: -200, do: 200, shag: 1, edinica: 'px/с' },
@@ -142,21 +154,35 @@
                  o.opcii]);
     });
 
-    // Счётчик перебитых границ: сколько раз таблица не подошла. Растёт —
-    // значит стартовые числа в таблице врут и их надо чинить, а не терпеть.
-    var perebito = (zakon || []).filter(function (s) {
-      return s[0] !== 'h' && s[3] && (s[3].ot0 !== undefined || s[3].do !== undefined || s[3].shag !== undefined);
-    }).length;
-    var vsego = (zakon || []).filter(function (s) { return s[0] !== 'h'; }).length;
+    // Датчик на саму таблицу. Считать просто «сколько перебито» мало:
+    // стенд имеет право сузить границу по смыслу (принцип 7 — максимум
+    // должен что-то значить). Врёт таблица только там, где её диапазон
+    // НЕ ВМЕЩАЕТ нужный стенду: тогда перебивка вынужденная.
+    var nuzhno = 0, zrya = 0, vsego = 0;
+    (zakon || []).forEach(function (s) {
+      if (s[0] === 'h') return;
+      vsego += 1;
+      var o = s[3]; if (!o) return;
+      if (o.ot0 === undefined && o.do === undefined && o.shag === undefined) return;
+      var b = s[2] === 'доля'
+        ? (o.kak === 'доли' || o.kak === '×' ? MNOZHITEL : (OPORY[o.ot] || OPORY['своё']))
+        : TABLICA[s[2]];
+      if (!b) { nuzhno += 1; return; }
+      var vylez = (o.ot0 !== undefined && o.ot0 < b.ot0) ||
+                  (o.do !== undefined && o.do > b.do) ||
+                  (o.shag !== undefined && o.shag < b.shag);
+      vylez ? nuzhno += 1 : zrya += 1;
+    });
 
-    izObyavleniya.otchet = { vsego: vsego, perebito: perebito, pretenzii: pretenzii };
+    izObyavleniya.otchet = { vsego: vsego, nuzhno: nuzhno, zrya: zrya,
+                             perebito: nuzhno + zrya, pretenzii: pretenzii };
     StendPanel.pretenzii = pretenzii;
     if (pretenzii.length && typeof console !== 'undefined') {
       console.warn('Объявление · претензии свода (' + pretenzii.length + '):\n' + pretenzii.join('\n'));
     }
     if (typeof console !== 'undefined') {
-      console.info('Объявление: ' + vsego + ' ручек, границы из таблицы у ' +
-                   (vsego - perebito) + ', перебито вручную ' + perebito + '.');
+      console.info('Объявление: ' + vsego + ' ручек · из таблицы ' + (vsego - nuzhno - zrya) +
+                   ' · сужено по смыслу ' + zrya + ' · таблица не вместила ' + nuzhno + '.');
     }
     return defs;
   }
