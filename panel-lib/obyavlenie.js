@@ -62,7 +62,7 @@
     'размер':   { organ: 'слайдер', ot0: 20, do: 800, edinica: 'px' },
     'длина':    { organ: 'слайдер', ot0: 0, do: 160, edinica: 'px' }, // общий случай
     'кернинг':  { organ: 'слайдер', ot0: -0.1, do: 0.5, edinica: 'доли кегля' },
-    'время':    { organ: 'слайдер', ot0: 0, do: 3000, edinica: 'мс', trebuet: 'кривая' },
+    'время':    { organ: 'слайдер', ot0: 0, do: 2000, edinica: 'мс', trebuet: 'кривая' },
     // Острота идёт от нуля вверх, ход — в обе стороны от нуля. Разные вещи:
     // сваленные в один тип, они дают лишнюю перебивку на каждой оси.
     'острота':  { organ: 'слайдер', ot0: 0, do: 1, edinica: '', trebuet: 'датчик' },
@@ -100,9 +100,7 @@
   var MNOZHITEL = { ot0: 0, do: 3 };
 
   function podpis(imya, edinica) {
-    if (!edinica) return imya;
-    // Единица через запятую, кроме относительных — там она часть меры.
-    return /^%|^‰|знаков/.test(edinica) ? imya + ', ' + edinica : imya + ', ' + edinica;
+    return edinica ? imya + ', ' + edinica : imya;
   }
 
   function izObyavleniya(zakon) {
