@@ -87,19 +87,8 @@
     // Любая правка ручки проходит здесь: сохранение, уведомление стенда (o.onChange —
     // нужен DOM-стендам, canvas читает P каждый кадр сам) и событие для органов
     // вроде отката, которым нужно знать о правке, не зная, кто её сделал.
-    var hozyaeva = {};   // хозяин фазы → чьи ручки он гасит; заполняется из карты
-    var fazaKesh = {};   // последние виденные значения хозяев
     function izmenilos(key) {
       save();
-      /* Фаза: повернулся хозяин — часть ручек умерла или ожила. Сверяются
-         ВСЕ хозяева, не только key: пресет меняет пачку параметров разом,
-         а izmenilos приходит с ключом самого пресета. Хозяев единицы —
-         сверка дешевле пропущенной фазы. */
-      var smena = false;
-      for (var h in hozyaeva) {
-        if (P[h] !== fazaKesh[h]) { smena = true; fazaKesh[h] = P[h]; }
-      }
-      if (smena) perestroitVid();
       if (typeof o.onChange === 'function') o.onChange(key, P);
       try {
         document.dispatchEvent(new CustomEvent('stend:izmenenie', {
@@ -605,25 +594,6 @@
       return out;
     }
 
-    /* Жива ли величина в текущей фазе. Условие лежит в карте (pri из
-       объявления), значения — в P. Сравнение через String: селект хранит
-       строку, стенд мог объявить число — '3' и 3 здесь одно и то же. */
-    function zhiv(k) {
-      var karta = (typeof StendPanel !== 'undefined' && StendPanel.karta) || null;
-      var u = karta && karta.zhivet && karta.zhivet[k];
-      if (u === undefined || u === null) return true;
-      if (typeof u === 'string') return !!P[u];
-      if (typeof u !== 'object') return !!u;
-      return Object.keys(u).every(function (h) {
-        var nado = u[h];
-        if (Array.isArray(nado)) {
-          return nado.some(function (v) { return String(P[h]) === String(v); });
-        }
-        if (typeof nado === 'boolean') return !!P[h] === nado;
-        return String(P[h]) === String(nado);
-      });
-    }
-
     function perestroitVid() {
       /* Пока панель сужена местом, набор не участвует: место режет поперёк
          секций, и пересечение с набором давало бы «Строка · 2 из 71» —
@@ -637,8 +607,7 @@
         var vneNabora = Boolean(spisok) && spisok.indexOf(s.title) < 0;
         var vidno = 0;
         [].forEach.call(s.card.querySelectorAll('.row'), function (r) {
-          var skryt = vneNabora || (svoi ? svoi.indexOf(r.dataset.k) < 0 : false)
-                                || !zhiv(r.dataset.k);
+          var skryt = vneNabora || (svoi ? svoi.indexOf(r.dataset.k) < 0 : false);
           /* Прячем КЛАССОМ, а не hidden. Атрибутом hidden пользуется сам
              стенд: gorizont убирает ручки той стороны каталога, которая
              сейчас не работает.Два механизма на одном атрибуте дрались бы —
@@ -701,7 +670,6 @@
        есть свои ссылки и свои жесты, отбирать их у стенда нельзя. Режим
        включает прицел в строке состояния, гасит — выбор или Esc. */
     var karta0 = (typeof StendPanel !== 'undefined' && StendPanel.karta) || null;
-    if (karta0 && karta0.hozyaeva) hozyaeva = karta0.hozyaeva;
     var sloi = null, sostP = null, rezhim = false, podKursorom = null, posl = null;
 
     function snyatMarkery() {
