@@ -459,7 +459,7 @@
       var lines = z.mesta.map(function (r) {
         var skolko = !r.chitaetsya ? 'селектор не читается'
           : r.naideno === null ? 'считает стенд'
-          : r.naideno + ' на экране';
+          : r.naideno + ' в макете';
         return '  ' + r.mesto + ' (' + r.kak + ') · ' + skolko + ' · ' +
                (r.zakony.length ? 'законов ' + r.zakony.length + ': ' + r.zakony.join(', ')
                                 : 'законов нет');
