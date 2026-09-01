@@ -382,7 +382,7 @@
   /* мера титула: длину строки держит текст, а не соседи по ленте */
   .col.title h1 { max-width: calc(var(--ttl-mera, 26) * 1ch); margin: 0 auto; }
   .col.title h1 {
-    font-family: "Dent Display", "Even Mono", ui-monospace, monospace; font-weight: 400;
+    font-family: var(--stil-titul, "Dent Display", "Even Mono", ui-monospace, monospace); font-weight: 400;
     letter-spacing: var(--ttl-tr); line-height: var(--ttl-lh);
     font-size: var(--ttl, 60px); white-space: pre-line;
   }
@@ -595,7 +595,6 @@
   /* Шрифты стилей: значения ставит primenitStili(), стеки — запасные.
      Блок стоит в конце нарочно: при равной специфичности побеждает
      поздний, и стиль перекрывает исходные правила выше. */
-  .col.title { font-family: var(--stil-titul, "Even Mono", ui-monospace, monospace); }
   .main { font-family: var(--stil-tekst, "Even Mono", ui-monospace, monospace); }
   .idx, .cap, .by, .nad {
     font-family: var(--stil-dsc, "JetBrains Mono", ui-monospace, monospace); }
@@ -752,12 +751,13 @@ var DEFAULTS = {
   aktivnyi: '',
   stilShrift: 'Even Mono',
   otkloneniya: { // служебное: гнездо отступлений стилей, ручка ему не нужна
+    titul: { stilShrift: 'Dent Display' },
     vrezka: { stilShrift: 'Dent Display' },
     dsc: { stilShrift: 'JetBrains Mono' },
   }
 };
 var P = Object.assign({}, DEFAULTS);
-try { Object.assign(P, JSON.parse(localStorage.getItem('gorizont-params') || '{}')); } catch (e) {}
+try { Object.assign(P, JSON.parse(localStorage.getItem('gorizont-obyavl-params') || '{}')); } catch (e) {}
 // гнездо отступлений — копией, не ссылкой: правка стиля не должна трогать DEFAULTS
 if (P.otkloneniya === DEFAULTS.otkloneniya) P.otkloneniya = JSON.parse(JSON.stringify(DEFAULTS.otkloneniya));
 // Параметры из адреса поверх сохранённых: ?col=300&figFit=step&dbg=1.
@@ -2281,10 +2281,13 @@ function katStorona() {
    Каталог строится при уходе из статьи — до того замер честно скажет
    «0 на экране». */
 var MESTA = {
-  'Титул':      { gde: '.col.title', etazh: 'titul' },
-  'Врезка':     { gde: '.lead', etazh: 'vrezka' },
+  /* порядок = приоритет попадания, мелкое раньше крупного: дата над
+     титулом — это .idx, и стоять она должна за дескриптором, а не за
+     титульной колонкой, внутри которой оказалась */
   'Дескриптор': { gde: ['.idx', '.cap', '.by', '.nad'], etazh: 'dsc' },
+  'Врезка':     { gde: '.lead', etazh: 'vrezka' },
   'Текст':      { gde: '.main', etazh: 'tekst' },
+  'Титул':      { gde: '.col.title', etazh: 'titul' },
   'Картинка':   '.col.fig',
   'Стопка':     '.col.figs',
   'Каталог':    ['.ryad', '.ten-lenta'],
