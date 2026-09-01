@@ -37,7 +37,8 @@ def zakon_slovami(t):
 def razobrat(p):
     t = p.read_text(encoding='utf-8', errors='ignore')
     r = {'fail': p.name, 'imya': zagolovok(t, p.stem), 'zakon': zakon_slovami(t),
-         'panel': 'StendPanel.build' in t, 'obyavlenie': 'izObyavleniya' in t,
+         'panel': 'StendPanel.build' in t,
+         'obyavlenie': bool(re.search(r'\bzakon:\s*\[', t)) or 'izObyavleniya' in t,
          'stop': '?stop' in t or 'stop=' in t,
          'pravlen': datetime.date.fromtimestamp(p.stat().st_mtime).isoformat()}
     r['organy'] = sorted(set(re.findall(r'panel-lib/(\w+)\.js', t)))
@@ -76,13 +77,13 @@ def otchet(rr):
     L.append('Реестр органов — хранилище, «Библиотека панелей/Приёмы панелей/00 Индекс».\n')
 
     L.append('\n## Стенды\n')
-    L.append('| стенд | ручек | объявление | стоп-кадр | органы | правлен |')
-    L.append('|---|---|---|---|---|---|')
+    L.append('| стенд | файл | ручек | объявление | стоп-кадр | органы | правлен |')
+    L.append('|---|---|---|---|---|---|---|')
     for r in sorted(rr, key=lambda x: -x['ruchek']):
         if not r['panel']:
             continue
-        L.append('| {} | {} | {} | {} | {} | {} |'.format(
-            r['imya'][:38], r['ruchek'],
+        L.append('| {} | {} | {} | {} | {} | {} | {} |'.format(
+            r['imya'][:30], '`' + r['fail'] + '`', r['ruchek'],
             '✓' if r['obyavlenie'] else '—',
             '✓' if r['stop'] else '—',
             ', '.join(r['organy'])[:44] or '—', r['pravlen']))

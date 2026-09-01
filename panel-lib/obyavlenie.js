@@ -111,6 +111,10 @@
     'этажи':    { organ: 'inspektor', edinica: '' },
     'пара':     { organ: 'para', edinica: '' }, // две родственные величины в строке
     'откат':    { organ: 'otkat', edinica: '' },
+    // Время в руку: скраб фазы + пуск + временная лупа. Фазу считает
+    // стенд (контракт faza/pusk/zamedli в opcii) — как попадание у
+    // канвасных мест. Первый орган, показывающий время как время.
+    'скраб':    { organ: 'skrab', edinica: '' },
   };
 
   // Доля — единственный тип, у которого границы зависят от опоры.
@@ -365,7 +369,7 @@
         return;
       }
       if (['color', 'ease', 'toggle', 'otkat', 'palitra', 'datchik', 'inspektor',
-           'garnitura', 'gradient'].indexOf(baza.organ) >= 0) {
+           'garnitura', 'gradient', 'skrab'].indexOf(baza.organ) >= 0) {
         defs.push([klyuch, nadpis, o.organ || baza.organ, o.iz || o.podpisi, o.opcii]);
         return;
       }

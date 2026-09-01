@@ -629,6 +629,7 @@
 <script src="/panel-lib/inspektor.js"></script>
 <script src="/panel-lib/nasledovanie.js"></script>
 <script src="/panel-lib/garnitura.js"></script>
+<script src="/panel-lib/skrab.js"></script>
 <script src="/panel-lib/toggle.js"></script>
 <script src="/panel-lib/koridor.js"></script>
 <script src="/panel-lib/para.js"></script>
@@ -2415,6 +2416,9 @@ var PANEL = StendPanel.build({
     ['vspTick', 'Вспышка: перещёлк', 'время', { ot0: 20, do: 300, shag: 5 }],
     ['vspEase', 'Вспышка: кривая затухания', 'кривая'],
     ['h', 'Каталог', { gde: 'Каталог' }],
+    /* время в руку: тяни фазу перехода, стой в любом кадре; ▸◂ — прогоны,
+       ×3/×10 — временная лупа на живой ход */
+    ['katSkrab', 'Переход: рука', 'скраб', { opcii: { faza: katFaza, pusk: katPrognat, zamedli: katZamedli } }],
     ['katMasht', 'Каталог: масштаб', 'доля', { ot: 'своё', ot0: 8, do: 60, shag: 1 }],
     ['katKrop', 'Каталог: строка', 'доля', { ot: 'лента', shag: 5 }],
     ['katProm', 'Каталог: промежуток', 'доля', { ot: 'строка', ot0: 0, do: 60, shag: 1 }],
@@ -2479,6 +2483,7 @@ var PANEL = StendPanel.build({
     katUmStor: 'Какая сторона движения правится: выход — из статьи в каталог, вход — обратно. У каждой своя длительность и кривая.',
     katSoStor: 'Какая сторона движения правится: выход — из статьи в каталог, вход — обратно. У каждой своя длительность и кривая.',
     ttlOtbivka: 'Отбивка даты от заголовка, в долях кегля титула. Дата — ведомый элемент группы: своей позиции у неё нет, она вычисляется от ведущего. Растёт титул — растёт и отбивка.',
+    katSkrab: 'Фаза перехода в каталог — в руке: тяни ползунок и стой в любом кадре, отпустишь — движение продолжится с этого места. Кнопки прогоняют переход целиком, ×3 и ×10 замедляют живой ход.',
     naborPut: 'Сколько прохода колонки занимает перенабор: при 100 строка добирается ровно к концу прохода.',
     vybeg: 'Насколько стопка фотографий выбегает вниз за свой ряд при раскрытии.',
     katPerekr: 'Очередь движений при переходе в каталог: ноль — все разом, сто — строго по очереди.',
@@ -2521,6 +2526,7 @@ var PANEL = StendPanel.build({
     katProm: 'Catalogue: gap, % of row',
     katTusk: 'Catalogue: unhovered, %', katTuskMs: 'Catalogue: highlight, ms',
     katPerekr: 'Catalogue: movement queue, %',
+    katSkrab: 'Transition: by hand',
     katUmVyMs: 'Duration, ms', katUmVyEase: 'Curve',
     katUmVhMs: 'Duration, ms', katUmVhEase: 'Curve',
     katNzMs: 'Duration, ms', katNzEase: 'Curve',
@@ -2747,7 +2753,9 @@ function katHod(now) {
     if (m.q === katCel) { m.t0 = 0; continue; }
     if (zanyato) { idet = true; continue; }        // ждёт своей очереди
     if (!m.t0) { m.t0 = now; m.ot = m.q; }
-    var ms = Math.max(0, katRuch(j, 'Ms'));
+    // временная лупа: живой ход в M раз медленнее; скраб на неё не смотрит —
+    // он сам держит время в руке
+    var ms = Math.max(0, katRuch(j, 'Ms')) * zamedlenieM;
     var p = ms > 0 ? (now - m.t0) / ms : 1;
     if (p >= 1) { m.q = katCel; m.t0 = 0; }
     else {
@@ -2950,6 +2958,66 @@ function adres(kat, slug) {
   try { history.pushState({ kat: kat ? 1 : 0, st: slug }, '', a); } catch (e) {}
 }
 function katAdres(v) { adres(v, STATYA.slug); }
+/* ── ВРЕМЯ В РУКУ (орган «скраб», 02.09) ──────────────────────────────
+   Фаза перехода по контракту органа: q → состояние трёх долей. Очередь
+   детерминирована от времени, поэтому фаза считается ПРОГОНОМ той же
+   механики с нуля до момента T — никакой второй формулы, которая могла
+   бы разойтись с katHod. Длительность прогона D меряется тем же прогоном
+   до останова: с перекрытием переход короче суммы длительностей. */
+var zamedlenieM = 1, skrabRuka = false, skrabD = 0;
+function katProgon(T) {
+  var d = [{ q: 0, ot: 0, t0: 0 }, { q: 0, ot: 0, t0: 0 }, { q: 0, ot: 0, t0: 0 }];
+  var poroh = Math.max(0, Math.min(1, P.katPerekr / 100));
+  for (var t = 16; t <= 60000; t += 16) {
+    var zanyato = false, idet = false;
+    for (var i = 0; i < 3; i++) {
+      var m = d[i];
+      if (m.q === 1) continue;
+      if (zanyato) { idet = true; continue; }
+      if (!m.t0) { m.t0 = t; m.ot = m.q; }
+      var ms = Math.max(0, katRuch(i, 'Ms'));
+      var pp = ms > 0 ? (t - m.t0) / ms : 1;
+      if (pp >= 1) { m.q = 1; m.t0 = 0; }
+      else {
+        m.q = m.ot + (1 - m.ot) * evalEase(katRuch(i, 'Ease'), katRuch(i, 'Bez'), pp);
+        if (m.q < poroh) zanyato = true;
+        idet = true;
+      }
+    }
+    if (T !== null && t >= T) return { d: d, t: t };
+    if (!idet) return { d: d, t: t };
+  }
+  return { d: d, t: 60000 };
+}
+function katFaza(q) {
+  if (q === null) {
+    if (!skrabRuka) return;
+    skrabRuka = false;
+    // Рука отпустила: живой ход продолжается ровно с этого места.
+    // Сверяется КАЖДАЯ доля, не katK: katK — максимум, и он равен единице
+    // уже на второй фазе, когда соседи ещё не доехали.
+    var nedoshlo = false;
+    for (var i = 0; i < 3; i++) {
+      KATD[i].t0 = 0; KATD[i].ot = KATD[i].q;
+      if (KATD[i].q !== katCel) nedoshlo = true;
+    }
+    if (nedoshlo) katDvig = true;
+    return;
+  }
+  if (!skrabRuka) {
+    skrabRuka = true;
+    if (katK === 0) katPusk(true, true);   // сборка каталога до движения
+    katCel = 1;
+    skrabD = katProgon(null).t;            // фактическая длительность выхода
+  }
+  katDvig = false;
+  var sost = katProgon(q * skrabD);
+  for (var j = 0; j < 3; j++) { KATD[j].q = sost.d[j].q; KATD[j].ot = sost.d[j].q; KATD[j].t0 = 0; }
+  katK = Math.max(KATD[0].q, KATD[1].q, KATD[2].q);
+}
+function katPrognat(cel) { katPusk(!!cel, true); }
+function katZamedli(m) { zamedlenieM = Math.max(1, m || 1); }
+
 function katPusk(v, bezAdresa) {
   v = v ? 1 : 0;
   if (v === katCel) return;
