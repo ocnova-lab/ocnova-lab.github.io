@@ -165,17 +165,8 @@
        (x, y) → true, попадание считает сам стенд.                      */
     var mesta = {}, imenaMest = Object.keys(mestaObj || {});
     var vMeste = {}, uZakona = {}, sekciyaZakona = {}, vezde = [], zayavleno = {};
-    /* Место с этажом: у именованных этажей страницы (инспектор) клик по
-       месту ставит ещё и адрес правки — рамка п.3: иначе после клика
-       правишь этаж незаметно. Форма: { gde: 'h1', etazh: 'zagolovok' }.
-       Селектор и функция без этажа остаются как были. */
-    var etazhMesta = {};
     imenaMest.forEach(function (m) {
       var g = mestaObj[m];
-      if (g && typeof g === 'object' && !Array.isArray(g)) {
-        if (g.etazh) etazhMesta[m] = g.etazh;
-        g = g.gde;
-      }
       mesta[m] = typeof g === 'function' ? g : [].concat(g);
       vMeste[m] = [];
     });
@@ -220,7 +211,7 @@
 
     // Первый проход: из чего состоит каждая секция — для проверки обязательств,
     // где действует каждый закон — для карты мест, при чём живёт — для фазы.
-    var gdeSekcii = null, priSekcii = null, inspektorKlyuch = null;
+    var gdeSekcii = null, priSekcii = null;
     (zakon || []).forEach(function (s) {
       if (s[0] === 'h') {
         sekcii.push(tek); tek = { imya: s[1], tipy: {} };
@@ -230,7 +221,6 @@
       }
       tek.tipy[s[2]] = (tek.tipy[s[2]] || 0) + 1;
       if (s[3] && s[3].organ === 'datchik') tek.tipy['датчик'] = (tek.tipy['датчик'] || 0) + 1;
-      if (s[2] === 'этажи' && !inspektorKlyuch) inspektorKlyuch = s[0];
       pripisat(s, tek.imya, gdeSekcii);
       klyuchiZakona[s[0]] = 1;
       if (s[3] && s[3].ot) opora[s[0]] = s[3].ot;
@@ -415,29 +405,6 @@
                        'действует: клик по нему откроет пустую панель');
       }
     });
-    /* Этаж места должен существовать: без инспектора адрес некуда
-       ставить, с чужим id клик выбирал бы несуществующий этаж. */
-    var etazhImena = Object.keys(etazhMesta);
-    if (etazhImena.length && !inspektorKlyuch) {
-      pretenzii.push('места называют этажи (' + etazhImena.join(', ') +
-                     '), а величины типа «этажи» в объявлении нет — адрес некуда ставить');
-    } else if (inspektorKlyuch) {
-      var punkty = {};
-      (zakon || []).forEach(function (z) {
-        if (z[0] !== inspektorKlyuch) return;
-        var iz = (z[3] && z[3].iz) || [];
-        iz.forEach(function (r) { punkty[Array.isArray(r) ? r[0] : r] = 1; });
-      });
-      if (Object.keys(punkty).length) {
-        etazhImena.forEach(function (m) {
-          if (!punkty[etazhMesta[m]]) {
-            pretenzii.push('место «' + m + '» называет этаж «' + etazhMesta[m] +
-                           '», которого нет в инспекторе');
-          }
-        });
-      }
-    }
-
     if (!imenaMest.length) {
       var bezhozyaina = Object.keys(zayavleno);
       if (bezhozyaina.length) {
@@ -471,8 +438,6 @@
       opora: opora,              // ключ → названная опора (доли и отношения)
       zhivet: zhivet,            // ключ → условие фазы (pri)
       hozyaeva: hozyaeva,        // хозяин фазы → чьи ручки он гасит
-      etazh: etazhMesta,         // место → id этажа (адрес правки по клику)
-      inspektor: inspektorKlyuch, // ключ величины типа «этажи», если есть
     };
 
     /* ЗАМЕР. Имя места пишет человек, а находит его машина — и между

@@ -713,7 +713,6 @@
       if (mestoTek) {
         // набор при клике не менялся — снятое место открывает его обратно
         mestoTek = null;
-        postavitAdres(null);
       } else if (nsel) {
         tekNabor = polnyi; nsel.value = polnyi;
       }
@@ -733,32 +732,6 @@
        включает прицел в строке состояния, гасит — выбор или Esc. */
     var karta0 = (typeof StendPanel !== 'undefined' && StendPanel.karta) || null;
     if (karta0 && karta0.hozyaeva) hozyaeva = karta0.hozyaeva;
-
-    /* ── АДРЕС ПРАВКИ ИДЁТ ЗА МЕСТОМ (рамка, п.3) ─────────────────────
-       Если у места объявлен этаж, клик ставит его в инспектор: сузив
-       панель до законов заголовка, правишь заголовок. Иначе ловушка —
-       вид сузился, а отступления пишутся тому этажу, что был выбран
-       раньше, и правишь этаж незаметно. Выход возвращает адрес, который
-       был до первого клика; переклик на место без этажа — тоже, по той
-       же причине. Адрес — правка, но откатная и видимая в инспекторе,
-       поэтому выход остаётся бесплатным. */
-    var adresDo = null, adresStavilsya = false;
-    function postavitAdres(imya) {
-      var insp = karta0 && karta0.inspektor;
-      if (!insp || !(insp in P)) return;
-      var et = imya && karta0.etazh ? karta0.etazh[imya] : null;
-      if (et) {
-        if (!adresStavilsya) { adresDo = P[insp]; adresStavilsya = true; }
-        if (P[insp] === et) return;
-        P[insp] = et;
-      } else {
-        if (!adresStavilsya) return;
-        P[insp] = adresDo;
-        adresStavilsya = false;
-      }
-      for (var k in controls) controls[k]();   // инспектор и наследования разом
-      izmenilos(insp);
-    }
     var sloi = null, sostP = null, rezhim = false, podKursorom = null, posl = null;
 
     /* Канвасный стенд не получает DOM-меток — подсветить место может
@@ -862,7 +835,6 @@
       e.preventDefault(); e.stopPropagation();
       var mesto = panel.scrollTop;
       mestoTek = imya;
-      postavitAdres(imya);
       vyklyuchitRezhim();
       perestroitVid();
       panel.scrollTop = mesto;
@@ -897,7 +869,7 @@
       var izAdresaMesta = (location.search.match(/[?&]mesto=([^&]+)/) || [])[1];
       if (izAdresaMesta) {
         var m0 = decodeURIComponent(izAdresaMesta);
-        if (karta0.vMeste[m0]) { mestoTek = m0; postavitAdres(m0); }
+        if (karta0.vMeste[m0]) mestoTek = m0;
       }
 
       var kogda = 0;
@@ -1140,7 +1112,7 @@
       mesto: function (imya) {
         if (imya && (!karta0 || !karta0.vMeste[imya])) return;
         if (!imya) { vyhod(); return; }
-        mestoTek = imya; postavitAdres(imya); perestroitVid();
+        mestoTek = imya; perestroitVid();
       },
       vyhod: vyhod,
     };
