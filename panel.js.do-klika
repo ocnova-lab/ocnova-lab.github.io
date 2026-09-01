@@ -562,247 +562,16 @@
       paintFill(inp);
     });
 
-    /* ── СУЖЕНИЕ ПАНЕЛИ ────────────────────────────────────────────────
-       Показать не все ручки просят два разных повода. Рабочий набор режет
-       СЕКЦИЯМИ и выбирается руками: «работаю над каталогом». Место на
-       макете режет СТРОКАМИ и выбирается кликом: «какие законы правят вот
-       этим». Второе не ложится на первое — карта мест показала, что место
-       идёт поперёк секций (в «Обтекании» место «Строка» — это разрядка из
-       секции «Набор» плюс пять ручек из «Волны», а сама «Волна» держит ещё
-       две ручки дескрипторов). Поэтому вид собирается один раз здесь, из
-       обоих условий сразу, а не двумя механиками по очереди.
-
-       Уровень один: панель либо показывает всё, либо одно сужение. Клик по
-       месту перебивает набор и при выходе возвращает его — вложенности и
-       хлебных крошек нет по решению. */
-    var tekNabor = null, polnyi = null, nsel = null;   // заполнит блок наборов
-    var mestoTek = null, vozvratNabor = null;
-
-    function vseStroki() {
-      var out = [];
-      sekcii.forEach(function (s) {
-        if (s.title === 'Панель') return;
-        [].push.apply(out, s.card.querySelectorAll('.row'));
-      });
-      // строки, объявленные до первой секции, живут прямо в панели
-      [].forEach.call(panel.children, function (e) {
-        if (e.classList && e.classList.contains('row')) out.push(e);
-      });
-      return out;
-    }
-
-    function perestroitVid() {
-      var spisok = (o.nabory && tekNabor) ? o.nabory[tekNabor] : null;
-      var karta = (typeof StendPanel !== 'undefined' && StendPanel.karta) || null;
-      var svoi = mestoTek && karta ? (karta.vMeste[mestoTek] || []) : null;
-      sekcii.forEach(function (s) {
-        if (s.title === 'Панель') return;       // подвал не прячется никогда
-        var vneNabora = Boolean(spisok) && spisok.indexOf(s.title) < 0;
-        var vidno = 0;
-        [].forEach.call(s.card.querySelectorAll('.row'), function (r) {
-          var skryt = vneNabora || (svoi ? svoi.indexOf(r.dataset.k) < 0 : false);
-          /* Прячем КЛАССОМ, а не hidden. Атрибутом hidden пользуется сам
-             стенд: gorizont убирает ручки той стороны каталога, которая
-             сейчас не работает.Два механизма на одном атрибуте дрались бы —
-             переключение набора возвращало бы стенду спрятанное. Класс и
-             hidden складываются: спрятано, если хоть один сказал спрятать. */
-          r.classList.toggle('st-vne', !!skryt);
-          if (!skryt && !r.hidden) vidno += 1;
+    if (!o.nabory) {
+      obnovitSostoyanie = function () {
+        var n = 0;
+        sekcii.forEach(function (s) {
+          if (s.title !== 'Панель') n += s.card.querySelectorAll('.row').length;
         });
-        // секция без единой видимой строки прячется вместе с заголовком:
-        // пустой заголовок читается как поломка
-        var skrytSekciyu = vneNabora || (svoi && !vidno);
-        s.h.hidden = !!skrytSekciyu;
-        s.card.hidden = !!skrytSekciyu || !!folds[s.title];
-      });
-      obnovitSostoyanie();
+        sostText.innerHTML = '<b>' + T('panel:vse', 'Все законы') + '</b> · ' + ruchek(n);
+      };
     }
-
-    obnovitSostoyanie = function () {
-      var vsego = 0, vidno = 0;
-      vseStroki().forEach(function (r) {
-        vsego += 1;
-        if (!r.hidden && !r.classList.contains('st-vne')) vidno += 1;
-      });
-      var uzko = !!mestoTek || (!!o.nabory && tekNabor && tekNabor !== polnyi);
-      sost.classList.toggle('uzko', !!uzko);
-      sostX.hidden = !uzko;
-      sostText.innerHTML = uzko
-        ? '<b>' + (mestoTek || tekNabor) + '</b> · ' + vidno + ' из ' + izRuchek(vsego)
-        : '<b>' + T('panel:vse', 'Все законы') + '</b> · ' + ruchek(vsego);
-    };
-
-    /* Выход отменяет сужение целиком и НИЧЕГО не меняет в макете: сужение —
-       это вид, а не правка, поэтому он бесплатный и без подтверждений.
-       Место прокрутки сохраняется: в панели на семьдесят ручек ты где-то
-       стоял, и возврат в начало был бы наказанием за любопытство. */
-    function vyhod() {
-      if (!mestoTek && (!o.nabory || !tekNabor || tekNabor === polnyi)) return;
-      var mesto = panel.scrollTop;
-      if (mestoTek) {
-        mestoTek = null;
-        if (vozvratNabor && nsel) { tekNabor = vozvratNabor; nsel.value = tekNabor; }
-        vozvratNabor = null;
-      } else if (nsel) {
-        tekNabor = polnyi; nsel.value = polnyi;
-      }
-      perestroitVid();
-      panel.scrollTop = mesto;
-    }
-    sostX.addEventListener('click', vyhod);
-
-    /* ── ВЫБОР МЕСТА НА МАКЕТЕ ─────────────────────────────────────────
-       Не «настройки этого элемента», а ЗАКОНЫ ЭТОГО МЕСТА: у элемента
-       своих настроек нет, его положение складывают несколько законов, и
-       каждый из них правит ещё сотней таких же. Поэтому наведение метит
-       ВСЕ элементы места разом, а не тот один, что под курсором.
-
-       Выбор живёт режимом, а не постоянным перехватом кликов: на макете
-       есть свои ссылки и свои жесты, отбирать их у стенда нельзя. Режим
-       включает прицел в строке состояния, гасит — выбор или Esc. */
-    var karta0 = (typeof StendPanel !== 'undefined' && StendPanel.karta) || null;
-    var sloi = null, sostP = null, rezhim = false, podKursorom = null, posl = null;
-
-    function snyatMarkery() {
-      if (sloi) { sloi.remove(); sloi = null; }
-      podKursorom = null;
-    }
-    function vyklyuchitRezhim() {
-      if (!rezhim) return;
-      rezhim = false;
-      document.body.classList.remove('st-vybor');
-      if (sostP) sostP.classList.remove('on');
-      snyatMarkery();
-    }
-    function mestoPod(x, y) {
-      if (!karta0) return null;
-      var el = document.elementFromPoint(x, y);
-      if (!el) return null;
-      if (el.closest && (el.closest('.st-panel') || el.closest('.st-gear'))) return null;
-      for (var i = 0; i < karta0.mesta.length; i++) {
-        var imya = karta0.mesta[i], g = karta0.gde[imya];
-        if (typeof g === 'function') { if (g(x, y)) return imya; continue; }
-        for (var j = 0; j < g.length; j++) {
-          if (el.closest && el.closest(g[j])) return imya;
-        }
-      }
-      return null;
-    }
-    function narisovatMarkery(imya) {
-      snyatMarkery();
-      if (!imya) return;
-      podKursorom = imya;
-      sloi = document.createElement('div');
-      sloi.className = 'st-mesta';
-      // акцент темы живёт на панели, а слой лежит в body — тему переносим,
-      // иначе метки в «Нотхинге» остались бы синими
-      if (panel.classList.contains('st-theme-nothing')) sloi.classList.add('st-theme-nothing');
-      var g = karta0.gde[imya], n = 0;
-      if (typeof g !== 'function') {
-        g.forEach(function (sel) {
-          [].forEach.call(document.querySelectorAll(sel), function (e) {
-            var r = e.getBoundingClientRect();
-            if (!r.width && !r.height) return;
-            var m = document.createElement('div');
-            m.className = 'st-metka';
-            m.style.left = r.left + 'px'; m.style.top = r.top + 'px';
-            m.style.width = r.width + 'px'; m.style.height = r.height + 'px';
-            sloi.appendChild(m); n += 1;
-          });
-        });
-      }
-      var pod = document.createElement('div');
-      pod.className = 'st-mesto-imya';
-      // счёт элементов рядом с именем: он и есть довод, что правится не один
-      var zak = (karta0.vMeste[imya] || []).length;
-      pod.textContent = imya + (n > 1 ? ' \u00d7 ' + n : '') + ' · ' + ruchek(zak);
-      if (posl) { pod.style.left = posl.x + 'px'; pod.style.top = posl.y + 'px'; }
-      sloi.appendChild(pod);
-      document.body.appendChild(sloi);
-    }
-    function navedenie(e) {
-      if (!rezhim) return;
-      posl = { x: e.clientX, y: e.clientY };
-      var imya = mestoPod(e.clientX, e.clientY);
-      if (imya !== podKursorom) narisovatMarkery(imya);
-      else if (sloi) {
-        var pod = sloi.querySelector('.st-mesto-imya');
-        if (pod) { pod.style.left = posl.x + 'px'; pod.style.top = posl.y + 'px'; }
-      }
-    }
-    function vybor(e) {
-      if (!rezhim) return;
-      var imya = mestoPod(e.clientX, e.clientY);
-      if (!imya) return;
-      // клик перехватывается целиком: на макете под ним могла быть ссылка
-      e.preventDefault(); e.stopPropagation();
-      var mesto = panel.scrollTop;
-      if (o.nabory && tekNabor !== polnyi) vozvratNabor = tekNabor;
-      mestoTek = imya;
-      vyklyuchitRezhim();
-      perestroitVid();
-      panel.scrollTop = mesto;
-    }
-    if (karta0 && karta0.mesta.length) {
-      sostP = document.createElement('button');
-      sostP.type = 'button'; sostP.className = 'st-sost-p';
-      sostP.innerHTML = '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" ' +
-        'stroke-width="1.3"><circle cx="7" cy="7" r="4"/><path d="M7 0v2.4M7 11.6V14M0 7h2.4M11.6 7H14"/></svg>';
-      sostP.title = 'показать законы места на макете';
-      sost.insertBefore(sostP, sostX);
-      sostP.addEventListener('click', function () {
-        if (rezhim) { vyklyuchitRezhim(); return; }
-        rezhim = true;
-        document.body.classList.add('st-vybor');
-        sostP.classList.add('on');
-      });
-      document.addEventListener('pointermove', navedenie);
-      document.addEventListener('click', vybor, true);
-      // маркеры прибиты к экрану: под ними едет макет
-      ['scroll', 'resize'].forEach(function (s) {
-        window.addEventListener(s, function () {
-          if (rezhim && podKursorom) narisovatMarkery(podKursorom);
-        }, true);
-      });
-
-      /* АВАРИЙНЫЙ ВЫХОД. Правка закона может убрать место с экрана —
-         тогда панель показывает законы того, чего нет. Проверяем замером,
-         не чаще раза в треть секунды: ручку крутят десятками кадров. */
-      /* ?mesto=Строка — панель открывается уже суженной. Тот же путь, что
-         у ?nabor=: им нейронке говорят, над чем идёт работа. */
-      var izAdresaMesta = (location.search.match(/[?&]mesto=([^&]+)/) || [])[1];
-      if (izAdresaMesta) {
-        var m0 = decodeURIComponent(izAdresaMesta);
-        if (karta0.vMeste[m0]) mestoTek = m0;
-      }
-
-      var kogda = 0;
-      document.addEventListener('stend:izmenenie', function () {
-        if (!mestoTek) return;
-        var t = Date.now(); if (t - kogda < 300) return; kogda = t;
-        var g = karta0.gde[mestoTek];
-        if (typeof g === 'function') return;
-        var est = 0;
-        g.forEach(function (sel) { try { est += document.querySelectorAll(sel).length; } catch (e) {} });
-        if (est) return;
-        var imya = mestoTek;
-        vyhod();
-        sostText.innerHTML = '<b>' + imya + '</b> · место исчезло, показаны все законы';
-        setTimeout(obnovitSostoyanie, 2600);
-      });
-    }
-
-    // Esc — рефлекс. Сначала гасит режим выбора, потом снимает сужение;
-    // в поле ввода он занят отменой правки числа и сюда не доходит.
-    document.addEventListener('keydown', function (e) {
-      if (e.key !== 'Escape' || panel.hidden) return;
-      var a = document.activeElement;
-      if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) return;
-      if (rezhim) { vyklyuchitRezhim(); return; }
-      vyhod();
-    });
-
-    perestroitVid();
+    obnovitSostoyanie();
 
     /* Органы из библиотеки строят свои подписи сами, до языка панели им
        дела нет. Чтобы он доставал и их, всё, что уже стоит в панели и не
@@ -834,27 +603,70 @@
     if (o.nabory) {
       var NABOR_KEY = 'stend-nabor:' + o.storageKey;
       var imena = Object.keys(o.nabory);
+      var tekNabor = null;
       try { tekNabor = localStorage.getItem(NABOR_KEY); } catch (e) {}
       var izAdresa = (location.search.match(/[?&]nabor=([^&]+)/) || [])[1];
       if (izAdresa) tekNabor = decodeURIComponent(izAdresa);
       if (imena.indexOf(tekNabor) < 0) tekNabor = imena[0];
 
       // Полный набор — тот, что ничего не прячет: к нему ведёт выход.
-      polnyi = imena.filter(function (i) { return o.nabory[i] === null; })[0] || imena[0];
+      var polnyi = imena.filter(function (i) { return o.nabory[i] === null; })[0] || imena[0];
+      // Куда возвращает выход. Обычно к полному; временное сужение (клик по
+      // месту в будущем) кладёт сюда набор, который был до него.
+      var vozvrat = null;
 
-      /* Набор, выбранный руками, снимает сужение по месту: уровень один,
-         накладывать одно сужение на другое было решено не давать. При
-         начальной сборке (nachalo) место с адреса ?mesto= остаётся. */
-      function primenitNabor(imya, nachalo) {
+      function primenitNabor(imya) {
         tekNabor = imya;
-        if (!nachalo) { mestoTek = null; vozvratNabor = null; }
+        var spisok = o.nabory[imya];
+        sekcii.forEach(function (s) {
+          if (s.title === 'Панель') return; // подвал не прячется никогда
+          var skryt = Boolean(spisok) && spisok.indexOf(s.title) < 0;
+          s.h.hidden = skryt;
+          s.card.hidden = skryt || !!folds[s.title];
+        });
         try { localStorage.setItem(NABOR_KEY, imya); } catch (e) {}
-        perestroitVid();
+        obnovitSostoyanie();
       }
+
+      /* Выход отменяет сужение целиком и НИЧЕГО не меняет в макете.
+         Место прокрутки сохраняется: панель на семьдесят ручек — ты в ней
+         где-то стоял, и возврат в начало был бы наказанием за любопытство. */
+      function vyhod() {
+        if (tekNabor === polnyi && !vozvrat) return;
+        var mesto = panel.scrollTop;
+        nsel.value = vozvrat || polnyi;
+        primenitNabor(nsel.value);
+        vozvrat = null;
+        panel.scrollTop = mesto;
+      }
+      sostX.addEventListener('click', vyhod);
+      // Esc — рефлекс; в поле ввода он занят отменой правки числа
+      document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape' || panel.hidden) return;
+        var a = document.activeElement;
+        if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) return;
+        vyhod();
+      });
+
+      obnovitSostoyanie = function () {
+        var vsego = 0, vidno = 0;
+        sekcii.forEach(function (s) {
+          if (s.title === 'Панель') return;
+          var n = s.card.querySelectorAll('.row').length;
+          vsego += n;
+          if (!s.h.hidden) vidno += n;
+        });
+        var uzko = tekNabor !== polnyi;
+        sost.classList.toggle('uzko', uzko);
+        sostX.hidden = !uzko;
+        sostText.innerHTML = uzko
+          ? '<b>' + tekNabor + '</b> · ' + vidno + ' из ' + izRuchek(vsego)
+          : '<b>' + T('panel:vse', 'Все законы') + '</b> · ' + ruchek(vsego);
+      };
 
       var nrow = document.createElement('div'); nrow.className = 'row';
       var nlab = document.createElement('label'); nadpis(nlab, 'panel:nabor', 'Набор');
-      nsel = document.createElement('select');
+      var nsel = document.createElement('select');
       imena.forEach(function (imya) {
         var opt = document.createElement('option');
         opt.value = imya; nadpis(opt, 'nabor:' + imya, imya);
@@ -864,7 +676,7 @@
       nsel.addEventListener('input', function () { primenitNabor(nsel.value); });
       nrow.appendChild(nlab); nrow.appendChild(nsel);
       foot.appendChild(nrow);
-      primenitNabor(tekNabor, true);
+      primenitNabor(tekNabor);
       vyborNabora = function (imya) {
         if (!o.nabory[imya] && o.nabory[imya] !== null) return;
         nsel.value = imya; primenitNabor(imya);
@@ -934,10 +746,13 @@
     panel.appendChild(rst);
 
     gear.addEventListener('click', function () { panel.hidden = !panel.hidden; });
-    /* Панель НЕ закрывается кликом по макету. Закрытие по клику вне было
-       заведено, пока клик по макету ничего не значил; теперь он выбирает
-       место, и панель обязана остаться на экране — иначе выбор места
-       гасит то самое, ради чего он делается. Закрывает шестерёнка. */
+    // клик в любом месте вне панели (и вне шестерёнки) закрывает её
+    document.addEventListener('pointerdown', function (e) {
+      if (panel.hidden) return;
+      var t = e.target;
+      if (t && t.closest && (t.closest('.st-panel') || t.closest('.st-gear'))) return;
+      panel.hidden = true;
+    });
     if (/[?&]panel/.test(location.search)) panel.hidden = false;
     applyTheme(theme);
 
@@ -947,14 +762,6 @@
       // перерисовать все ручки после внешней правки P (откат, пресет извне)
       obnovit: function () { for (var k in controls) controls[k](); },
       nabor: vyborNabora, // переключить рабочий набор снаружи (агент, скрипт)
-      // сузить панель до законов места снаружи; без имени — выход
-      mesto: function (imya) {
-        if (imya && (!karta0 || !karta0.vMeste[imya])) return;
-        if (!imya) { vyhod(); return; }
-        if (o.nabory && tekNabor !== polnyi) vozvratNabor = tekNabor;
-        mestoTek = imya; perestroitVid();
-      },
-      vyhod: vyhod,
     };
   }
 

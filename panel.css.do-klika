@@ -93,9 +93,6 @@
    месте, сколько её ни прячь. Стенду это нужно, когда одни ручки показаны,
    а другие спрятаны переключателем. */
 .st-panel [hidden] { display: none !important; }
-/* Строка вне сужения: панель прячет своим классом, стенд — атрибутом
-   hidden. Каналы разные, потому что оба живут одновременно. */
-.st-panel .row.st-vne { display: none !important; }
 .st-panel .card > .row + .row,
 .st-panel .card > canvas + .row { border-top: 0.5px solid var(--st-hairline); }
 .st-panel label { flex: 1; color: var(--st-text); cursor: help; }
@@ -238,30 +235,6 @@
   padding: 2px 4px; cursor: pointer; border-radius: 5px; }
 .st-panel .st-sost-x:hover { color: var(--st-text); background: var(--st-card); }
 .st-panel .st-sost-x[hidden] { display: none; }
-/* Прицел — вход в выбор места. Стоит рядом с выходом: одна пара «войти в
-   сужение — выйти», и обе кнопки в строке, которая отвечает «где я». */
-.st-panel .st-sost-p { margin-left: auto; border: 0; background: transparent;
-  color: var(--st-text-2); padding: 3px 4px 1px; cursor: pointer; border-radius: 5px; }
-.st-panel .st-sost-p svg { width: 13px; height: 13px; display: block; }
-.st-panel .st-sost-p:hover { color: var(--st-text); background: var(--st-card); }
-.st-panel .st-sost-p.on { color: #fff; background: var(--st-accent); }
-.st-panel .st-sost-p + .st-sost-x { margin-left: 0; }
-
-/* ── СЛОЙ МЕСТ ─────────────────────────────────────────────────────────
-   Метки лежат поверх макета и ПОД панелью, сквозные для мыши: слой
-   показывает, а не ловит. Метится всё место разом, а не элемент под
-   курсором, — в этом весь довод: у элемента своих настроек нет, его
-   держат законы, и те же законы держат ещё сотню таких же. */
-.st-mesta { position: fixed; inset: 0; z-index: 15; pointer-events: none; }
-.st-metka { position: fixed; border: 1px solid var(--st-accent);
-  background: color-mix(in srgb, var(--st-accent) 14%, transparent);
-  border-radius: 2px; }
-.st-mesto-imya { position: fixed; transform: translate(14px, 14px);
-  background: var(--st-accent); color: #fff; white-space: nowrap;
-  font: 500 11px/1.35 var(--st-font); padding: 4px 8px; border-radius: 7px; }
-/* Прицел на всём макете: режим виден курсором ещё до наведения на место. */
-body.st-vybor, body.st-vybor * { cursor: crosshair !important; }
-body.st-vybor .st-panel, body.st-vybor .st-panel * { cursor: default !important; }
 .st-panel .st-yaz { display: flex; border: 1px solid var(--st-line, rgba(255,255,255,.18));
   border-radius: 7px; overflow: hidden; }
 .st-panel .st-yaz-b { border: 0; background: transparent; color: inherit;
