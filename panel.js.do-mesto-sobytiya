@@ -704,18 +704,8 @@
     if (karta0 && karta0.hozyaeva) hozyaeva = karta0.hozyaeva;
     var sloi = null, sostP = null, rezhim = false, podKursorom = null, posl = null;
 
-    /* Канвасный стенд не получает DOM-меток — подсветить место может
-       только он сам. Панель говорит ему, над чем курсор, событием:
-       stend:mesto {imya} при входе, {imya: null} при уходе и выходе из
-       режима. DOM-стендам событие тоже шлётся — им оно просто не нужно. */
-    function skazatMesto(imya) {
-      try {
-        document.dispatchEvent(new CustomEvent('stend:mesto', { detail: { imya: imya } }));
-      } catch (e) {}
-    }
     function snyatMarkery() {
       if (sloi) { sloi.remove(); sloi = null; }
-      if (podKursorom) skazatMesto(null);
       podKursorom = null;
     }
     function vyklyuchitRezhim() {
@@ -751,7 +741,6 @@
       snyatMarkery();
       if (!imya) return;
       podKursorom = imya;
-      skazatMesto(imya);
       sloi = document.createElement('div');
       sloi.className = 'st-mesta';
       // акцент темы живёт на панели, а слой лежит в body — тему переносим,
