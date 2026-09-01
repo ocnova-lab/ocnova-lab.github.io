@@ -2287,7 +2287,9 @@ var MESTA = {
   'Дескриптор': { gde: ['.idx', '.cap', '.by', '.nad'], etazh: 'dsc' },
   'Врезка':     { gde: '.lead', etazh: 'vrezka' },
   'Текст':      { gde: '.main', etazh: 'tekst' },
-  'Титул':      { gde: '.col.title', etazh: 'titul' },
+  /* место — сам заголовок, не колонка: титульная колонка на стартовом
+     экране во всю ширину, и метка на неё читалась как «весь экран» */
+  'Титул':      { gde: '.col.title h1', etazh: 'titul' },
   'Картинка':   '.col.fig',
   'Стопка':     '.col.figs',
   'Каталог':    ['.ryad', '.ten-lenta'],
