@@ -66,9 +66,7 @@
        ничего не замечают — ветка включается только при наличии zakon. */
     if (o.zakon && !o.defs) {
       if (typeof StendPanel !== 'undefined' && StendPanel.izObyavleniya) {
-        // mesta — словарь мест стенда: 'Строка': '.line'. Закон помечается
-        // gde:'Строка' и попадает в карту StendPanel.karta.
-        o.defs = StendPanel.izObyavleniya(o.zakon, o.mesta);
+        o.defs = StendPanel.izObyavleniya(o.zakon);
       } else {
         // Молча отдать пустую панель — худшее, что можно сделать: стенд
         // выглядит сломанным, а причина не названа.

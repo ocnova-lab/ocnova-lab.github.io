@@ -28,12 +28,7 @@
           kak — '%' (по умолчанию), 'доли', '‰';
           ot0/do — свои границы, shag — свой шаг (перебивают таблицу);
           iz — варианты выбора, organ — перебить орган;
-          edinica — перебить единицу в подписи, '' — убрать;
-          gde — место, где закон действует (см. МЕСТА ниже).
-
-   МЕСТА (ход 2, 2026-09-01). Второй аргумент — словарь мест стенда:
-     StendPanel.izObyavleniya(ZAKON, MESTA)
-   Отсюда карта «место → законы» приезжает даром: StendPanel.karta.       */
+          edinica — перебить единицу в подписи, '' — убрать.                */
 (function () {
   // Границы — медианы фактических диапазонов работающих стендов.
   // Это стартовый набор: стенд перебивает своё через ot0/do/shag.
@@ -112,71 +107,14 @@
     return edinica ? imya + ', ' + edinica : imya;
   }
 
-  function izObyavleniya(zakon, mestaObj) {
+  function izObyavleniya(zakon) {
     var defs = [], pretenzii = [], sekcii = [], tek = { imya: '(без секции)', tipy: {} };
 
-    /* ── МЕСТА ────────────────────────────────────────────────────────
-       Закон знает, где действует. Место объявляется ОДИН РАЗ и по имени:
-       имя читает человек (оно уйдёт в строку состояния), селектор — машина.
-       Дальше величина ссылается на имя — той же рукой, какой доля ссылается
-       на опору: «доля ЧЕГО» ↔ «закон ГДЕ».
-
-         mesta: { 'Строка': '.line', 'Картинка': ['.pic', '#thumb'] }
-
-         ['BULGE', 'Пузырь', 'сила', { gde: 'Строка' }]
-         ['h', 'Волна', { gde: 'Строка' }]           // на всю секцию разом
-         ['PAPER', 'Бумага', 'цвет', { gde: null }]  // отписаться от секции
-         { gde: ['Строка', 'Картинка'] }             // закон правит двумя
-
-       Последняя строка — не оговорка, а суть замысла: у элемента своих
-       настроек нет. Его положение складывают несколько законов, и каждый
-       из них правит ещё сотней элементов. Зазор у картинки виден и со
-       стороны строки, и со стороны картинки — он в обоих местах.
-       Закон без gde действует везде и в сужение по месту не попадает.
-
-       Канвасный стенд DOM не имеет: там вместо селектора функция
-       (x, y) → true, попадание считает сам стенд.                      */
-    var mesta = {}, imenaMest = Object.keys(mestaObj || {});
-    var vMeste = {}, uZakona = {}, sekciyaZakona = {}, vezde = [], zayavleno = {};
-    imenaMest.forEach(function (m) {
-      var g = mestaObj[m];
-      mesta[m] = typeof g === 'function' ? g : [].concat(g);
-      vMeste[m] = [];
-    });
-    function pripisat(s, imyaSekcii, gdeSekcii) {
-      var klyuch = s[0], o = s[3] || {};
-      var g = o.gde !== undefined ? o.gde : gdeSekcii;
-      sekciyaZakona[klyuch] = imyaSekcii;
-      if (g === null || g === undefined) { vezde.push(klyuch); uZakona[klyuch] = []; return; }
-      // Неизвестное имя до карты не доходит: пусть закон лучше окажется
-      // ничьим и это будет видно, чем карта начнёт ссылаться на место,
-      // которого нет. Об опечатке кричит претензия — но только если
-      // места вообще объявлены, иначе о том же скажет одна общая.
-      var spisok = [].concat(g).filter(function (m) {
-        if (vMeste[m]) return true;
-        if (imenaMest.length) {
-          pretenzii.push('закон ' + klyuch + ' отправлен в место «' + m +
-                         '», которого нет в объявлении мест');
-        }
-        return false;
-      });
-      uZakona[klyuch] = spisok;
-      zayavleno[klyuch] = [].concat(g);   // что автор написал — для общей претензии
-      spisok.forEach(function (m) { vMeste[m].push(klyuch); });
-    }
-
-    // Первый проход: из чего состоит каждая секция — для проверки обязательств,
-    // и где действует каждый закон — для карты мест.
-    var gdeSekcii = null;
+    // Первый проход: из чего состоит каждая секция — для проверки обязательств.
     (zakon || []).forEach(function (s) {
-      if (s[0] === 'h') {
-        sekcii.push(tek); tek = { imya: s[1], tipy: {} };
-        gdeSekcii = s[2] && s[2].gde !== undefined ? s[2].gde : null;
-        return;
-      }
+      if (s[0] === 'h') { sekcii.push(tek); tek = { imya: s[1], tipy: {} }; return; }
       tek.tipy[s[2]] = (tek.tipy[s[2]] || 0) + 1;
       if (s[3] && s[3].organ === 'datchik') tek.tipy['датчик'] = (tek.tipy['датчик'] || 0) + 1;
-      pripisat(s, tek.imya, gdeSekcii);
     });
     sekcii.push(tek);
 
@@ -305,112 +243,9 @@
       vylez ? nuzhno += 1 : zrya += 1;
     });
 
-    /* Обязательство мест. Пустое место — тупик: клик по нему откроет
-       панель, в которой нечего крутить. Молчать об этом нельзя, поэтому
-       оно идёт в претензии наравне со «временем без кривой». */
-    imenaMest.forEach(function (m) {
-      if (!vMeste[m].length) {
-        pretenzii.push('место «' + m + '» объявлено, но ни один закон в нём не ' +
-                       'действует: клик по нему откроет пустую панель');
-      }
-    });
-    if (!imenaMest.length) {
-      var bezhozyaina = Object.keys(zayavleno);
-      if (bezhozyaina.length) {
-        var n = bezhozyaina.length;
-        pretenzii.push('gde стоит у ' + n + (n % 10 === 1 && n % 100 !== 11 ? ' закона' : ' законов') +
-                       ', а мест не объявлено: второй аргумент izObyavleniya(ZAKON, MESTA)');
-      }
-    }
-
     izObyavleniya.otchet = { vsego: vsego, nuzhno: nuzhno, zrya: zrya,
                              perebito: nuzhno + zrya, pretenzii: pretenzii };
     StendPanel.pretenzii = pretenzii;
-
-    /* ── КАРТА МЕСТ ───────────────────────────────────────────────────
-       Всё, что понадобится сужению по клику, известно уже здесь: в каком
-       месте какие законы, в какой секции каждый закон, какие законы
-       действуют везде. Панель ищет строку по data-k — ключ на строке уже
-       стоит, поэтому третьему ходу останется только прятать строки.       */
-    var karta = {
-      mesta: imenaMest,          // имена в порядке объявления
-      gde: mesta,                // имя → [селектор, …] либо функция стенда
-      vMeste: vMeste,            // место → [ключи законов]
-      uZakona: uZakona,          // ключ закона → [места]
-      sekciya: sekciyaZakona,    // ключ закона → имя секции
-      vezde: vezde,              // законы без места: цвет бумаги, язык, тема
-    };
-
-    /* ЗАМЕР. Имя места пишет человек, а находит его машина — и между
-       ними ошибка: опечатка в селекторе, переименованный класс, элемент,
-       которого на этом стенде уже нет. Проверяется это только счётом
-       живых элементов, поэтому замер стоит рядом с картой, а не в голове
-       у автора. Второе, что он ловит: закон приписан к месту, но до
-       панели не доехал (опечатка в ключе) — тогда место обещает ручку,
-       которой нет. */
-    karta.zamer = function () {
-      var stroki = {}, pan = null;
-      try { pan = document.querySelector('.st-panel'); } catch (e) {}
-      if (pan) {
-        [].forEach.call(pan.querySelectorAll('[data-k]'), function (r) { stroki[r.dataset.k] = 1; });
-      }
-      var po = imenaMest.map(function (m) {
-        var g = mesta[m], naideno = null, kak, chitaetsya = true;
-        if (typeof g === 'function') {
-          kak = 'считает стенд';
-        } else {
-          kak = g.join(', '); naideno = 0;
-          g.forEach(function (sel) {
-            try { naideno += document.querySelectorAll(sel).length; }
-            catch (e) { chitaetsya = false; }
-          });
-        }
-        return { mesto: m, kak: kak, naideno: naideno, chitaetsya: chitaetsya,
-                 zakony: vMeste[m] };
-      });
-      var poteryany = pan ? Object.keys(uZakona).filter(function (k) {
-        return uZakona[k].length && !stroki[k];
-      }) : [];
-      return { mesta: po, poteryany: poteryany, panelNaidena: !!pan };
-    };
-
-    /* Показ — не украшение отчёта, а единственный способ увидеть карту до
-       того, как появится клик по макету: третий ход ещё не написан, а
-       проверять связь «место → законы» надо уже сейчас. */
-    karta.pokazat = function () {
-      var z = karta.zamer();
-      if (typeof console === 'undefined') return z;
-      var lines = z.mesta.map(function (r) {
-        var skolko = !r.chitaetsya ? 'селектор не читается'
-          : r.naideno === null ? 'считает стенд'
-          : r.naideno + ' на экране';
-        return '  ' + r.mesto + ' (' + r.kak + ') · ' + skolko + ' · ' +
-               (r.zakony.length ? 'законов ' + r.zakony.length + ': ' + r.zakony.join(', ')
-                                : 'законов нет');
-      });
-      if (vezde.length) lines.push('  везде (без места): ' + vezde.join(', '));
-      z.mesta.forEach(function (r) {
-        if (r.chitaetsya && r.naideno === 0) {
-          lines.push('  ! «' + r.mesto + '» сейчас ничего не находит — стенд, ' +
-                     'возможно, строит его позже; повторить: StendPanel.karta.pokazat()');
-        }
-      });
-      if (z.poteryany.length) {
-        lines.push('  ! приписаны к месту, но до панели не доехали: ' + z.poteryany.join(', '));
-      }
-      console.info('Места стенда (' + imenaMest.length + '):\n' + lines.join('\n'));
-      return z;
-    };
-
-    StendPanel.karta = karta;
-    /* Замер откладывается до загрузки: стенд строит строки и картинки уже
-       после разбора объявления, и мгновенный замер соврал бы нулями.
-       400 мс — не закон, а отступ на сборку; счёт можно повторить рукой. */
-    if (imenaMest.length && typeof window !== 'undefined') {
-      var pusk = function () { setTimeout(karta.pokazat, 400); };
-      if (document.readyState === 'complete') pusk();
-      else window.addEventListener('load', pusk);
-    }
     if (pretenzii.length && typeof console !== 'undefined') {
       console.warn('Объявление · претензии свода (' + pretenzii.length + '):\n' + pretenzii.join('\n'));
     }
