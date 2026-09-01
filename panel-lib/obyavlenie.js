@@ -95,6 +95,11 @@
     'скорость': { organ: 'слайдер', ot0: -200, do: 200, edinica: 'px/с' },
     'цвет':     { organ: 'color', edinica: '' },
     'палитра':  { organ: 'palitra', edinica: '' },
+    // Семейство оттенков формулой (косинусный градиент Килеза), а не
+    // перечнем: палитра-закон для шкал; списочная палитра остаётся там,
+    // где цвета названы поимённо. Значение: [пресет, середина, размах,
+    // частота, сдвиг]; вычислитель — StendPanel.gradient(z).
+    'градиент': { organ: 'gradient', edinica: '' },
     'датчик':   { organ: 'datchik', edinica: '' },
     'кривая':   { organ: 'ease', edinica: '' },
     'двоичное': { organ: 'toggle', edinica: '' },
@@ -238,12 +243,17 @@
       });
     });
 
+    /* Претензии двух сортов. Нарушенное обязательство (время без кривой,
+       острота без датчика, инерция без силы) чинится не подстановкой
+       слова — переделывается устройство эффекта. Такие идут первыми:
+       в длинном списке их нельзя хоронить под пропущенными единицами. */
+    var tyazhkie = [];
     sekcii.forEach(function (sk) {
       Object.keys(sk.tipy).forEach(function (t) {
         var nado = (TABLICA[t] || {}).trebuet;
         if (!nado) return;
         var est = sk.tipy[nado] || (nado === 'датчик' ? sk.tipy['датчик'] : 0);
-        if (!est) pretenzii.push('«' + sk.imya + '»: ' + sk.tipy[t] + '×' + t + ' без «' + nado + '»');
+        if (!est) tyazhkie.push('«' + sk.imya + '»: ' + sk.tipy[t] + '×' + t + ' без «' + nado + '»');
       });
     });
 
@@ -380,8 +390,10 @@
       return s[0] !== 'h' && s[2] === 'доля' && s[3] && s[3].ot === 'своё';
     }).map(function (s) { return s[0]; });
     if (svalka.length) {
-      pretenzii.push('доля от «своё» у ' + svalka.length + ' законов — опора не названа, ' +
-                     'границы взяты общие 0…100%: ' + svalka.join(', '));
+      var nS = svalka.length;
+      pretenzii.push('доля от «своё» у ' + nS +
+                     (nS % 10 === 1 && nS % 100 !== 11 ? ' закона' : ' законов') +
+                     ' — опора не названа, границы взяты общие 0…100%: ' + svalka.join(', '));
     }
 
     /* Обязательство мест. Пустое место — тупик: клик по нему откроет
@@ -402,8 +414,13 @@
       }
     }
 
+    // тяжёлые вперёд; лёгкие (подстановки: опора, единица, имя) — следом
+    var podstanovki = pretenzii;
+    pretenzii = tyazhkie.concat(podstanovki);
+
     izObyavleniya.otchet = { vsego: vsego, nuzhno: nuzhno, zrya: zrya,
-                             perebito: nuzhno + zrya, pretenzii: pretenzii };
+                             perebito: nuzhno + zrya, pretenzii: pretenzii,
+                             tyazhkie: tyazhkie, podstanovki: podstanovki };
     StendPanel.pretenzii = pretenzii;
 
     /* ── КАРТА МЕСТ ───────────────────────────────────────────────────
@@ -494,7 +511,16 @@
       else window.addEventListener('load', pusk);
     }
     if (pretenzii.length && typeof console !== 'undefined') {
-      console.warn('Объявление · претензии свода (' + pretenzii.length + '):\n' + pretenzii.join('\n'));
+      var kusok = [];
+      if (tyazhkie.length && podstanovki.length) {
+        kusok.push('— требуют переписывания закона (' + tyazhkie.length + '):');
+        kusok.push(tyazhkie.join('\n'));
+        kusok.push('— чинятся подстановкой (' + podstanovki.length + '):');
+        kusok.push(podstanovki.join('\n'));
+      } else {
+        kusok.push(pretenzii.join('\n'));
+      }
+      console.warn('Объявление · претензии свода (' + pretenzii.length + '):\n' + kusok.join('\n'));
     }
     if (typeof console !== 'undefined') {
       console.info('Объявление: ' + vsego + ' ручек · из таблицы ' + (vsego - nuzhno - zrya) +

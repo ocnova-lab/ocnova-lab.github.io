@@ -258,8 +258,7 @@
     try { if (localStorage.getItem(LANG_KEY) === 'en') lang = 'en'; } catch (e) {}
     var SVOI = {
       'Панель': 'Panel', 'Тема': 'Theme', 'Эпл': 'Apple', 'Нотхинг': 'Nothing',
-      'Скопировать параметры': 'Copy parameters', 'Скопировать правки': 'Copy edits',
-      'Сбросить настройки': 'Reset',
+      'Скопировать параметры': 'Copy parameters', 'Сбросить настройки': 'Reset',
       'скопировано: ': 'copied: ', ' ручек': ' knobs',
       'всё по умолчанию': 'all at defaults', 'Параметры:': 'Parameters:',
       'своя (безье)': 'custom (bezier)', 'линейный': 'linear',
@@ -398,40 +397,11 @@
     // ── сборка строк по defs ──
     var controls = {};
     var curCard = null;
-    /* Сведения о ручке для экспорта правок: подпись и секция берутся из
-       defs по ходу сборки, тип — из объявления, если стенд на нём. */
-    var opisRuchek = {}, tekSek = '';
-    function zapomni(k, podpis) {
-      if (k) opisRuchek[k] = { podpis: podpis || k, sekciya: tekSek };
-    }
-    // «доля от кегля», не «доля от кегль»: опоры лежат именительным
-    var ROD_OPORY = { 'ширина': 'ширины', 'кегль': 'кегля', 'высота': 'высоты',
-      'экран': 'экрана', 'строка': 'строки', 'колонка': 'колонки', 'лента': 'ленты',
-      'знак': 'знака', 'своё': '«своего»', 'ось': 'оси', 'место': 'места',
-      'фаза': 'фазы', 'сосед': 'соседа', 'объект': 'объекта', 'край': 'края' };
-    function rodOpory(ot) { return ROD_OPORY[ot] || ot; }
-    var tipRuchki = {};
-    (o.zakon || []).forEach(function (z) {
-      if (z[0] === 'h') return;
-      var t = z[2], op = z[3] || {};
-      if (t === 'пара' && op.iz) {
-        op.iz.forEach(function (r) {
-          tipRuchki[r[0]] = r[2] + ((r[3] || {}).ot ? ' от ' + rodOpory(r[3].ot) : '');
-        });
-        return;
-      }
-      if (z[0]) tipRuchki[z[0]] = t + (op.ot ? ' от ' + rodOpory(op.ot) : '');
-    });
     (o.defs || []).forEach(function (d) {
       if (d[0] === 'h') {
         curCard = addSection(d[1]);
-        tekSek = d[1];
         return;
       }
-      if (d[2] === 'para' && Array.isArray(d[3])) {
-        d[3].forEach(function (r) { zapomni(r[0], d[1] + ' · ' + r[1]); });
-      }
-      zapomni(d[0], d[1]);
       var host = curCard || panel;
       var row = document.createElement('div'); row.className = 'row';
       /* Ключ на самой строке: стенду бывает нужно показать одни ручки и
@@ -984,37 +954,25 @@
        что уведены от исходных. Стенд, который читает параметры из адреса,
        откроется ровно в этом состоянии; остальным это читаемый список
        настроек. Якорь сохраняется — уезжает и место, и вид. */
-    // Отбор уведённых ручек один на обе кнопки: URL и текст правок —
-    // две формы выдачи одного сравнения DEFAULTS против P.
-    function uvedennye() {
-      var out = [];
-      Object.keys(DEFAULTS).forEach(function (k) {
-        var v = P[k], d = DEFAULTS[k];
-        var same = Array.isArray(d)
-          ? JSON.stringify(v) === JSON.stringify(d)
-          : String(v) === String(d);
-        if (!same) out.push({ k: k, bylo: d, stalo: v });
-      });
-      return out;
-    }
-    function pokazatNaKnopke(kn, klyuch, ru) {
-      return function (t) {
-        kn.textContent = t;
-        setTimeout(function () { kn.textContent = T(klyuch, ru); }, 1400);
-      };
-    }
     var cp = document.createElement('button');
     cp.className = 'st-reset st-copy';
     nadpis(cp, 'panel:copy', 'Скопировать параметры');
     cp.addEventListener('click', function () {
       var q = [];
-      uvedennye().forEach(function (u) {
-        q.push(encodeURIComponent(u.k) + '=' +
-          encodeURIComponent(Array.isArray(u.stalo) ? u.stalo.join(',') : u.stalo));
+      Object.keys(DEFAULTS).forEach(function (k) {
+        var v = P[k], d = DEFAULTS[k];
+        var same = Array.isArray(d)
+          ? JSON.stringify(v) === JSON.stringify(d)
+          : String(v) === String(d);
+        if (!same) q.push(encodeURIComponent(k) + '=' +
+          encodeURIComponent(Array.isArray(v) ? v.join(',') : v));
       });
       var url = location.origin + location.pathname +
         (q.length ? '?' + q.join('&') : '') + location.hash;
-      var said = pokazatNaKnopke(cp, 'panel:copy', 'Скопировать параметры');
+      var said = function (t) {
+        cp.textContent = t;
+        setTimeout(function () { cp.textContent = T('panel:copy', 'Скопировать параметры'); }, 1400);
+      };
       var ok = function () {
         said(q.length ? T('', 'скопировано: ') + q.length + T('', ' ручек')
                       : T('', 'всё по умолчанию'));
@@ -1024,59 +982,6 @@
       else ruchkami();
     });
     panel.appendChild(cp);
-
-    /* «Скопировать правки» — тот же отбор, вторая форма выдачи. URL выше
-       читает машина; модели и человеку нужен текст: подпись, тип и пара
-       «было → стало», сгруппированные по секциям. Закрывает разрыв цикла:
-       значения живут в localStorage, в коде стоят старые дефолты, и
-       следующая сессия рассуждала бы о ненастроенном стенде. */
-    var cpp = document.createElement('button');
-    cpp.className = 'st-reset st-copy';
-    nadpis(cpp, 'panel:copyEdits', 'Скопировать правки');
-    cpp.addEventListener('click', function () {
-      var uved = uvedennye();
-      var saidP = pokazatNaKnopke(cpp, 'panel:copyEdits', 'Скопировать правки');
-      if (!uved.length) { saidP(T('', 'всё по умолчанию')); return; }
-      function znak(v) { return Array.isArray(v) ? JSON.stringify(v) : String(v); }
-      // группировка по секциям в порядке появления в панели
-      var poSekciyam = [], vSekcii = {};
-      uved.forEach(function (u) {
-        var op = opisRuchek[u.k] || { podpis: u.k, sekciya: '' };
-        var sek = op.sekciya || '(без секции)';
-        if (!vSekcii[sek]) { vSekcii[sek] = []; poSekciyam.push(sek); }
-        vSekcii[sek].push({ k: u.k, podpis: op.podpis, tip: tipRuchki[u.k] || '',
-                            bylo: znak(u.bylo), stalo: znak(u.stalo) });
-      });
-      // секции идут в порядке панели, не в порядке ключей DEFAULTS
-      var poryadok = sekcii.map(function (x) { return x.title; });
-      poSekciyam.sort(function (a, b) { return poryadok.indexOf(a) - poryadok.indexOf(b); });
-      var w1 = 0, w2 = 0, w3 = 0;
-      uved.forEach(function (u) {
-        var op = opisRuchek[u.k] || { podpis: u.k };
-        w1 = Math.max(w1, u.k.length);
-        w2 = Math.max(w2, (op.podpis || '').length);
-        w3 = Math.max(w3, (tipRuchki[u.k] || '').length);
-      });
-      function pad(t, n) { t = String(t); while (t.length < n) t += ' '; return t; }
-      var imya = (location.pathname.split('/').pop() || location.pathname) || 'стенд';
-      var stroki = ['Стенд: ' + imya + ' \u00b7 ' + location.origin + location.pathname,
-                    'Уведено ' + ruchek(uved.length) + ' из ' + Object.keys(DEFAULTS).length + '.', ''];
-      poSekciyam.forEach(function (sek) {
-        stroki.push(sek);
-        vSekcii[sek].forEach(function (r) {
-          stroki.push('  ' + pad(r.k, w1) + '  ' + pad(r.podpis, w2) +
-                      (w3 ? '  ' + pad(r.tip, w3) : '') + '  ' + r.bylo + ' \u2192 ' + r.stalo);
-        });
-      });
-      stroki.push('');
-      stroki.push('Впиши эти значения в DEFAULTS стенда как новые значения по умолчанию.');
-      var tekst = stroki.join('\n');
-      var okP = function () { saidP(T('', 'скопировано: ') + uved.length + T('', ' ручек')); };
-      var rukamiP = function () { prompt(T('', 'Правки:'), tekst); };
-      if (navigator.clipboard) navigator.clipboard.writeText(tekst).then(okP, rukamiP);
-      else rukamiP();
-    });
-    panel.appendChild(cpp);
 
     var rst = document.createElement('button');
     rst.className = 'st-reset';

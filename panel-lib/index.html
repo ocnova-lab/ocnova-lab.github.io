@@ -49,6 +49,7 @@
 <script src="/panel-lib/vybor.js"></script>
 <script src="/panel-lib/ugol.js"></script>
 <script src="/panel-lib/palitra.js"></script>
+<script src="/panel-lib/gradient.js"></script>
 <script src="/panel-lib/garnitura.js"></script>
 <script src="/panel-lib/para.js"></script>
 <script src="/panel-lib/nasledovanie.js"></script>
@@ -184,6 +185,8 @@ StendPanel.build({
     ['shrift', 'Гарнитура', 'garnitura'],
     ['zaval', 'Завал оси, °', 'ugol'],   // без сектора — полный круг
     ['', 'Поле, px', 'para', [['padT', 'сверху', 0, 300, 4], ['padB', 'снизу', 0, 300, 4]]],
+    // палитра-закон: семейство оттенков одной формулой, ступени с кривой
+    ['grad', 'Семейство оттенков', 'gradient'],
     ['palette', 'Палитра', 'palitra', [
       ['night', 'Ночь', { bg: '#101014', ink: '#f0f0f2', acc: '#4d8dff' }],
       ['white', 'Чёрное на белом', { bg: '#ffffff', ink: '#111111', acc: '#1b2db3' }],
