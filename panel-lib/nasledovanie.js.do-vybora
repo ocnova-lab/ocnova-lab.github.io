@@ -12,10 +12,6 @@
 
    Объявление:  ['keglTeksta', 'Кегль', 'nasledovanie', 12, 48, 1]
                 ['fon', 'Фон', 'nasledovanie', 'color']
-                ['shrift', 'Шрифт', 'nasledovanie', 'vybor', 'garnitura']
-                ['ves', 'Вес', 'nasledovanie', 'vybor', [['400','обычный'], …]]
-                ('garnitura' берёт список у органа гарнитуры — алфавит свода
-                плюс личный набор; недоступные на машине помечаются)
    Значения:    P.keglTeksta                        — общий закон
                 P.otkloneniya['etazh-2'].keglTeksta — отступление этажа
 
@@ -92,36 +88,16 @@
     vstavitStil();
     var klyuch = d[0];
     var cvet = d[3] === 'color';
-    var vybor = d[3] === 'vybor';
-    var n = nastroyki(cvet ? d[4] : vybor ? d[5] : d[6]);
-    var lo = cvet || vybor ? 0 : Number(d[3]);
-    var hi = cvet || vybor ? 1 : Number(d[4]);
+    var n = nastroyki(cvet ? d[4] : d[6]);
+    var lo = cvet ? 0 : Number(d[3]);
+    var hi = cvet ? 1 : Number(d[4]);
 
     var box = document.createElement('div'); box.className = 'st-nasl';
     var val = null;
-    var inp;
-    if (vybor) {
-      /* Выбор из закрытого списка — шрифт этажа, вес, начертание.
-         'garnitura' вместо списка берёт полный список у органа гарнитуры;
-         недоступный на машине шрифт честно помечается — молчаливая
-         подмена запасным хуже некрасивой подписи. */
-      inp = document.createElement('select');
-      var spisok = d[4] === 'garnitura' && StendPanel.garnituraSpisok
-        ? StendPanel.garnituraSpisok() : (d[4] || []);
-      spisok.forEach(function (g) {
-        var imya = Array.isArray(g) ? g[0] : g;
-        var opt = document.createElement('option');
-        opt.value = imya;
-        var zdes = d[4] !== 'garnitura' || !StendPanel.garnituraDostupna ||
-                   StendPanel.garnituraDostupna(imya);
-        opt.textContent = zdes ? imya : imya + ' — нет на машине';
-        inp.appendChild(opt);
-      });
-    } else if (cvet) {
-      inp = document.createElement('input');
+    var inp = document.createElement('input');
+    if (cvet) {
       inp.type = 'color'; inp.className = 'st-color';
     } else {
-      inp = document.createElement('input');
       inp.type = 'range'; inp.min = lo; inp.max = hi; inp.step = d[5];
       val = document.createElement('span'); val.className = 'val';
     }
@@ -129,7 +105,7 @@
     tochka.className = 'st-nasl-tochka'; tochka.type = 'button';
 
     function zalivka() {
-      if (cvet || vybor) return;
+      if (cvet) return;
       var p = (parseFloat(inp.value) - lo) / (hi - lo) * 100;
       inp.style.background =
         'linear-gradient(to right, ' + api.accent() + ' ' + p + '%, var(--st-track) ' + p + '%)';
@@ -139,10 +115,7 @@
       var id = adres(P, n);
       var est = svoyo(P, n, id, klyuch);
       var v = est ? P[n.gnezdo][id][klyuch] : P[klyuch];
-      if (vybor) {
-        inp.value = v;
-        inp.style.opacity = id && !est ? '.45' : '1';
-      } else if (cvet) {
+      if (cvet) {
         inp.value = v;
         inp.style.opacity = id && !est ? '.45' : '1';
       } else {
@@ -168,7 +141,7 @@
     }
 
     inp.addEventListener('input', function () {
-      zapisat(cvet || vybor ? inp.value : parseFloat(inp.value) / n.mul);
+      zapisat(cvet ? inp.value : parseFloat(inp.value) / n.mul);
     });
 
     // Дабл-клик: на этаже — вернуть закон, на законе — вернуть исходное.

@@ -342,7 +342,7 @@
   .idx.sub { color: var(--ink); margin-bottom: calc(18px * var(--u)); }
   .main { font-size: calc(var(--main-fs) * var(--u)); line-height: var(--main-lh);
           letter-spacing: var(--main-tr); white-space: pre-line; }
-  .lead { font-family: var(--stil-vrezka, "Dent Display", "Even Mono", ui-monospace, monospace);
+  .lead { font-family: "Dent Display", "Even Mono", ui-monospace, monospace;
           font-size: calc(var(--lead-fs) * var(--u)); line-height: var(--lead-lh);
           letter-spacing: var(--lead-tr); }
   /* ссылка: цвета не заводит, отличает её подчёркивание */
@@ -591,14 +591,6 @@
   .lang-btn { left: 56px;
               font: 600 11px/1 -apple-system, "Helvetica Neue", Arial, sans-serif;
               letter-spacing: .04em; }
-
-  /* Шрифты стилей: значения ставит primenitStili(), стеки — запасные.
-     Блок стоит в конце нарочно: при равной специфичности побеждает
-     поздний, и стиль перекрывает исходные правила выше. */
-  .col.title { font-family: var(--stil-titul, "Even Mono", ui-monospace, monospace); }
-  .main { font-family: var(--stil-tekst, "Even Mono", ui-monospace, monospace); }
-  .idx, .cap, .by, .nad {
-    font-family: var(--stil-dsc, "JetBrains Mono", ui-monospace, monospace); }
 </style>
 </head>
 <body>
@@ -627,9 +619,6 @@
 <!-- органы панели из библиотеки /panel-lib (каталог: стенды.0снова.рф/panel-lib) -->
 <script src="/panel-lib/segment.js"></script>
 <script src="/panel-lib/obyavlenie.js"></script>
-<script src="/panel-lib/inspektor.js"></script>
-<script src="/panel-lib/nasledovanie.js"></script>
-<script src="/panel-lib/garnitura.js"></script>
 <script src="/panel-lib/toggle.js"></script>
 <script src="/panel-lib/koridor.js"></script>
 <script src="/panel-lib/para.js"></script>
@@ -745,21 +734,10 @@ var DEFAULTS = {
   bg: '#ffffff',
   ink: '#878c97',
   dbg: false,      // показать границы колонок
-  dbgbuf: false,   // показать буферы
-  /* Шрифтовые стили = именованные этажи типографики (рамка 02.09).
-     Закон — Even Mono; врезка и дескрипторы отступают своими шрифтами,
-     ровно как в CSS до этой ручки. */
-  aktivnyi: '',
-  stilShrift: 'Even Mono',
-  otkloneniya: { // служебное: гнездо отступлений стилей, ручка ему не нужна
-    vrezka: { stilShrift: 'Dent Display' },
-    dsc: { stilShrift: 'JetBrains Mono' },
-  }
+  dbgbuf: false    // показать буферы
 };
 var P = Object.assign({}, DEFAULTS);
 try { Object.assign(P, JSON.parse(localStorage.getItem('gorizont-params') || '{}')); } catch (e) {}
-// гнездо отступлений — копией, не ссылкой: правка стиля не должна трогать DEFAULTS
-if (P.otkloneniya === DEFAULTS.otkloneniya) P.otkloneniya = JSON.parse(JSON.stringify(DEFAULTS.otkloneniya));
 // Параметры из адреса поверх сохранённых: ?col=300&figFit=step&dbg=1.
 // Тип берём у исходного значения, а не угадываем по строке: иначе цвет
 // «#0a0f1a» станет числом, а рукоятки безье — одной координатой.
@@ -2281,30 +2259,15 @@ function katStorona() {
    Каталог строится при уходе из статьи — до того замер честно скажет
    «0 на экране». */
 var MESTA = {
-  'Титул':      { gde: '.col.title', etazh: 'titul' },
-  'Врезка':     { gde: '.lead', etazh: 'vrezka' },
-  'Дескриптор': { gde: ['.idx', '.cap', '.by', '.nad'], etazh: 'dsc' },
-  'Текст':      { gde: '.main', etazh: 'tekst' },
+  'Титул':      '.col.title',
+  'Врезка':     '.lead',
+  'Дескриптор': ['.idx', '.cap', '.by', '.nad'],
+  'Текст':      '.main',
   'Картинка':   '.col.fig',
   'Стопка':     '.col.figs',
   'Каталог':    ['.ryad', '.ten-lenta'],
   'Колонка':    '.col',
 };
-
-/* Шрифты стилей — CSS-переменными; прежние стеки остаются запасными.
-   Смена адреса (какой стиль правим) ничего не красит — красит значение. */
-function primenitStili() {
-  var r = document.documentElement.style;
-  ['titul', 'tekst', 'vrezka', 'dsc'].forEach(function (id) {
-    var im = StendPanel.znachenie(P, 'stilShrift', id).replace(/"/g, '');
-    r.setProperty('--stil-' + id, '"' + im + '", ui-monospace, monospace');
-  });
-}
-document.addEventListener('stend:izmenenie', function (e) {
-  var k = e.detail && e.detail.key;
-  if (!k || k === 'stilShrift' || k === 'aktivnyi') primenitStili();
-});
-primenitStili();
 
 var PANEL = StendPanel.build({
   storageKey: 'gorizont-obyavl-params',
@@ -2328,19 +2291,6 @@ var PANEL = StendPanel.build({
   // без единой правки под gorizont. Цель — узнать, не подогнана ли таблица
   // под первый стенд. Границы пишутся только там, где таблица не вместила.
   zakon: [
-    /* СТИЛИ. Шрифтовой стиль — именованный этаж типографики: закон один,
-       стиль отступает своим шрифтом (точка справа возвращает к закону).
-       Клик по месту на макете ставит его стиль в инспектор. Кегли и
-       строки стилей пока живут парами в «Наборе» — их перевод на
-       наследование отдельным заходом: движок читает их напрямую. */
-    ['h', 'Стили', { gde: ['Титул', 'Врезка', 'Текст', 'Дескриптор'] }],
-    ['aktivnyi', 'Стиль', 'этажи', { iz: [
-      ['titul', 'Титул'], ['vrezka', 'Врезка'],
-      ['tekst', 'Текст'], ['dsc', 'Дескриптор']] }],
-    ['stilShrift', 'Шрифт', 'гарнитура', { k: 'этаж', iz: [
-      ['Even Mono', 'моно'], ['Dent Display', 'антиква титулов'],
-      ['JetBrains Mono', 'моно'], ['Editorial New', 'антиква набора'],
-      ['Times New Roman', 'системная антиква']] }],
     /* Секция «Набор» без общего места: её законы разнесены по четырём
        родам текста. Пары получили ключи (ttlPara и далее) — строка панели
        ищется по data-k, а пустой ключ спутал бы все пары в одну. */

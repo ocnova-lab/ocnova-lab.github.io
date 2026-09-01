@@ -108,7 +108,7 @@ var DEFAULTS = {
   pole: [40, 180], sila: 60, ostrota: 2.2,
   spring: [320, 0.35], kompoziciya: 'A',
   zaval: 2, padT: 60, padB: 120, shrift: 'Editorial New',
-  aktivnyi: '', etazhKegl: 100, etazhVozduh: 0,
+  aktivnyi: '', etazhKegl: 100, etazhVozduh: 0, etazhShrift: 'Even Mono',
   otkloneniya: {}, // служебное: гнездо отступлений, ручка ему не нужна
 };
 var P = Object.assign({}, DEFAULTS);
@@ -134,6 +134,9 @@ function prilozhit() {
     if (!el) return;
     el.style.fontSize = StendPanel.znachenie(P, 'etazhKegl', e[0]) / 100 + 'em';
     el.style.marginTop = StendPanel.znachenie(P, 'etazhVozduh', e[0]) + 'px';
+    // шрифт стиля: закон один, этаж отступает — полный шрифтовой стиль
+    el.style.fontFamily = '"' + StendPanel.znachenie(P, 'etazhShrift', e[0]).replace(/"/g, '') +
+      '", ui-monospace, monospace';
   });
 }
 
@@ -198,6 +201,7 @@ StendPanel.build({
     ['h', 'Этажи и закон', { gde: ['Заголовок', 'Список', 'Сноска'] }],
     ['aktivnyi', 'Правим', 'этажи', { iz: [
       ['zagolovok', 'Заголовок'], ['spisok', 'Список'], ['snoska', 'Сноска']] }],
+    ['etazhShrift', 'Шрифт этажа', 'гарнитура', { k: 'этаж' }],
     ['etazhKegl', 'Кегль этажа', 'доля', { ot: 'кегль', k: 'этаж', ot0: 60, shag: 1 }],
     ['etazhVozduh', 'Воздух сверху', 'поле', { k: 'этаж', do: 80, shag: 1 }],
   ], {
@@ -230,6 +234,7 @@ StendPanel.build({
     zaval: 'угол показан углом: тяни по кругу от текущего положения, с Shift — по 5°; клик по числу — точный ввод, стрелки ±1, с Shift ±10',
     palette: 'профиль виден цветом, а не назван словом',
     aktivnyi: 'сначала выбираешь, что правишь, потом крутишь; сводка считает отступления',
+    etazhShrift: 'шрифт стиля: закон один, этаж может отступить своим; недоступные на машине шрифты помечены',
     etazhKegl: 'закон один на все этажи; точка справа отмечает отступление и возвращает закон',
     etazhVozduh: 'то же наследование для вертикального ритма этажей',
   },

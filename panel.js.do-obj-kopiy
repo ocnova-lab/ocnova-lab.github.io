@@ -50,12 +50,8 @@
     if (/[?&]reset/.test(location.search)) {
       try { localStorage.removeItem(o.storageKey); } catch (e) {}
       Object.assign(o.params, o.defaults);
-      Object.keys(o.defaults).forEach(function (k) { // массивы и объекты — копиями:
-        // otkloneniya стилей по умолчанию — объект; ссылка дала бы правку DEFAULTS
+      Object.keys(o.defaults).forEach(function (k) { // массивы — копиями
         if (Array.isArray(o.defaults[k])) o.params[k] = o.defaults[k].slice();
-        else if (o.defaults[k] && typeof o.defaults[k] === 'object') {
-          o.params[k] = JSON.parse(JSON.stringify(o.defaults[k]));
-        }
       });
     }
     /* ОБЪЯВЛЕНИЕ вместо defs. Стенд может отдать не готовые строки панели, а
@@ -1120,12 +1116,6 @@
         if (d[2] !== 'ease') return;
         var bk = d[0].replace('Ease', 'Bez');
         if (Array.isArray(DEFAULTS[bk])) P[bk] = DEFAULTS[bk].slice();
-      });
-      // объекты (гнездо отступлений стилей) — тоже копиями, не ссылкой
-      Object.keys(DEFAULTS).forEach(function (k) {
-        if (DEFAULTS[k] && typeof DEFAULTS[k] === 'object' && !Array.isArray(DEFAULTS[k])) {
-          P[k] = JSON.parse(JSON.stringify(DEFAULTS[k]));
-        }
       });
       try { localStorage.removeItem(o.storageKey); } catch (e) {}
       for (var k in controls) controls[k]();

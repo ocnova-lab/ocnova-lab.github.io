@@ -94,7 +94,6 @@
     'порог':    { organ: 'слайдер', ot0: 320, do: 1200, edinica: 'px' },
     'скорость': { organ: 'слайдер', ot0: -200, do: 200, edinica: 'px/с' },
     'цвет':     { organ: 'color', edinica: '' },
-    'гарнитура': { organ: 'garnitura', edinica: '' }, // шрифт из алфавита свода + личного набора; с k:'этаж' — шрифт стиля
     'палитра':  { organ: 'palitra', edinica: '' },
     // Семейство оттенков формулой (косинусный градиент Килеза), а не
     // перечнем: палитра-закон для шкал; списочная палитра остаётся там,
@@ -352,16 +351,7 @@
         defs.push([klyuch, nadpis, 'nasledovanie', 'color']);
         return;
       }
-      /* Шрифт этажа — сердце шрифтового СТИЛЯ (рамка 02.09): стиль — это
-         именованный этаж типографики, гарнитура наследуется как кегль.
-         Список даёт орган гарнитуры (алфавит + личный набор из витрины),
-         стенд может сузить его своим iz. */
-      if (o.k === 'этаж' && tip === 'гарнитура') {
-        defs.push([klyuch, nadpis, 'nasledovanie', 'vybor', o.iz || 'garnitura']);
-        return;
-      }
-      if (['color', 'ease', 'toggle', 'otkat', 'palitra', 'datchik', 'inspektor',
-           'garnitura', 'gradient'].indexOf(baza.organ) >= 0) {
+      if (['color', 'ease', 'toggle', 'otkat', 'palitra', 'datchik', 'inspektor'].indexOf(baza.organ) >= 0) {
         defs.push([klyuch, nadpis, o.organ || baza.organ, o.iz || o.podpisi, o.opcii]);
         return;
       }

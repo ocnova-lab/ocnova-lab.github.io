@@ -44,33 +44,6 @@
       return Object.keys(n).sort().map(function (im) { return [im, 'мой набор']; });
     } catch (e) { return []; }
   }
-  // Полный список — и другим органам тоже (наследование шрифта этажа).
-  StendPanel.garnituraSpisok = function () { return ALFAVIT.concat(svoi()); };
-
-  /* ЗАМЕР ДОСТУПНОСТИ. Личный набор — список ИМЁН: на чужой машине шрифт
-     молча подменится запасным, и стенд будет выглядеть иначе, чем настроен.
-     Орган обязан сказать это до выбора, а не после.
-
-     document.fonts.check тут врёт: на имя, которого браузер не знает,
-     Хром отвечает true («отрисую фолбэком»). Честный замер — метриками:
-     пробная строка меряется с запасным шрифтом и с именем поверх него.
-     Совпали ширины и с monospace, и с serif — имени на машине нет. */
-  var kanva = null;
-  function dostupen(imya) {
-    try {
-      if (!kanva) kanva = document.createElement('canvas').getContext('2d');
-      var probn = 'iIl1 mmWW ФфЖж 0Oo';
-      var chist = imya.replace(/"/g, '');
-      var raznitsa = ['monospace', 'serif'].some(function (zapas) {
-        kanva.font = '32px ' + zapas;
-        var bez = kanva.measureText(probn).width;
-        kanva.font = '32px "' + chist + '", ' + zapas;
-        return kanva.measureText(probn).width !== bez;
-      });
-      return raznitsa;
-    } catch (e) { return true; }
-  }
-  StendPanel.garnituraDostupna = dostupen;
 
   StendPanel.tip('garnitura', function (row, d, P, api) {
     if (!document.getElementById('st-garn-css')) {
@@ -91,10 +64,7 @@
         var pr = document.createElement('i');
         pr.textContent = imya;
         pr.style.fontFamily = '"' + imya.replace(/"/g, '') + '", serif';
-        var m = document.createElement('s');
-        var zdes = dostupen(imya);
-        m.textContent = zdes ? rol : (rol ? rol + ' · ' : '') + 'нет на машине';
-        if (!zdes) r.style.opacity = '.5';
+        var m = document.createElement('s'); m.textContent = rol;
         r.appendChild(pr); r.appendChild(m);
         r.addEventListener('click', function () {
           P[d[0]] = imya;
@@ -117,10 +87,6 @@
     sobrat();
     // набор мог пополниться в соседней вкладке, пока стенд открыт
     addEventListener('storage', function (e) { if (e.key === 'shrifty-nabor') sobrat(); });
-    // шрифты догрузились — замер доступности мог перемениться
-    if (document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(function () { sobrat(); });
-    }
     row.appendChild(box);
   });
 })();
