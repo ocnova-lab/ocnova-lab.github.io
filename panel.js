@@ -292,7 +292,10 @@
       panel.appendChild(h);
       panel.appendChild(card);
       function applyFold() {
-        card.hidden = !!folds[title];
+        /* Секцию, спрятанную сужением (набор или место прячут заголовок),
+           «Развернуть всё» не воскрешает: без заголовка карточка вернулась
+           бы безымянной. Найдено ревизией 2026-09-01, жило с хода 5. */
+        card.hidden = !!folds[title] || h.hidden;
         h.classList.toggle('st-closed', !!folds[title]);
       }
       h.addEventListener('click', function () {
@@ -576,7 +579,7 @@
        месту перебивает набор и при выходе возвращает его — вложенности и
        хлебных крошек нет по решению. */
     var tekNabor = null, polnyi = null, nsel = null;   // заполнит блок наборов
-    var mestoTek = null, vozvratNabor = null;
+    var mestoTek = null;
 
     function vseStroki() {
       var out = [];
@@ -592,7 +595,11 @@
     }
 
     function perestroitVid() {
-      var spisok = (o.nabory && tekNabor) ? o.nabory[tekNabor] : null;
+      /* Пока панель сужена местом, набор не участвует: место режет поперёк
+         секций, и пересечение с набором давало бы «Строка · 2 из 71» —
+         законы места, случайно попавшие в секции набора. Место ПЕРЕБИВАЕТ
+         набор; набор ждёт своей очереди и возвращается выходом. */
+      var spisok = (o.nabory && tekNabor && !mestoTek) ? o.nabory[tekNabor] : null;
       var karta = (typeof StendPanel !== 'undefined' && StendPanel.karta) || null;
       var svoi = mestoTek && karta ? (karta.vMeste[mestoTek] || []) : null;
       sekcii.forEach(function (s) {
@@ -627,6 +634,9 @@
       var uzko = !!mestoTek || (!!o.nabory && tekNabor && tekNabor !== polnyi);
       sost.classList.toggle('uzko', !!uzko);
       sostX.hidden = !uzko;
+      sostX.title = (mestoTek && o.nabory && tekNabor && tekNabor !== polnyi)
+        ? 'вернуться к набору «' + tekNabor + '» (Esc)'
+        : 'показать все законы (Esc)';
       sostText.innerHTML = uzko
         ? '<b>' + (mestoTek || tekNabor) + '</b> · ' + vidno + ' из ' + izRuchek(vsego)
         : '<b>' + T('panel:vse', 'Все законы') + '</b> · ' + ruchek(vsego);
@@ -640,9 +650,8 @@
       if (!mestoTek && (!o.nabory || !tekNabor || tekNabor === polnyi)) return;
       var mesto = panel.scrollTop;
       if (mestoTek) {
+        // набор при клике не менялся — снятое место открывает его обратно
         mestoTek = null;
-        if (vozvratNabor && nsel) { tekNabor = vozvratNabor; nsel.value = tekNabor; }
-        vozvratNabor = null;
       } else if (nsel) {
         tekNabor = polnyi; nsel.value = polnyi;
       }
@@ -688,6 +697,14 @@
       }
       return null;
     }
+    // Подпись держится у курсора, но не уезжает за край: у правой и
+    // нижней кромки её сдвиг (14px в CSS) прижимается внутрь экрана.
+    function stavitPodpis(pod) {
+      var r = pod.getBoundingClientRect();
+      var x = Math.min(posl.x, window.innerWidth - r.width - 22);
+      var y = Math.min(posl.y, window.innerHeight - r.height - 22);
+      pod.style.left = x + 'px'; pod.style.top = y + 'px';
+    }
     function narisovatMarkery(imya) {
       snyatMarkery();
       if (!imya) return;
@@ -719,12 +736,13 @@
       }
       var pod = document.createElement('div');
       pod.className = 'st-mesto-imya';
+      pod.dataset.podpis = '1';
       // счёт элементов рядом с именем: он и есть довод, что правится не один
       var zak = (karta0.vMeste[imya] || []).length;
       pod.textContent = imya + (n > 1 ? ' \u00d7 ' + n : '') + ' · ' + ruchek(zak);
-      if (posl) { pod.style.left = posl.x + 'px'; pod.style.top = posl.y + 'px'; }
       sloi.appendChild(pod);
       document.body.appendChild(sloi);
+      if (posl) stavitPodpis(pod);
     }
     function navedenie(e) {
       if (!rezhim) return;
@@ -733,7 +751,7 @@
       if (imya !== podKursorom) narisovatMarkery(imya);
       else if (sloi) {
         var pod = sloi.querySelector('.st-mesto-imya');
-        if (pod) { pod.style.left = posl.x + 'px'; pod.style.top = posl.y + 'px'; }
+        if (pod) stavitPodpis(pod);
       }
     }
     function vybor(e) {
@@ -743,7 +761,6 @@
       // клик перехватывается целиком: на макете под ним могла быть ссылка
       e.preventDefault(); e.stopPropagation();
       var mesto = panel.scrollTop;
-      if (o.nabory && tekNabor !== polnyi) vozvratNabor = tekNabor;
       mestoTek = imya;
       vyklyuchitRezhim();
       perestroitVid();
@@ -853,7 +870,7 @@
          начальной сборке (nachalo) место с адреса ?mesto= остаётся. */
       function primenitNabor(imya, nachalo) {
         tekNabor = imya;
-        if (!nachalo) { mestoTek = null; vozvratNabor = null; }
+        if (!nachalo) mestoTek = null;
         try { localStorage.setItem(NABOR_KEY, imya); } catch (e) {}
         perestroitVid();
       }
@@ -957,7 +974,6 @@
       mesto: function (imya) {
         if (imya && (!karta0 || !karta0.vMeste[imya])) return;
         if (!imya) { vyhod(); return; }
-        if (o.nabory && tekNabor !== polnyi) vozvratNabor = tekNabor;
         mestoTek = imya; perestroitVid();
       },
       vyhod: vyhod,
