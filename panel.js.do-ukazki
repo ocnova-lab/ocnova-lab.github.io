@@ -697,12 +697,6 @@
       // акцент темы живёт на панели, а слой лежит в body — тему переносим,
       // иначе метки в «Нотхинге» остались бы синими
       if (panel.classList.contains('st-theme-nothing')) sloi.classList.add('st-theme-nothing');
-      /* Этаж указки берётся у самой панели, а не из общего правила: стенд
-         вправе опустить панель на свой порядок (diagonal держит её на 50),
-         и указка обязана поехать за ней — на этаж ниже, чтобы лежать
-         поверх макета, но не закрывать то, ради чего в неё тычут. */
-      var zp = parseInt(getComputedStyle(panel).zIndex, 10);
-      if (zp === zp) sloi.style.zIndex = zp - 1;
       var g = karta0.gde[imya], n = 0;
       if (typeof g !== 'function') {
         g.forEach(function (sel) {
