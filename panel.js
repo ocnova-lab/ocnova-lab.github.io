@@ -727,6 +727,7 @@
         P[d[0]] = parseFloat(inp.value) / mul;
         val.textContent = fmt(P[d[0]]);
         paintFill(inp);
+        uvodObnovit();   // точка загорается в момент правки, не после перезагрузки
         izmenilos(d[0]);
       });
       // дабл-клик по слайдеру — откат ЭТОЙ ручки к дефолту
@@ -772,7 +773,7 @@
       uvod.title = 'уведено от умолчания — вернуть';
       function uvodObnovit() {
         var d0 = DEFAULTS[d[0]];
-        uvod.hidden = d0 === undefined || String(P[d[0]]) === String(d0);
+        uvod.classList.toggle('on', d0 !== undefined && String(P[d[0]]) !== String(d0));
       }
       uvod.addEventListener('click', function () {
         if (DEFAULTS[d[0]] === undefined) return;

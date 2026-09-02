@@ -97,7 +97,8 @@
 }
 .st-panel .row {
   display: flex; align-items: center; gap: 10px;
-  min-height: 40px; padding: 5px 12px;
+  /* воздух: 40px было плотно глазам — правка приёмки Сергея 02.09 */
+  min-height: 46px; padding: 7px 12px;
 }
 /* СПРЯТАНО — ЗНАЧИТ НЕТ. Атрибут hidden даёт display:none стилем браузера,
    и любой явный display его перебивает: строка с display:flex остаётся на
@@ -108,7 +109,10 @@
    точка горит, клик возвращает умолчание. Родня точке наследования. */
 .st-panel .st-uvod { all: unset; box-sizing: border-box; flex: none;
   width: 9px; height: 9px; border-radius: 50%; cursor: pointer;
-  background: var(--st-accent); opacity: .8; }
+  background: var(--st-accent); opacity: .8;
+  /* место занято всегда: появление точки не должно сдвигать полоску */
+  visibility: hidden; }
+.st-panel .st-uvod.on { visibility: visible; }
 .st-panel .st-uvod:hover { opacity: 1; }
 .st-theme-nothing .st-uvod { border-radius: 0; }
 /* Строка вне сужения: панель прячет своим классом, стенд — атрибутом
