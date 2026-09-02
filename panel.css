@@ -67,6 +67,8 @@
   color: #fff;
   font: 13px/1.35 var(--st-font);
   scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .25) transparent;
+  /* окно: пропорции тянутся системным уголком (правый нижний угол) */
+  resize: both; min-width: 280px; min-height: 180px;
   transform-origin: bottom left;
   animation: st-panel-in .28s cubic-bezier(.32, .72, 0, 1);
 }
@@ -321,6 +323,7 @@ body.st-vybor .st-panel, body.st-vybor .st-panel * { cursor: default !important;
    и значит должна вести себя как лист: во всю ширину, снизу, с ручкой хвата
    и коротким ходом до края. Приёмы раскладки сняты с tweakpane-compact-kit. */
 @media (max-width: 560px) {
+  .st-panel { resize: none; }
   .st-panel {
     /* лист лежит ПОВЕРХ работы, а не рядом с ней: стекло уплотняется,
        иначе сквозь панель читается то, чем управляешь */

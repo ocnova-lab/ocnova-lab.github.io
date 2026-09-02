@@ -182,6 +182,74 @@
     var panel = document.createElement('div');
     panel.className = 'st-panel';
     panel.hidden = true;
+
+    /* ── ОКНО ПАНЕЛИ (правка приёмки 02.09) ───────────────────────────
+       Панель закрывала собой куски макета — а клик по месту требует
+       макет видеть. Теперь она окно: перенос за шапку, пропорции —
+       системным уголком (правый нижний угол), дабл-клик по шапке
+       возвращает на место. Привычка руки одна на все стенды —
+       хранится глобально, как тема. На узком экране панель остаётся
+       нижним листом, окна там нет. */
+    var OKNO_KEY = 'stend-panel-okno';
+    var uzkiy = function () { return window.innerWidth < 560; };
+    function oknoPrivyazka() {
+      // из прибитого низа — в свободный верх: до первого переноса панель
+      // живёт как раньше, после — координатами окна
+      if (panel.style.top) return;
+      var r = panel.getBoundingClientRect();
+      panel.style.top = r.top + 'px';
+      panel.style.left = r.left + 'px';
+      panel.style.bottom = 'auto';
+    }
+    function oknoSohranit() {
+      try {
+        localStorage.setItem(OKNO_KEY, JSON.stringify({
+          left: panel.style.left, top: panel.style.top,
+          w: panel.style.width, h: panel.style.height,
+        }));
+      } catch (e) {}
+    }
+    function oknoVernut() {
+      panel.style.top = ''; panel.style.left = '';
+      panel.style.bottom = ''; panel.style.width = ''; panel.style.height = '';
+      try { localStorage.removeItem(OKNO_KEY); } catch (e) {}
+    }
+    (function oknoVosstanovit() {
+      if (uzkiy()) return;
+      var o2 = null;
+      try { o2 = JSON.parse(localStorage.getItem(OKNO_KEY) || 'null'); } catch (e) {}
+      if (!o2) return;
+      if (o2.top) {
+        // окно не должно восстановиться за кромкой экрана
+        var t = Math.max(0, Math.min(parseFloat(o2.top) || 0, window.innerHeight - 80));
+        var l = Math.max(0, Math.min(parseFloat(o2.left) || 0, window.innerWidth - 80));
+        panel.style.top = t + 'px'; panel.style.left = l + 'px';
+        panel.style.bottom = 'auto';
+      }
+      if (o2.w) panel.style.width = o2.w;
+      if (o2.h) panel.style.height = o2.h;
+    })();
+    /* Пользовательский размер: системный уголок пишет inline width/height.
+       Захват у правого нижнего угла переводит окно на верхнюю привязку —
+       иначе прибитый низ рос бы вверх из-под курсора; отпускание руки
+       сохраняет (ResizeObserver дублирует, но он спит там, где не гонятся
+       кадры). */
+    panel.addEventListener('pointerdown', function (e) {
+      if (uzkiy()) return;
+      var r = panel.getBoundingClientRect();
+      if (e.clientX > r.right - 22 && e.clientY > r.bottom - 22) oknoPrivyazka();
+    });
+    panel.addEventListener('pointerup', function () {
+      if (panel.style.width || panel.style.height) { oknoPrivyazka(); oknoSohranit(); }
+    });
+    if (window.ResizeObserver) {
+      var roT = null;
+      new ResizeObserver(function () {
+        if (!panel.style.width && !panel.style.height) return;
+        oknoPrivyazka();
+        clearTimeout(roT); roT = setTimeout(oknoSohranit, 300);
+      }).observe(panel);
+    }
     var tip = document.createElement('div');
     tip.className = 'st-tip';
     document.body.appendChild(gear);
@@ -426,6 +494,38 @@
     panel.appendChild(verh);
     metkaSver();
 
+    /* Перенос: рука берёт за шапку (верхняя строка и строка состояния),
+       кнопки остаются кнопками — захват только с порога хода в 4px.
+       Дабл-клик по шапке возвращает окно на место по умолчанию. */
+    function oknoTaskat(ruchka) {
+      ruchka.style.cursor = 'grab';
+      ruchka.addEventListener('pointerdown', function (e) {
+        if (uzkiy()) return;
+        if (e.target.closest('button, select, input')) return;
+        var r0 = panel.getBoundingClientRect();
+        var x0 = e.clientX, y0 = e.clientY, vzyal = false;
+        function hod(ev) {
+          var dx = ev.clientX - x0, dy = ev.clientY - y0;
+          if (!vzyal && Math.abs(dx) + Math.abs(dy) < 4) return;
+          if (!vzyal) { vzyal = true; oknoPrivyazka(); }
+          panel.style.left = Math.max(0, Math.min(r0.left + dx, window.innerWidth - 60)) + 'px';
+          panel.style.top = Math.max(0, Math.min(r0.top + dy, window.innerHeight - 40)) + 'px';
+        }
+        function otpustil() {
+          document.removeEventListener('pointermove', hod);
+          document.removeEventListener('pointerup', otpustil);
+          if (vzyal) oknoSohranit();
+        }
+        document.addEventListener('pointermove', hod);
+        document.addEventListener('pointerup', otpustil);
+      });
+      ruchka.addEventListener('dblclick', function (e) {
+        if (e.target.closest('button, select, input')) return;
+        oknoVernut();
+      });
+    }
+    oknoTaskat(verh);
+
     /* ── СТРОКА СОСТОЯНИЯ ──────────────────────────────────────────────
        Отвечает на «где я» и держит выход. Сужение вида — это ВИД, а не
        правка: выход ничего не меняет в макете, поэтому он бесплатный и
@@ -442,6 +542,7 @@
     sostX.hidden = true;
     sost.appendChild(sostText); sost.appendChild(sostX);
     panel.appendChild(sost);
+    oknoTaskat(sost);
     var obnovitSostoyanie = function () {};
     // «23 ручек» читается как машинный вывод; строка состояния — текст,
     // который читают глазами каждый раз, и склонение тут не мелочь
