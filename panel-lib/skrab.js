@@ -47,7 +47,6 @@
     'border:0.5px solid var(--st-hairline)}' +
     '.st-skrab-k:hover{color:var(--st-text);background:var(--st-card)}' +
     '.st-skrab-lupa{display:flex;gap:2px;align-items:center;width:100%;margin-top:4px}' +
-    '.st-skrab-lupa i{font-style:normal;font:10px/1 var(--st-font);color:var(--st-text-2);margin-right:4px}' +
     '.st-skrab-lupa button{all:unset;box-sizing:border-box;cursor:pointer;padding:3px 7px;' +
     'font:11px/1 var(--st-font);color:var(--st-text-2);border-radius:5px}' +
     '.st-skrab-lupa button[aria-checked="true"]{background:var(--st-accent);color:#fff}' +
@@ -108,8 +107,9 @@
 
     // пуск: туда и обратно — прогон перехода без ухода из панели
     if (pusk) {
-      [['▸', true, 'прогнать переход туда'],
-       ['◂', false, 'прогнать переход обратно']].forEach(function (k) {
+      // левая кнопка ведёт к левому концу нитки, правая — к правому
+      [['◂', false, 'прогнать переход обратно'],
+       ['▸', true, 'прогнать переход туда']].forEach(function (k) {
         var b = document.createElement('button');
         b.type = 'button'; b.className = 'st-skrab-k';
         b.textContent = k[0]; b.title = k[2];
@@ -161,14 +161,12 @@
         kino(kinoVkl);
         if (!kinoVkl) faza(null);   // выключил — стоп-кадр
       });
-      box.appendChild(kn);
+      var kinoKn = kn;   // уедет во второй этаж, к лупе, правым краем
     }
     var lupa = null;
     if (zamedli) {
       // вторым этажом: в одну строку с прогонами и скроллом лупа не влезает
       lupa = document.createElement('div'); lupa.className = 'st-skrab-lupa';
-      var met = document.createElement('i'); met.textContent = 'лупа';
-      lupa.appendChild(met);
       var knopki = [];
       [1, 3, 10].forEach(function (m) {
         var b = document.createElement('button');
@@ -210,6 +208,11 @@
     if (pod) pod.addEventListener('click', kopirovatMoment);
     hud.addEventListener('click', kopirovatMoment);
     box.appendChild(fl);
+    if (typeof kinoKn !== 'undefined' && kinoKn) {
+      if (!lupa) { lupa = document.createElement('div'); lupa.className = 'st-skrab-lupa'; }
+      kinoKn.style.marginLeft = 'auto';   // скролл по правому краю второго этажа
+      lupa.appendChild(kinoKn);
+    }
     row.appendChild(box);
     if (lupa) row.appendChild(lupa);
     if (pod) row.appendChild(pod);
