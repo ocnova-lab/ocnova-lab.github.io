@@ -46,7 +46,8 @@
     'padding:3px 8px;font:12px/1 var(--st-font);color:var(--st-text-2);' +
     'border:0.5px solid var(--st-hairline)}' +
     '.st-skrab-k:hover{color:var(--st-text);background:var(--st-card)}' +
-    '.st-skrab-lupa{display:flex;gap:2px;margin-left:auto}' +
+    '.st-skrab-lupa{display:flex;gap:2px;align-items:center;width:100%;margin-top:4px}' +
+    '.st-skrab-lupa i{font-style:normal;font:10px/1 var(--st-font);color:var(--st-text-2);margin-right:4px}' +
     '.st-skrab-lupa button{all:unset;box-sizing:border-box;cursor:pointer;padding:3px 7px;' +
     'font:11px/1 var(--st-font);color:var(--st-text-2);border-radius:5px}' +
     '.st-skrab-lupa button[aria-checked="true"]{background:var(--st-accent);color:#fff}' +
@@ -162,8 +163,12 @@
       });
       box.appendChild(kn);
     }
+    var lupa = null;
     if (zamedli) {
-      var lupa = document.createElement('div'); lupa.className = 'st-skrab-lupa';
+      // вторым этажом: в одну строку с прогонами и скроллом лупа не влезает
+      lupa = document.createElement('div'); lupa.className = 'st-skrab-lupa';
+      var met = document.createElement('i'); met.textContent = 'лупа';
+      lupa.appendChild(met);
       var knopki = [];
       [1, 3, 10].forEach(function (m) {
         var b = document.createElement('button');
@@ -176,7 +181,6 @@
         });
         knopki.push([b, m]); lupa.appendChild(b);
       });
-      box.appendChild(lupa);
     }
     // метка момента: воспроизводимый адрес кадра — в буфер
     var fl = document.createElement('button');
@@ -207,6 +211,7 @@
     hud.addEventListener('click', kopirovatMoment);
     box.appendChild(fl);
     row.appendChild(box);
+    if (lupa) row.appendChild(lupa);
     if (pod) row.appendChild(pod);
 
     /* ?moment=имя:q — открыть стенд в этом кадре. Фаза ставится после
