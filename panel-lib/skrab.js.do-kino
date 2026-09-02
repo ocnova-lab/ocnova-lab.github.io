@@ -21,14 +21,6 @@
                    Пока рука не на бегунке, орган отражает q стенда:
                    прогон везёт бегунок, смена состояния стендом (клик,
                    жест) возвращает его к правде — бегунок не врёт
-     kino(vkl)   — аналоговый режим «кино по скроллу»: стенд отдаёт
-                   колесо фазе перехода — сколько проскролил, столько
-                   и проигралось, назад и вперёд, с любой скоростью.
-                   Покадровый досмотр без бегунка; выключение — стоп-кадр
-
-   Пока идёт взаимодействие (рука, скролл) и кадр стоит внутри перехода,
-   срез показывается и НА ЭКРАНЕ — бейджем поверх макета: глазам не надо
-   бегать между движением и панелью. Клик по бейджу копирует момент.
 
    МЕТКА МОМЕНТА (⚑). Переход составной, но время у него одно — потому
    адрес момента живёт на переходе, а нитки-движения соотносятся срезом,
@@ -52,14 +44,7 @@
     '.st-skrab-lupa button[aria-checked="true"]{background:var(--st-accent);color:#fff}' +
     '.st-skrab-srez{width:100%;margin-top:3px;font:10px/1.4 var(--st-font);' +
     'color:var(--st-text-2);font-variant-numeric:tabular-nums}' +
-    '.row:has(>.st-skrab){flex-wrap:wrap}' +
-    '.st-moment-hud{position:fixed;top:14px;left:50%;transform:translateX(-50%);' +
-    'z-index:calc(var(--st-z, 2147483000) - 1);cursor:pointer;' +
-    'background:var(--st-glass-2, rgba(30,30,32,.94));color:var(--st-text, #fff);' +
-    'border:0.5px solid var(--st-border, rgba(255,255,255,.2));border-radius:8px;' +
-    'padding:6px 12px;font:11px/1.4 var(--st-font, monospace);' +
-    'font-variant-numeric:tabular-nums;white-space:nowrap}' +
-    '.st-moment-hud[hidden]{display:none!important}';
+    '.row:has(>.st-skrab){flex-wrap:wrap}';
 
   StendPanel.tip('skrab', function (row, d, P, api) {
     if (!document.getElementById('st-skrab-css')) {
@@ -73,22 +58,7 @@
     var imya = o.imya || d[0];
     var srez = o.srez || null;
     var tek = o.tek || null;
-    var kino = o.kino || null;
     var ruka = false;   // пока рука на бегунке, отражение молчит
-    var kinoVkl = false;
-
-    /* Срез на экране: бейдж поверх макета, пока кадр внутри перехода.
-       Взаимодействие идёт на макете — там и показатели. */
-    var hud = document.createElement('div');
-    hud.className = 'st-moment-hud';
-    hud.hidden = true;
-    hud.title = 'скопировать момент';
-    document.body.appendChild(hud);
-    function obnovitHud(q) {
-      var vnutri = q > 0.004 && q < 0.996;
-      hud.hidden = !vnutri;
-      if (vnutri && srez) hud.textContent = imya + ' \u00b7 ' + q.toFixed(2) + '  \u2014  ' + srez(q);
-    }
 
     var box = document.createElement('div'); box.className = 'st-skrab';
     // срез момента: общая доля + фазы всех движений — соотнесение ниток;
@@ -100,7 +70,6 @@
       pod.title = 'скопировать момент: имя, срез и адрес этого кадра';
     }
     function pokazatSrez(q) {
-      obnovitHud(q);
       if (!pod) return;
       pod.textContent = imya + ' \u00b7 ' + q.toFixed(2) + '  \u2014  ' + srez(q);
     }
@@ -148,20 +117,6 @@
     }
 
     // временная лупа: живой ход медленнее, кратности — не настройка, а вид
-    if (kino) {
-      var kn = document.createElement('button');
-      kn.type = 'button'; kn.className = 'st-skrab-k';
-      kn.textContent = 'скролл';
-      kn.title = 'кино по скроллу: колесо проигрывает переход — сколько проскролил, столько прошло';
-      kn.addEventListener('click', function () {
-        kinoVkl = !kinoVkl;
-        kn.style.background = kinoVkl ? 'var(--st-accent)' : '';
-        kn.style.color = kinoVkl ? '#fff' : '';
-        kino(kinoVkl);
-        if (!kinoVkl) faza(null);   // выключил — стоп-кадр
-      });
-      box.appendChild(kn);
-    }
     if (zamedli) {
       var lupa = document.createElement('div'); lupa.className = 'st-skrab-lupa';
       var knopki = [];
@@ -204,7 +159,6 @@
     }
     fl.addEventListener('click', kopirovatMoment);
     if (pod) pod.addEventListener('click', kopirovatMoment);
-    hud.addEventListener('click', kopirovatMoment);
     box.appendChild(fl);
     row.appendChild(box);
     if (pod) row.appendChild(pod);

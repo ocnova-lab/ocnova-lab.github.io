@@ -2138,12 +2138,6 @@ function awake(sc) {
 strip.addEventListener('wheel', function (e) {
   if (mobile) return;
   if (e.target.closest && e.target.closest('.st-panel')) return;   // панель скроллится сама
-  if (skrabKino) {   // кино: колесо проигрывает переход, лента стоит
-    e.preventDefault();
-    e.stopPropagation();   // иначе то же колесо поймает и слушатель каталога на документе
-    katKinoKrutka(e.deltaY * (e.deltaMode === 1 ? 100 / 6 : e.deltaMode === 2 ? innerHeight : 1));
-    return;
-  }
   // колесо шлёт пиксели, строки (deltaMode 1) или экраны (2) — сводим к пикселям // без ручки
   var kx = e.deltaMode === 1 ? 100 / 6 : e.deltaMode === 2 ? innerWidth : 1;
   var ky = e.deltaMode === 1 ? 100 / 6 : e.deltaMode === 2 ? innerHeight : 1;
@@ -2167,10 +2161,6 @@ document.addEventListener('wheel', function (e) {
   if (!katK) return;
   if (e.target.closest && (e.target.closest('.st-panel') || e.target.closest('.st-gear'))) return;
   e.preventDefault();
-  if (skrabKino) {   // кино и внутри каталога: колесо крутит фазу
-    katKinoKrutka(e.deltaY * (e.deltaMode === 1 ? 100 / 6 : e.deltaMode === 2 ? innerHeight : 1));
-    return;
-  }
   var kx = e.deltaMode === 1 ? 100 / 6 : e.deltaMode === 2 ? innerWidth : 1;
   var ky = e.deltaMode === 1 ? 100 / 6 : e.deltaMode === 2 ? innerHeight : 1;
   var dx = e.deltaX * kx, dy = e.deltaY * ky;
@@ -2430,7 +2420,7 @@ var PANEL = StendPanel.build({
        ×3/×10 — временная лупа на живой ход */
     ['katSkrab', 'Переход: рука', 'скраб', { opcii: {
       faza: katFaza, pusk: katPrognat, zamedli: katZamedli,
-      imya: 'каталог', srez: katSrez, tek: katTek, kino: katKino } }],
+      imya: 'каталог', srez: katSrez, tek: katTek } }],
     ['katMasht', 'Каталог: масштаб', 'доля', { ot: 'своё', ot0: 8, do: 60, shag: 1 }],
     ['katKrop', 'Каталог: строка', 'доля', { ot: 'лента', shag: 5 }],
     ['katProm', 'Каталог: промежуток', 'доля', { ot: 'строка', ot0: 0, do: 60, shag: 1 }],
@@ -2977,28 +2967,6 @@ function katAdres(v) { adres(v, STATYA.slug); }
    бы разойтись с katHod. Длительность прогона D меряется тем же прогоном
    до останова: с перекрытием переход короче суммы длительностей. */
 var zamedlenieM = 1, skrabRuka = false;
-/* Скраб помнит точку ухода (слово Сергея 02.09): концы перехода
-   фиксируются на скраб-сессию. Довёл до каталога и вернулся — лента
-   встаёт туда, откуда ушёл, а не к титулу. Сессия перезаводится, когда
-   стенд сменил статью: у нового перехода свои концы. */
-var skrabS0 = null, skrabSlug = null;
-/* Кино по скроллу: колесо отдано фазе перехода. Полный переход — за
-   полтора экрана хода колеса; жест инструмента, не эффект. // без ручки */
-var skrabKino = false;
-function katKino(vkl) {
-  skrabKino = !!vkl;
-  if (skrabKino) {
-    kinoQ = (KATD[0].q + KATD[1].q + KATD[2].q) / 3;   // продолжить с кадра
-    if (katK === 0) katFaza(0);                        // сессия и сборка каталога
-  }
-}
-var kinoQ = 0;
-function katKinoKrutka(delta) {
-  // свой накопитель фазы: чтение прогресса из долей квантовано кэшем,
-  // и обратная связь дёргала бы ход колеса
-  kinoQ = Math.max(0, Math.min(1, kinoQ + delta / 1500));
-  katFaza(kinoQ);
-}
 function katProgon(T) {
   var d = [{ q: 0, ot: 0, t0: 0 }, { q: 0, ot: 0, t0: 0 }, { q: 0, ot: 0, t0: 0 }];
   var poroh = Math.max(0, Math.min(1, P.katPerekr / 100));
@@ -3043,14 +3011,10 @@ function katTraektoria() {
 function katPoProgressu(q) {
   if (!katTraekt) katTraekt = katTraektoria();
   q = Math.max(0, Math.min(1, q));
-  // ближайший шаг, не «первый не меньше»: кривые с забросом делают
-  // траекторию прогресса немонотонной, и жадный поиск перескакивал
-  var luchshe = katTraekt[0], r = Infinity;
   for (var i = 0; i < katTraekt.length; i++) {
-    var d = Math.abs(katTraekt[i].p - q);
-    if (d < r) { r = d; luchshe = katTraekt[i]; }
+    if (katTraekt[i].p >= q) return katTraekt[i];
   }
-  return luchshe;
+  return katTraekt[katTraekt.length - 1];
 }
 function katFaza(q) {
   if (q === null) {
@@ -3065,11 +3029,7 @@ function katFaza(q) {
     if (katK === 0) katPusk(true, true);   // сборка каталога до движения
     katCel = 1;
     katTraekt = katTraektoria();           // ручки могли смениться с прошлого касания
-    if (STATYA.slug !== skrabSlug || skrabS0 === null) {
-      skrabSlug = STATYA.slug; skrabS0 = katS0;   // новые концы перехода
-    }
   }
-  katS0 = skrabS0 === null ? katS0 : skrabS0;     // точка ухода — из сессии
   katDvig = false;
   var shag = katPoProgressu(q);
   for (var j = 0; j < 3; j++) { KATD[j].q = shag.d[j]; KATD[j].ot = shag.d[j]; KATD[j].t0 = 0; }
