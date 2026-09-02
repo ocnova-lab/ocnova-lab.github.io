@@ -111,7 +111,7 @@
        себе флагом window.STEND_PANEL_VSEGDA (каталог органов: его
        содержимое и есть панель). Возвращается пустышка с рабочим API —
        стенд, читающий P и зовущий obnovit, ничего не замечает. */
-    var VITRINA = /stendy\.vercel\.app$|ocnova-lab\.github\.io$|xn--80apagbbfxgmuj4j/;
+    var VITRINA = /stendy\.vercel\.app$|ocnova-lab\.github\.io$|xn--80apagbbfxgmuj4j|osnova-workshop\.vercel\.app$|gurovdsgn\.vercel\.app$|modulnyi-longread\.vercel\.app$|mdl-gr2\.vercel\.app$|mapa-grid\.vercel\.app$|osnova-gallery\.vercel\.app$|gurov-works\.vercel\.app$/;
     if (!window.STEND_PANEL_VSEGDA && VITRINA.test(location.hostname)) {
       var pusto = function () {};
       var pustNabor = pusto; pustNabor.vyhod = pusto;
