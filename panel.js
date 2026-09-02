@@ -181,6 +181,7 @@
       }
       if (smena) perestroitVid();
       if (typeof o.onChange === 'function') o.onChange(key, P);
+      svetlota();
       try {
         document.dispatchEvent(new CustomEvent('stend:izmenenie', {
           detail: { key: key, params: P, storageKey: o.storageKey },
@@ -270,7 +271,7 @@
       }).observe(panel);
     }
     var tip = document.createElement('div');
-    tip.className = 'st-tip';
+    tip.className = 'st-tip'; tip.id = 'st-tip'; tip.setAttribute('role', 'tooltip');
     document.body.appendChild(gear);
     document.body.appendChild(panel);
     document.body.appendChild(tip);
@@ -293,11 +294,26 @@
       try { localStorage.setItem(THEME_KEY, name); } catch (e) {}
       repaints.forEach(function (f) { f(); });
     }
+    /* ПЛОТНОСТЬ СТЕКЛА ПО СВЕТЛОТЕ СТРАНИЦЫ — закон записан в panel.css у
+       .st-nad-svetlym. Светлота берётся с фона body, затем html; прозрачный
+       фон считается белым, как в браузере. Сверяется при сборке и после
+       каждой правки: палитру стенда меняют ручкой. Ошибка в безопасную
+       сторону: неизвестный фон → плотнее. */
+    function svetlota() {
+      var c = null;
+      [document.body, document.documentElement].some(function (el) {
+        var m = (getComputedStyle(el).backgroundColor || '').match(/[\d.]+/g);
+        if (m && m.length >= 3 && (m.length < 4 || parseFloat(m[3]) > 0)) { c = m; return true; }
+        return false;
+      });
+      var L = c ? (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255 : 1;
+      [gear, panel, tip].forEach(function (el) { el.classList.toggle('st-nad-svetlym', L > 0.5); });
+    }
 
     // ── подсказки: справа от панели, у своей строки ──
     function bindTip(el, key) {
       if (!DESC[key]) return;
-      el.addEventListener('mouseenter', function () {
+      function pokazat() {
         tip.textContent = opisanie(key);
         tip.classList.add('show');
         var r = el.getBoundingClientRect();
@@ -306,15 +322,21 @@
         var top = r.top - 4;
         top = Math.max(8, Math.min(top, window.innerHeight - tip.offsetHeight - 8));
         tip.style.top = top + 'px';
-      });
-      el.addEventListener('mouseleave', function () { tip.classList.remove('show'); });
+      }
+      function spryatat() { tip.classList.remove('show'); }
+      el.addEventListener('mouseenter', pokazat);
+      el.addEventListener('mouseleave', spryatat);
+      /* Клавиатура: фокус в строке показывает ту же подсказку — иначе
+         описание ручки живёт только под мышью (приёмка HIG 02.09). */
+      el.addEventListener('focusin', pokazat);
+      el.addEventListener('focusout', spryatat);
     }
 
     // ── слайдер: заливка слева от шайбы цветом акцента ──
     function paintFill(inp) {
       var lo = parseFloat(inp.min), hi = parseFloat(inp.max);
       var p = (parseFloat(inp.value) - lo) / (hi - lo) * 100;
-      inp.style.background =
+      inp.style.backgroundImage =
         'linear-gradient(to right, ' + accent() + ' ' + p + '%, var(--st-track) ' + p + '%)';
     }
 
@@ -407,7 +429,7 @@
     var SVOI = {
       'Панель': 'Panel', 'Тема': 'Theme', 'Эпл': 'Apple', 'Нотхинг': 'Nothing',
       'Скопировать параметры': 'Copy parameters', 'Скопировать правки': 'Copy edits',
-      'Сбросить настройки': 'Reset',
+      'Сбросить настройки': 'Reset', 'Вернуть': 'Restore',
       'скопировано: ': 'copied: ', ' ручек': ' knobs',
       'всё по умолчанию': 'all at defaults', 'Параметры:': 'Parameters:',
       'своя (безье)': 'custom (bezier)', 'линейный': 'linear',
@@ -447,6 +469,11 @@
       var h = document.createElement('h4');
       h.className = 'st-sec';
       nadpis(h, 'h:' + title, title);
+      // заголовок складывает секцию — значит достижим с клавиатуры (приёмка HIG 02.09)
+      h.tabIndex = 0; h.setAttribute('role', 'button');
+      h.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); h.click(); }
+      });
       var card = document.createElement('div');
       card.className = 'card';
       panel.appendChild(h);
@@ -457,6 +484,7 @@
            бы безымянной. Найдено ревизией 2026-09-01, жило с хода 5. */
         card.hidden = !!folds[title] || h.hidden;
         h.classList.toggle('st-closed', !!folds[title]);
+        h.setAttribute('aria-expanded', String(!folds[title]));
       }
       h.addEventListener('click', function () {
         folds[title] = !folds[title];
@@ -620,6 +648,12 @@
          строку по подписи нельзя, подписи повторяются и переводятся. */
       row.dataset.k = d[0];
       var lab = document.createElement('label'); nadpis(lab, d[0], d[1]);
+      /* Имя для скринридера: label связывается с органом по id, иначе
+         читается «ползунок, 60» без названия ручки (приёмка HIG 02.09). */
+      function svyazat(el) {
+        if (!el.id) el.id = ('st-' + (o.storageKey || 'p') + '-' + d[0]).replace(/[^\w-]/g, '_');
+        lab.htmlFor = el.id;
+      }
       /* подсказка — на всей строке, не на подписи: у тумблера подписи нет
          (глагол живёт на кнопке), у сегментера она — меньшая часть строки */
       bindTip(row, d[0]);
@@ -628,7 +662,7 @@
       if (d[2] === 'preset') {
         // [key, подпись, 'preset', [[значение, метка, {ключ: значение, ...}], ...]]
         // выбор пресета выставляет пачку параметров и обновляет их ручки
-        var prSel = document.createElement('select');
+        var prSel = document.createElement('select'); svyazat(prSel);
         d[3].forEach(function (opt) {
           var oEl = document.createElement('option');
           oEl.value = opt[0]; oEl.textContent = opt[1];
@@ -650,7 +684,7 @@
       if (d[2] === 'color') {
         // [key, подпись, 'color'] — параметр живёт строкой '#rrggbb'
         var ci = document.createElement('input');
-        ci.type = 'color'; ci.className = 'st-color';
+        ci.type = 'color'; ci.className = 'st-color'; svyazat(ci);
         ci.value = P[d[0]];
         ci.addEventListener('input', function () { P[d[0]] = ci.value; izmenilos(d[0]); });
         controls[d[0]] = function () { ci.value = P[d[0]]; };
@@ -660,7 +694,7 @@
       }
       if (d[2] === 'select') {
         // [key, подпись, 'select', [[значение, метка], ...]]
-        var sSel = document.createElement('select');
+        var sSel = document.createElement('select'); svyazat(sSel);
         d[3].forEach(function (opt) {
           var oEl = document.createElement('option');
           oEl.value = opt[0]; oEl.textContent = opt[1];
@@ -676,7 +710,7 @@
       if (d[2] === 'ease') {
         var easeKey = d[0];
         var bezKey = easeKey.replace('Ease', 'Bez');
-        var sel = document.createElement('select');
+        var sel = document.createElement('select'); svyazat(sel);
         Object.keys(EASES).forEach(function (name) {
           var opt = document.createElement('option');
           opt.value = name; nadpis(opt, 'ease:' + name, name);
@@ -739,9 +773,15 @@
       function fmt(v) { return String(parseFloat((v * mul).toFixed(4))); }
       var inp = document.createElement('input');
       inp.type = 'range'; inp.min = d[2]; inp.max = d[3]; inp.step = d[4];
-      inp.value = P[d[0]] * mul;
+      inp.value = P[d[0]] * mul; svyazat(inp);
       var val = document.createElement('span'); val.className = 'val';
       val.textContent = fmt(P[d[0]]);
+      // число редактируемо — и это сказано (title) и достижимо с клавиатуры
+      val.tabIndex = 0; val.setAttribute('role', 'button');
+      val.title = 'клик — точный ввод; выражения: 700/2, +25';
+      val.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter') { ev.preventDefault(); val.click(); }
+      });
       inp.addEventListener('input', function () {
         P[d[0]] = parseFloat(inp.value) / mul;
         val.textContent = fmt(P[d[0]]);
@@ -763,12 +803,19 @@
         row.replaceChild(ked, val);
         ked.focus(); ked.select();
         var done = false;
-        function commit(ok) {
+        function commit(ok, myagko) {
           if (done) return; done = true;
           if (ok) {
             // поле принимает выражения: «700/2», «(3+1)*20», «+50» к текущему
             var v = vyrazhenie(ked.value, P[d[0]] * mul);
             if (isNaN(v)) v = chislo(ked.value);
+            if (isNaN(v) && myagko) {
+              /* Кривой ввод не молчит: по Enter поле остаётся и краснеет —
+                 «verify values as soon as people enter them» (HIG, entering
+                 data). Уход из поля (blur) по-прежнему просто отменяет. */
+              done = false; ked.classList.add('oshibka'); ked.setAttribute('aria-invalid', 'true');
+              return;
+            }
             if (!isNaN(v)) {
               v = Math.max(parseFloat(inp.min), Math.min(parseFloat(inp.max), v));
               P[d[0]] = v / mul;
@@ -779,11 +826,15 @@
           controls[d[0]]();
         }
         ked.addEventListener('keydown', function (ev) {
-          if (ev.key === 'Enter') commit(true);
+          if (ev.key === 'Enter') commit(true, true);
           else if (ev.key === 'Escape') commit(false);
+        });
+        ked.addEventListener('input', function () {
+          ked.classList.remove('oshibka'); ked.removeAttribute('aria-invalid');
         });
         ked.addEventListener('blur', function () { commit(true); });
       });
+      row.classList.add('dva');   // имя этажом выше, нитка во всю ширину
       /* Точка увода от умолчания — снято с reset-dot из раздатки Михаила
          Матвеева: видно, ЧТО уведено, клик возвращает умолчание. Отбор
          тот же, что у «Скопировать правки», — точка и есть его глаза. */
@@ -1358,7 +1409,19 @@
     var rst = document.createElement('button');
     rst.className = 'st-reset';
     nadpis(rst, 'panel:reset', 'Сбросить настройки');
+    /* ОБРАТИМОСТЬ ВМЕСТО ПРЕДУПРЕЖДЕНИЯ. Сброс возвращает десятки ручек
+       разом; HIG велит предупреждать о необратимой потере — вместо окна
+       кнопка шесть секунд предлагает «Вернуть N ручек» (приёмка 02.09). */
+    var vozvrat = null, vozvratT = 0;
     rst.addEventListener('click', function () {
+      if (vozvrat) {
+        Object.assign(P, JSON.parse(vozvrat)); vozvrat = null; clearTimeout(vozvratT);
+        rst.textContent = T('panel:reset', 'Сбросить настройки');
+        for (var k2 in controls) controls[k2]();
+        izmenilos('__vozvrat');
+        return;
+      }
+      var snimok = JSON.stringify(P), n = uvedennye().length;
       Object.assign(P, DEFAULTS);
       // рукоятки безье — копиями, чтобы лепка не портила DEFAULTS
       (o.defs || []).forEach(function (d) {
@@ -1374,6 +1437,14 @@
       });
       try { localStorage.removeItem(o.storageKey); } catch (e) {}
       for (var k in controls) controls[k]();
+      izmenilos('__reset');   // стенд и откат узнают о сбросе, как о любой правке
+      if (n) {
+        vozvrat = snimok;
+        rst.textContent = T('panel:vernut', 'Вернуть') + ' ' + n + T(' ручек', ' ручек');
+        vozvratT = setTimeout(function () {
+          vozvrat = null; rst.textContent = T('panel:reset', 'Сбросить настройки');
+        }, 6000);
+      }
     });
     panel.appendChild(rst);
 
@@ -1384,6 +1455,7 @@
        гасит то самое, ради чего он делается. Закрывает шестерёнка. */
     if (/[?&]panel/.test(location.search)) panel.hidden = false;
     applyTheme(theme);
+    svetlota();
 
     return {
       save: save, panel: panel, applyTheme: applyTheme,

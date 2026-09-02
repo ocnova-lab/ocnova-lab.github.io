@@ -11,12 +11,12 @@
                 ['', 'Правки', 'otkat', { pauza: 400, glubina: 60 }]              */
 (function () {
   var STIL = '.st-otkat{display:flex;gap:4px;margin-left:auto;align-items:center}' +
-    '.st-otkat button{all:unset;padding:3px 9px;font:11px/1 var(--st-font);cursor:pointer;' +
+    '.st-otkat button{all:unset;padding:5px 9px;font:11px/1 var(--st-font);cursor:pointer;' +
     'border-radius:5px;background:var(--st-card);border:0.5px solid var(--st-hairline);' +
     'color:var(--st-text-2);transition:background .12s,color .12s}' +
     '.st-otkat button:hover:not([disabled]){background:var(--st-border);color:var(--st-text)}' +
     '.st-otkat button[disabled]{opacity:.32;cursor:default}' +
-    '.st-otkat i{font-style:normal;font-size:10px;color:var(--st-text-3);min-width:3ch;text-align:right}';
+    '.st-otkat i{font-style:normal;font-size:11px;color:var(--st-text-3);min-width:3ch;text-align:right}';
 
   StendPanel.tip('otkat', function (row, d, P, api) {
     if (!document.getElementById('st-otkat-css')) {
@@ -71,6 +71,10 @@
     });
     document.addEventListener('keydown', function (e) {
       if (!(e.metaKey || e.ctrlKey) || String(e.key).toLowerCase() !== 'z') return;
+      /* В текстовом поле ⌘Z принадлежит полю: стандартный шорткат не
+         перехватывается (приёмка HIG 02.09, keyboards). */
+      var a = document.activeElement;
+      if (a && /^(INPUT|TEXTAREA)$/.test(a.tagName) && a.type !== 'range') return;
       e.preventDefault();
       clearTimeout(taymer); zapomnit();      // недописанный шаг закрываем до отката
       shag(e.shiftKey ? 1 : -1);

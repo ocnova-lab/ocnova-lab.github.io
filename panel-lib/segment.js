@@ -6,7 +6,7 @@
 (function () {
   var STIL = '.st-seg{display:flex;gap:2px;margin-left:auto;background:var(--st-hairline);' +
     'padding:2px;border-radius:7px}' +
-    '.st-seg button{all:unset;padding:3px 8px;font:11px/1 var(--st-font);color:var(--st-text-2);' +
+    '.st-seg button{all:unset;padding:5px 9px;font:11px/1 var(--st-font);color:var(--st-text-2);' +
     'cursor:pointer;border-radius:5px;transition:background .12s,color .12s;white-space:nowrap}' +
     '.st-seg button:hover{color:var(--st-text)}' +
     '.st-seg button[aria-checked="true"]{background:var(--st-accent);color:#fff}';

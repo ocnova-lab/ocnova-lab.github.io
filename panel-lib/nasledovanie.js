@@ -153,7 +153,9 @@
         zalivka();
       }
       // Точка живёт только на этаже: у самого закона наследовать не от кого.
-      tochka.hidden = !id;
+      // Место под неё занято всегда — вертикаль чисел не рвётся (рифма).
+      tochka.style.visibility = id ? 'visible' : 'hidden';
+      tochka.hidden = false;
       tochka.dataset.svoyo = est ? '1' : '0';
       tochka.title = est ? 'своё значение этажа — вернуть закон' : 'наследует закон';
     }
@@ -218,6 +220,11 @@
     box.appendChild(inp);
     if (val) box.appendChild(val);
     box.appendChild(tochka);
+    if (!cvet && !vybor) {
+      row.classList.add('dva');           // нитка наследования — вторым этажом
+      box.style.marginLeft = '0'; box.style.flex = '1';
+      inp.style.width = 'auto'; inp.style.flex = '1';
+    }
     row.appendChild(box);
     narisovat();
   });

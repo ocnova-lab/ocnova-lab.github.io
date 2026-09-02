@@ -11,21 +11,30 @@
    .curve (редактор безье), .st-reset (кнопка сброса), .st-tip (подсказка)
    ──────────────────────────────────────────────────────────────────── */
 
+/* Значения темы «Эпл» сверены с системными Apple (тёмный режим) по
+   приёмке HIG 02.09.2026 (ревьюер dickwu/apple-design-skill, токены
+   axiaoge2/apple-hig-designer, толщины материалов cmurphy1140):
+   вторичный текст — secondary label rgba(235,235,245,.6); разделитель —
+   separator rgba(84,84,88,.6); стекло — material regular (плотность
+   .6–.8, размытие 20–40, насыщенность 1.2–1.5); кегли 13/12/11 =
+   footnote/caption1/caption2, ниже 11 нет; цель ≥ 20 pt на десктопе;
+   фокус — кольцо акцента. Разбор: хранилище, «Библиотека панелей/
+   Разборы чужих работ/Apple-репозитории с GitHub — разбор». */
 :root {
   --st-accent: #0A84FF;                 /* системный синий Apple */
   --st-glass: rgba(24, 24, 26, .72);    /* стекло панели */
   --st-glass-2: rgba(40, 40, 42, .85);  /* стекло подсказки */
   --st-card: rgba(255, 255, 255, .05);  /* карточка секции */
-  --st-hairline: rgba(255, 255, 255, .07); /* волосяной разделитель */
+  --st-hairline: rgba(84, 84, 88, .6);     /* волосяной разделитель — separator Apple */
   --st-border: rgba(255, 255, 255, .12);
   --st-text: rgba(255, 255, 255, .92);
-  --st-text-2: rgba(255, 255, 255, .5);
-  --st-text-3: rgba(255, 255, 255, .45);
+  --st-text-2: rgba(235, 235, 245, .6);  /* secondary label Apple; было .5 — над белым 3.1:1 */
+  --st-text-3: rgba(235, 235, 245, .6);  /* заголовок секции: у Apple secondary; tertiary .3 — только неактивное */
   --st-track: rgba(255, 255, 255, .22);
   --st-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   --st-radius: 16px;
   --st-radius-card: 12px;
-  --st-blur: blur(28px) saturate(1.7);
+  --st-blur: blur(28px) saturate(1.4);   /* regular: 20–40 / 1.2–1.5; одно стекло на панель, шестерёнку, подсказку */
   /* ЭТАЖ ПАНЕЛИ. Инструмент обязан лежать поверх любого слоя стенда: слои
      стенда — это его материал, а панель и указка смотрят на материал
      сверху. Числами тут не выиграть — стенд волен поставить занавес на
@@ -35,15 +44,21 @@
      переопределить --st-z. Служебная геометрия. */
   --st-z: 2147483000;
 }
+/* ПЛОТНОСТЬ СТЕКЛА — ЗАКОН. Стекло смотрит на светлоту страницы под собой
+   и отвечает плотностью: над тёмной .72 (regular), над светлой .88 — иначе
+   вторичный текст падает до 3.1:1 при пороге 4.5 (посчитано 02.09: белая
+   страница, стекло .72). Класс ставит panel.js по фону body; на узком
+   экране лист и так .95. Служебное, без ручки. */
+.st-nad-svetlym { --st-glass: rgba(24, 24, 26, .88); --st-glass-2: rgba(40, 40, 42, .94); }
 
 /* ── Кнопка-шестерёнка (левый нижний угол) ── */
 .st-gear {
   position: fixed; left: 12px; bottom: 12px; z-index: var(--st-z);
   width: 36px; height: 36px; border-radius: 50%; padding: 0;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(28, 28, 30, .6);
-  -webkit-backdrop-filter: blur(20px) saturate(1.6);
-  backdrop-filter: blur(20px) saturate(1.6);
+  background: var(--st-glass);
+  -webkit-backdrop-filter: var(--st-blur);
+  backdrop-filter: var(--st-blur);
   border: 0.5px solid var(--st-border);
   box-shadow: 0 4px 16px rgba(0, 0, 0, .4);
   cursor: pointer;
@@ -108,21 +123,41 @@
 /* Точка увода от умолчания (по reset-dot Миши Матвеева): ручка уведена —
    точка горит, клик возвращает умолчание. Родня точке наследования. */
 .st-panel .st-uvod { all: unset; box-sizing: border-box; flex: none;
-  width: 9px; height: 9px; border-radius: 50%; cursor: pointer;
-  background: var(--st-accent); opacity: .8;
+  /* рисунок 9 px, цель 20 (минимум HIG); отрицательное поле оставляет
+     колонке прежние 9 px — вертикаль не сдвигается */
+  width: 20px; height: 20px; margin: -5.5px; border-radius: 50%; cursor: pointer;
+  background: radial-gradient(circle, var(--st-accent) 4.5px, transparent 5px); opacity: .8;
   /* место занято всегда: появление точки не должно сдвигать полоску */
   visibility: hidden; }
 .st-panel .st-uvod.on { visibility: visible; }
 .st-panel .st-uvod:hover { opacity: 1; }
-.st-theme-nothing .st-uvod { border-radius: 0; }
+.st-theme-nothing .st-uvod { background: linear-gradient(var(--st-accent), var(--st-accent)) no-repeat center / 9px 9px; }
 /* Строка вне сужения: панель прячет своим классом, стенд — атрибутом
    hidden. Каналы разные, потому что оба живут одновременно. */
 .st-panel .row.st-vne { display: none !important; }
 .st-panel .card > .row + .row,
 .st-panel .card > canvas + .row { border-top: 0.5px solid var(--st-hairline); }
 .st-panel label { flex: 1; color: var(--st-text); cursor: help; }
+/* ── Правило двух этажей (приёмка Сергея 02.09) ──
+   Имя параметра — первым этажом на всю ширину, контролы — вторым.
+   Горизонтальная строка жала нитки, ломала подписи на три строки и
+   делала границы коридора нередактируемым текстом. */
+.st-panel .row.dva { flex-wrap: wrap; row-gap: 6px; }
+.st-panel .row.dva > label { flex: 1 1 100%; }
+.st-panel .row.dva input[type=range] { width: auto; flex: 1 1 auto; }
+/* ── Рифмовка по вертикалям (правило Сергея, 02.09) ──
+   Элементы разных этажей и строк держатся сквозных вертикальных линий:
+   все нитки начинаются на одной вертикали и заканчиваются на одной,
+   числа стоят в правой сквозной колонке одной ширины, точки увода — в
+   своей узкой колонке самым правым краем (место под точку занято всегда,
+   чтобы вертикаль не рвалась). Исключение оговорено правилом: левое
+   число коридора — показатель слева от нитки. */
+.st-panel .row.dva .val { flex: none; width: 4.5ch; min-width: 0; text-align: right; }
+.st-panel .row.dva .st-kor-val { flex: none; width: 4.5ch; min-width: 0; }
+.st-panel .row.dva .st-kor-val:last-of-type { text-align: right; }
+.st-panel .row.dva .st-nasl .val { flex: none; width: 4.5ch; min-width: 0; }
 .st-panel .val {
-  min-width: 44px; text-align: right;
+  min-width: 44px; text-align: right; cursor: text;
   color: var(--st-text-2); font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
@@ -130,18 +165,21 @@
 /* ── Слайдер (заливку слева рисует panel.js) ── */
 .st-panel input[type=range] {
   -webkit-appearance: none; appearance: none;
-  width: 104px; height: 3px; border-radius: 2px;
-  background: var(--st-track);
+  /* ЦЕЛЬ И НИТКА — РАЗНЫЕ ВЕЩИ. Нитка рисуется 3 px, а клик ловит вся
+     полоса 24 px: минимум цели на десктопе 20 pt (HIG), при 3 px попадали
+     только в шайбу. Заливку кладёт panel.js в background-image. */
+  width: 104px; height: 24px; margin: 0; border-radius: 2px;
+  background: linear-gradient(var(--st-track), var(--st-track)) no-repeat center / 100% 3px;
   outline: none;
 }
 .st-panel input[type=range]::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 17px; height: 17px; border-radius: 50%;
+  width: 20px; height: 20px; border-radius: 50%;   /* минимум цели 20 pt */
   background: #fff;
   box-shadow: 0 1px 4px rgba(0, 0, 0, .45), 0 0 0 0.5px rgba(0, 0, 0, .18);
 }
 .st-panel input[type=range]::-moz-range-thumb {
-  width: 17px; height: 17px; border: none; border-radius: 50%;
+  width: 20px; height: 20px; border: none; border-radius: 50%;
   background: #fff;
   box-shadow: 0 1px 4px rgba(0, 0, 0, .45);
 }
@@ -188,8 +226,8 @@
   display: block; opacity: 0; visibility: hidden;
   transition: opacity .16s ease, visibility .16s ease;
   background: var(--st-glass-2);
-  -webkit-backdrop-filter: blur(20px) saturate(1.5);
-  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: var(--st-blur);
+  backdrop-filter: var(--st-blur);
   border: 0.5px solid var(--st-border);
   border-radius: 10px;
   box-shadow: 0 10px 34px rgba(0, 0, 0, .5);
@@ -257,13 +295,15 @@
 .st-panel .st-sost.uzko b { color: var(--st-accent); }
 .st-panel .st-sost-x { margin-left: auto; border: 0; background: transparent;
   color: var(--st-text-2); font: inherit; font-size: 14px; line-height: 1;
-  padding: 2px 4px; cursor: pointer; border-radius: 5px; }
+  padding: 2px 4px; cursor: pointer; border-radius: 5px;
+  min-width: 24px; min-height: 24px; display: inline-flex; align-items: center; justify-content: center; }
 .st-panel .st-sost-x:hover { color: var(--st-text); background: var(--st-card); }
 .st-panel .st-sost-x[hidden] { display: none; }
 /* Прицел — вход в выбор места. Стоит рядом с выходом: одна пара «войти в
    сужение — выйти», и обе кнопки в строке, которая отвечает «где я». */
 .st-panel .st-sost-p { margin-left: auto; border: 0; background: transparent;
-  color: var(--st-text-2); padding: 3px 4px 1px; cursor: pointer; border-radius: 5px; }
+  color: var(--st-text-2); padding: 3px 4px 1px; cursor: pointer; border-radius: 5px;
+  min-width: 24px; min-height: 24px; display: inline-flex; align-items: center; justify-content: center; }
 .st-panel .st-sost-p svg { width: 13px; height: 13px; display: block; }
 .st-panel .st-sost-p:hover { color: var(--st-text); background: var(--st-card); }
 .st-panel .st-sost-p.on { color: #fff; background: var(--st-accent); }
@@ -287,7 +327,7 @@ body.st-vybor .st-panel, body.st-vybor .st-panel * { cursor: default !important;
 .st-panel .st-yaz { display: flex; border: 1px solid var(--st-line, rgba(255,255,255,.18));
   border-radius: 7px; overflow: hidden; }
 .st-panel .st-yaz-b { border: 0; background: transparent; color: inherit;
-  font: 600 10px/1 inherit; letter-spacing: .06em; padding: 5px 9px; cursor: pointer; }
+  font: 600 11px/1 inherit; letter-spacing: .06em; padding: 5px 9px; cursor: pointer; }  /* 11 = caption2, ниже шкалы нет */
 .st-panel .st-yaz-b.on { background: var(--st-accent, #0A84FF); color: #fff; }
 .st-panel .st-sver { margin-left: auto; border: 0; background: transparent;
   color: inherit; opacity: .6; font: inherit; font-size: 11px; cursor: pointer;
@@ -297,6 +337,7 @@ body.st-vybor .st-panel, body.st-vybor .st-panel * { cursor: default !important;
 .st-panel h4.st-sec.st-closed::after { content: '▸'; }
 .st-panel .card[hidden], .st-panel canvas.curve[hidden] { display: none; }
 .st-panel label.st-fold { text-decoration: underline dotted rgba(255,255,255,.3); text-underline-offset: 3px; }
+.st-panel .val-edit.oshibka { border-color: #FF453A; }  /* systemRed dark: кривой ввод виден, поле не закрывается */
 .st-panel .val-edit { width: 76px; background: transparent; border: 1px solid var(--st-accent, #0A84FF); border-radius: 6px; color: inherit; font: inherit; text-align: right; padding: 2px 6px; outline: none; }
 
 /* цветовая ручка: квадрат-пипетка в правой колонке строки */
@@ -350,10 +391,53 @@ body.st-vybor .st-panel, body.st-vybor .st-panel * { cursor: default !important;
   }
   .st-panel.st-theme-nothing { --st-glass: rgba(10, 10, 10, .97); }
   .st-gear { bottom: calc(12px + env(safe-area-inset-bottom)); }
+  /* под пальцем минимум 28 pt */
+  .st-panel input[type=range] { height: 28px; }
+  .st-panel input[type=range]::-webkit-slider-thumb { width: 28px; height: 28px; }
+  .st-panel input[type=range]::-moz-range-thumb { width: 28px; height: 28px; }
   .st-tip { display: none; }            /* подсказке негде встать: лист во всю ширину */
 }
 @keyframes st-list-in {
   /* только ход снизу: если анимация не проиграется (снимок, reduced-motion,
      старый браузер), лист обязан остаться видимым — прозрачность не трогаем */
   from { transform: translateY(16px); }
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   Клавиатура и системные настройки — приёмка по HIG 02.09.2026
+   (dickwu/apple-design-skill, ehmo/platform-design-skills)
+   ──────────────────────────────────────────────────────────────────── */
+/* Кольцо фокуса: органы снимают outline через all:unset, слайдер — явно;
+   без кольца клавиатура слепа. Специфичность 0,2,0 бьёт .st-seg button. */
+.st-panel :focus-visible, .st-gear:focus-visible {
+  outline: 2px solid var(--st-accent); outline-offset: 2px;
+}
+.st-panel input[type=range]:focus-visible { outline: none; }
+.st-panel input[type=range]:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px var(--st-accent), 0 1px 4px rgba(0, 0, 0, .45);
+}
+.st-panel input[type=range]:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 3px var(--st-accent), 0 1px 4px rgba(0, 0, 0, .45);
+}
+/* Reduce Motion: вход панели — только ход, его и снимаем. */
+@media (prefers-reduced-motion: reduce) {
+  .st-panel { animation: none; }
+  .st-gear, .st-tip, .st-reset, .st-uvod { transition: none; }
+}
+/* Reduce Transparency: стекло сплошное, размывать нечего. */
+@media (prefers-reduced-transparency: reduce) {
+  :root, .st-theme-nothing, .st-nad-svetlym {
+    --st-glass: rgba(24, 24, 26, .97); --st-glass-2: rgba(40, 40, 42, .98); --st-blur: none;
+  }
+}
+/* Increase Contrast: вторичный текст и линии ярче (Apple: secondary .8). */
+@media (prefers-contrast: more) {
+  :root {
+    --st-text-2: rgba(235, 235, 245, .8); --st-text-3: rgba(235, 235, 245, .8);
+    --st-border: rgba(255, 255, 255, .3); --st-track: rgba(255, 255, 255, .4);
+  }
+}
+/* Windows High Contrast: rgba-рамки исчезают — рисуем системным цветом. */
+@media (forced-colors: active) {
+  .st-panel, .st-panel .card, .st-gear { border: 1px solid CanvasText; }
 }

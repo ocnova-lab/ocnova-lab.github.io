@@ -7,9 +7,9 @@
   var TOCHKI = [['tl', 'Верх слева'], ['t', 'Верх'], ['tr', 'Верх справа'],
                 ['l', 'Слева'], ['c', 'Центр'], ['r', 'Справа'],
                 ['bl', 'Низ слева'], ['b', 'Низ'], ['br', 'Низ справа']];
-  var STIL = '.st-anchor{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;width:66px;' +
+  var STIL = '.st-anchor{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;width:68px;' +
     'margin-left:auto;background:var(--st-hairline);padding:2px;border-radius:6px}' +
-    '.st-anchor button{all:unset;height:18px;cursor:pointer;border-radius:3px;' +
+    '.st-anchor button{all:unset;height:20px;cursor:pointer;border-radius:3px;' +
     'background:var(--st-card);transition:background .12s}' +
     '.st-anchor button:hover{background:var(--st-border)}' +
     '.st-anchor button[aria-checked="true"]{background:var(--st-accent)}';

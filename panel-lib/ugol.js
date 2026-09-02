@@ -125,7 +125,9 @@
       function prinyat(ok) {
         if (gotovo) return; gotovo = true;
         box.replaceChild(val, ked);
-        var v = parseFloat(String(ked.value).replace(',', '.'));
+        var v = StendPanel.vyrazhenie   // выражения, как в соседних органах
+          ? StendPanel.vyrazhenie(ked.value, P[d[0]])
+          : parseFloat(String(ked.value).replace(',', '.'));
         if (ok && !isNaN(v)) { P[d[0]] = Math.min(do_, Math.max(ot, v)); api.save(); }
         risovat();
       }
