@@ -9,12 +9,18 @@
 
      faza(q)     — поставить переход в фазу q (0…1) рукой; стенд сам
                    решает, как разложить q на свои движения
-     faza(null)  — рука отпустила: продолжить живой ход с этого места
+     faza(null)  — рука отпустила. СТОП-КАДР: кадр стоит, ход не идёт —
+                   закон Сергея 02.09: «либо стоп-кадр и бегунок остаётся,
+                   либо бегунок едет к одной из позиций; иначе рассинхрон
+                   между тем, что я вижу, и позицией бегунка»
      pusk(cel)   — прогнать переход целиком (true — туда, false — обратно)
      zamedli(M)  — временная лупа: живой ход в M раз медленнее
      imya        — имя перехода: оно уходит в адрес момента
-     srez(q)     — срез фаз всех движений в момент q, текстом:
-                   «уменьшение 1.00 · отмотка 0.35 · соседи 0.00»
+     srez(q)     — срез фаз всех движений в момент q, текстом
+     tek()       — { q, idet }: текущий прогресс перехода и идёт ли ход.
+                   Пока рука не на бегунке, орган отражает q стенда:
+                   прогон везёт бегунок, смена состояния стендом (клик,
+                   жест) возвращает его к правде — бегунок не врёт
 
    МЕТКА МОМЕНТА (⚑). Переход составной, но время у него одно — потому
    адрес момента живёт на переходе, а нитки-движения соотносятся срезом,
@@ -51,11 +57,18 @@
     var zamedli = o.zamedli || null;
     var imya = o.imya || d[0];
     var srez = o.srez || null;
+    var tek = o.tek || null;
+    var ruka = false;   // пока рука на бегунке, отражение молчит
 
     var box = document.createElement('div'); box.className = 'st-skrab';
-    // срез момента: общая доля + фазы всех движений — соотнесение ниток
+    // срез момента: общая доля + фазы всех движений — соотнесение ниток;
+    // клик по строке — та же метка, что ⚑: копирует момент целиком
     var pod = srez ? document.createElement('div') : null;
-    if (pod) pod.className = 'st-skrab-srez';
+    if (pod) {
+      pod.className = 'st-skrab-srez';
+      pod.style.cursor = 'pointer';
+      pod.title = 'скопировать момент: имя, срез и адрес этого кадра';
+    }
     function pokazatSrez(q) {
       if (!pod) return;
       pod.textContent = imya + ' \u00b7 ' + q.toFixed(2) + '  \u2014  ' + srez(q);
@@ -68,7 +81,7 @@
         var b = document.createElement('button');
         b.type = 'button'; b.className = 'st-skrab-k';
         b.textContent = k[0]; b.title = k[2];
-        b.addEventListener('click', function () { faza(null); pusk(k[1]); });
+        b.addEventListener('click', function () { ruka = false; faza(null); pusk(k[1]); });
         box.appendChild(b);
       });
     }
@@ -76,14 +89,32 @@
     // сам скраб: рука держит фазу, отпустила — ход продолжается
     var inp = document.createElement('input');
     inp.type = 'range'; inp.min = 0; inp.max = 1; inp.step = 0.002; inp.value = 0;
+    inp.addEventListener('pointerdown', function () { ruka = true; });
     inp.addEventListener('input', function () {
+      ruka = true;
       var q = parseFloat(inp.value);
       faza(q); pokazatSrez(q);
     });
     ['pointerup', 'pointercancel'].forEach(function (s) {
-      inp.addEventListener(s, function () { faza(null); });
+      inp.addEventListener(s, function () { ruka = false; faza(null); });
     });
     box.appendChild(inp);
+
+    /* Отражение: бегунок показывает правду стенда, когда рука не держит.
+       Опрос таймером, не rAF: чтение одно, а таймеры живут и там, где
+       кадры не гонятся (headless-пробы). 10 раз в секунду глазу хватает. */
+    if (tek) {
+      setInterval(function () {
+        if (ruka) return;
+        var t = tek();
+        if (!t) return;
+        var q = Math.max(0, Math.min(1, t.q));
+        if (Math.abs(parseFloat(inp.value) - q) > 0.004) {
+          inp.value = q;
+          pokazatSrez(q);
+        }
+      }, 100);
+    }
 
     // временная лупа: живой ход медленнее, кратности — не настройка, а вид
     if (zamedli) {
@@ -107,7 +138,7 @@
     fl.type = 'button'; fl.className = 'st-skrab-k';
     fl.textContent = '\u2691';
     fl.title = 'скопировать момент: имя, срез и адрес этого кадра';
-    fl.addEventListener('click', function () {
+    function kopirovatMoment() {
       var q = parseFloat(inp.value);
       var kus = [];
       (api.uvedennye ? api.uvedennye() : []).forEach(function (u) {
@@ -125,7 +156,9 @@
           function () { skazal('\u2713'); },
           function () { prompt('Момент:', tekst); });
       } else prompt('Момент:', tekst);
-    });
+    }
+    fl.addEventListener('click', kopirovatMoment);
+    if (pod) pod.addEventListener('click', kopirovatMoment);
     box.appendChild(fl);
     row.appendChild(box);
     if (pod) row.appendChild(pod);

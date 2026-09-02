@@ -2420,7 +2420,7 @@ var PANEL = StendPanel.build({
        ×3/×10 — временная лупа на живой ход */
     ['katSkrab', 'Переход: рука', 'скраб', { opcii: {
       faza: katFaza, pusk: katPrognat, zamedli: katZamedli,
-      imya: 'каталог', srez: katSrez } }],
+      imya: 'каталог', srez: katSrez, tek: katTek } }],
     ['katMasht', 'Каталог: масштаб', 'доля', { ot: 'своё', ot0: 8, do: 60, shag: 1 }],
     ['katKrop', 'Каталог: строка', 'доля', { ot: 'лента', shag: 5 }],
     ['katProm', 'Каталог: промежуток', 'доля', { ot: 'строка', ot0: 0, do: 60, shag: 1 }],
@@ -2966,7 +2966,7 @@ function katAdres(v) { adres(v, STATYA.slug); }
    механики с нуля до момента T — никакой второй формулы, которая могла
    бы разойтись с katHod. Длительность прогона D меряется тем же прогоном
    до останова: с перекрытием переход короче суммы длительностей. */
-var zamedlenieM = 1, skrabRuka = false, skrabD = 0;
+var zamedlenieM = 1, skrabRuka = false;
 function katProgon(T) {
   var d = [{ q: 0, ot: 0, t0: 0 }, { q: 0, ot: 0, t0: 0 }, { q: 0, ot: 0, t0: 0 }];
   var poroh = Math.max(0, Math.min(1, P.katPerekr / 100));
@@ -2991,44 +2991,77 @@ function katProgon(T) {
   }
   return { d: d, t: 60000 };
 }
+/* Шкала скраба — ПРОГРЕСС перехода (средняя доля трёх движений), не
+   время: та же шкала и у отражения, и у метки, и у руки — бегунок и
+   экран не могут разойтись по построению. Кэш траектории: один прогон
+   до конца, шаги с прогрессом и долями; рука и срез ищут по нему. */
+var katTraekt = null;
+function katTraektoria() {
+  var byloCel = katCel; katCel = 1;
+  var shagi = [{ p: 0, d: [0, 0, 0] }];
+  for (var t = 16; t <= 60000; t += 16) {
+    var sost = katProgon(t);
+    var d = sost.d.map(function (m) { return m.q; });
+    shagi.push({ p: (d[0] + d[1] + d[2]) / 3, d: d });
+    if (d[0] === 1 && d[1] === 1 && d[2] === 1) break;
+  }
+  katCel = byloCel;
+  return shagi;
+}
+function katPoProgressu(q) {
+  if (!katTraekt) katTraekt = katTraektoria();
+  q = Math.max(0, Math.min(1, q));
+  for (var i = 0; i < katTraekt.length; i++) {
+    if (katTraekt[i].p >= q) return katTraekt[i];
+  }
+  return katTraekt[katTraekt.length - 1];
+}
 function katFaza(q) {
   if (q === null) {
-    if (!skrabRuka) return;
+    /* СТОП-КАДР (закон Сергея 02.09): рука отпустила — кадр стоит и
+       бегунок стоит. Продолжают только прогоны ▸ ◂ — тогда бегунок
+       едет вместе с ходом через отражение tek(). */
     skrabRuka = false;
-    // Рука отпустила: живой ход продолжается ровно с этого места.
-    // Сверяется КАЖДАЯ доля, не katK: katK — максимум, и он равен единице
-    // уже на второй фазе, когда соседи ещё не доехали.
-    var nedoshlo = false;
-    for (var i = 0; i < 3; i++) {
-      KATD[i].t0 = 0; KATD[i].ot = KATD[i].q;
-      if (KATD[i].q !== katCel) nedoshlo = true;
-    }
-    if (nedoshlo) katDvig = true;
     return;
   }
   if (!skrabRuka) {
     skrabRuka = true;
     if (katK === 0) katPusk(true, true);   // сборка каталога до движения
     katCel = 1;
-    skrabD = katProgon(null).t;            // фактическая длительность выхода
+    katTraekt = katTraektoria();           // ручки могли смениться с прошлого касания
   }
   katDvig = false;
-  var sost = katProgon(q * skrabD);
-  for (var j = 0; j < 3; j++) { KATD[j].q = sost.d[j].q; KATD[j].ot = sost.d[j].q; KATD[j].t0 = 0; }
+  var shag = katPoProgressu(q);
+  for (var j = 0; j < 3; j++) { KATD[j].q = shag.d[j]; KATD[j].ot = shag.d[j]; KATD[j].t0 = 0; }
   katK = Math.max(KATD[0].q, KATD[1].q, KATD[2].q);
 }
-function katPrognat(cel) { katPusk(!!cel, true); }
+/* Отражение для бегунка: правда стенда, той же шкалой прогресса. */
+function katTek() {
+  return { q: (KATD[0].q + KATD[1].q + KATD[2].q) / 3, idet: katDvig };
+}
+function katPrognat(cel) {
+  var v = cel ? 1 : 0;
+  if (v === katCel) {
+    // цель уже стоит (скраб ставил её для прогона фазы) — из стоп-кадра
+    // прогон продолжает недоехавшие доли, а не выходит молча
+    var nedoshlo = false;
+    for (var i = 0; i < 3; i++) {
+      KATD[i].t0 = 0; KATD[i].ot = KATD[i].q;
+      if (KATD[i].q !== v) nedoshlo = true;
+    }
+    if (nedoshlo) katDvig = true;
+    return;
+  }
+  katPusk(!!cel, true);
+}
 function katZamedli(m) { zamedlenieM = Math.max(1, m || 1); }
 /* Срез момента: фазы всех трёх движений в общий момент q — соотнесение
    ниток вычислением. Тот же прогон, что ставит фазу. */
 var KATSLOVA = ['уменьшение', 'отмотка', 'соседи'];
 function katSrez(q) {
-  var byloCel = katCel; katCel = 1;                 // срез меряется по ходу «в каталог»
-  var D = skrabD || katProgon(null).t;
-  var sost = katProgon(Math.max(0, Math.min(1, q)) * D);
-  katCel = byloCel;
-  return sost.d.map(function (m, i) {
-    return KATSLOVA[i] + ' ' + m.q.toFixed(2);
+  var shag = katPoProgressu(q);
+  return shag.d.map(function (v, i) {
+    return KATSLOVA[i] + ' ' + v.toFixed(2);
   }).join(' \u00b7 ');
 }
 
