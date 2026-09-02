@@ -103,6 +103,25 @@
   var TIPY = {};
 
   function build(o) {
+    /* ── ВИТРИННЫЙ ГЕЙТ (решение Сергея 02.09) ────────────────────────
+       Публичные витрины показывают готовый результат — панель живёт на
+       локалке: работаем дома, наружу уходит решённое. Спит панель только
+       на НАШИХ адресах; студенческие и чужие домены не задеты — у них
+       панель остаётся частью результата. Страница может оставить панель
+       себе флагом window.STEND_PANEL_VSEGDA (каталог органов: его
+       содержимое и есть панель). Возвращается пустышка с рабочим API —
+       стенд, читающий P и зовущий obnovit, ничего не замечает. */
+    var VITRINA = /stendy\.vercel\.app$|ocnova-lab\.github\.io$|xn--80apagbbfxgmuj4j/;
+    if (!window.STEND_PANEL_VSEGDA && VITRINA.test(location.hostname)) {
+      var pusto = function () {};
+      var pustNabor = pusto; pustNabor.vyhod = pusto;
+      return {
+        save: pusto, panel: document.createElement('div'), applyTheme: pusto,
+        params: o.params, defaults: o.defaults, controls: {},
+        obnovit: pusto, nabor: pustNabor, mesto: pusto, vyhod: pusto,
+      };
+    }
+
     // ?reset=1 — аварийный сброс сохранённых настроек ещё до применения
     if (/[?&]reset/.test(location.search)) {
       try { localStorage.removeItem(o.storageKey); } catch (e) {}
