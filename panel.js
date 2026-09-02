@@ -1216,6 +1216,28 @@
         setTimeout(function () { kn.textContent = T(klyuch, ru); }, 1400);
       };
     }
+    /* ── ЛОКАЛКА (решение Сергея 02.09: сначала локалка, публикация
+       потом). На localhost у страницы есть мост к Клоду — lokalka.py
+       принимает заявки в .zayavki/, и Клод видит их мгновенно. В
+       интернете моста честно нет: там «Скопировать …» и буфер. */
+    var lokalka = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+    function zayavka(vid, telo, cb) {
+      telo = telo || {};
+      telo.vid = vid;
+      telo.stend = location.pathname;
+      try {
+        fetch('/zayavka', { method: 'POST', body: JSON.stringify(telo) })
+          .then(function (r) { cb && cb(r.ok); }, function () { cb && cb(false); });
+      } catch (e) { cb && cb(false); }
+    }
+    // ошибки страницы прилетают сами: «я глаза, ты мозг» без скриншотов
+    if (lokalka) {
+      window.addEventListener('error', function (e) {
+        zayavka('oshibka', { tekst: String(e.message || e),
+          fail: (e.filename || '') + ':' + (e.lineno || ''), });
+      });
+    }
+
     var cp = document.createElement('button');
     cp.className = 'st-reset st-copy';
     nadpis(cp, 'panel:copy', 'Скопировать параметры');
@@ -1290,6 +1312,29 @@
       else rukamiP();
     });
     panel.appendChild(cpp);
+
+    /* «Считать эталоном» — только на локалке: заявка с уведёнными
+       ручками падает файлом, Клод сверяет и вписывает в DEFAULTS.
+       Правда остаётся одна — эталон живёт в коде; кнопка не назначает
+       его, а отправляет предложение без буфера обмена. */
+    if (lokalka) {
+      var et = document.createElement('button');
+      et.className = 'st-reset st-copy';
+      nadpis(et, 'panel:etalon', 'Считать эталоном');
+      et.addEventListener('click', function () {
+        var uved = uvedennye().map(function (u) {
+          return { k: u.k, bylo: u.bylo, stalo: u.stalo,
+                   podpis: (opisRuchek[u.k] || {}).podpis || u.k };
+        });
+        var skazal = pokazatNaKnopke(et, 'panel:etalon', 'Считать эталоном');
+        if (!uved.length) { skazal(T('', 'всё и так по умолчанию')); return; }
+        zayavka('etalon', { ruchki: uved, otkloneniya: P.otkloneniya }, function (ok) {
+          skazal(ok ? T('', 'отправлено: ') + ruchek(uved.length)
+                    : T('', 'локалка не отвечает'));
+        });
+      });
+      panel.appendChild(et);
+    }
 
     var rst = document.createElement('button');
     rst.className = 'st-reset';
