@@ -78,20 +78,31 @@
        где рука и где угол, дальше ведём разницей. Абсолютный захват давал
        два срыва: прыжок к месту клика и переброску через границу сектора,
        где 0° и 360° соседи по кругу, но края по шкале. */
-    var tyanem = false, ruka0 = 0, ugol0 = 0;
+    /* Разница копится ПО КАДРАМ, не от точки нажатия: кратчайшая дуга от
+       старта не бывает больше 180°, и один захват не мог провернуть круг —
+       за 180 разница меняла знак и значение «сбрасывалось» (поймано
+       Сергеем на приёмке 02.09; сектор 0…90 этот дефект маскировал).
+       Полный круг заворачивается: 360 и 0 — соседи, крути бесконечно.
+       Упоры остаются только у настоящего сектора. */
+    var tyanem = false, ruka0 = 0, nakop = 0;
+    var krug = (do_ - ot) >= 360;
     cv.addEventListener('pointerdown', function (e) {
       tyanem = true; cv.setPointerCapture(e.pointerId);
-      ruka0 = ugol_kursora(e); ugol0 = P[d[0]];
+      ruka0 = ugol_kursora(e); nakop = P[d[0]];
     });
     cv.addEventListener('pointermove', function (e) {
       if (!tyanem) return;
-      var raznica = ugol_kursora(e) - ruka0;
-      if (raznica > 180) raznica -= 360;      // через границу круга — короткой дугой
+      var gr = ugol_kursora(e);
+      var raznica = gr - ruka0;
+      if (raznica > 180) raznica -= 360;      // шаг кадра — всегда короткой дугой
       if (raznica < -180) raznica += 360;
+      ruka0 = gr;
+      nakop += raznica;
+      if (krug) nakop = ((nakop - ot) % 360 + 360) % 360 + ot;
+      else nakop = Math.min(do_, Math.max(ot, nakop));
       var krupno = e.shiftKey ? Math.max(5, shag) : shag; // Shift — грубее, по 5°
-      var v = Math.round((ugol0 + raznica) / krupno) * krupno;
-      v = Math.min(do_, Math.max(ot, v));
-      if (v === ot || v === do_) { ruka0 = ugol_kursora(e); ugol0 = v; } // у упора не копим перелёт
+      var v = Math.round(nakop / krupno) * krupno;
+      v = krug ? ((v - ot) % 360 + 360) % 360 + ot : Math.min(do_, Math.max(ot, v));
       if (v !== P[d[0]]) { P[d[0]] = v; risovat(); api.save(); }
     });
     cv.addEventListener('pointerup', function () { tyanem = false; });
