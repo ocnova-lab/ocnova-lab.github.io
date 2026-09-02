@@ -35,7 +35,9 @@ def zagolovok(p):
     m = re.search(r'<title>(.*?)</title>', s, re.S)
     if not m: return ''
     z = re.sub(r'\s+', ' ', m.group(1)).strip().lower()
-    z = re.split(r'[—·\-|(]', z)[0].strip()
+    # первые два слова, а не разбор по знакам: разделитель в заголовке
+    # бывает любой («Hi Five ⇄ Hive Five»), а начало имени устойчиво
+    z = ' '.join(w for w in z.split(' ')[:2] if w)
     return z if len(z) >= 4 else ''
 
 def osnova(p):

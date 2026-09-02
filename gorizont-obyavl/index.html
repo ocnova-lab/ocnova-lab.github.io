@@ -2418,7 +2418,9 @@ var PANEL = StendPanel.build({
     ['h', 'Каталог', { gde: 'Каталог' }],
     /* время в руку: тяни фазу перехода, стой в любом кадре; ▸◂ — прогоны,
        ×3/×10 — временная лупа на живой ход */
-    ['katSkrab', 'Переход: рука', 'скраб', { opcii: { faza: katFaza, pusk: katPrognat, zamedli: katZamedli } }],
+    ['katSkrab', 'Переход: рука', 'скраб', { opcii: {
+      faza: katFaza, pusk: katPrognat, zamedli: katZamedli,
+      imya: 'каталог', srez: katSrez } }],
     ['katMasht', 'Каталог: масштаб', 'доля', { ot: 'своё', ot0: 8, do: 60, shag: 1 }],
     ['katKrop', 'Каталог: строка', 'доля', { ot: 'лента', shag: 5 }],
     ['katProm', 'Каталог: промежуток', 'доля', { ot: 'строка', ot0: 0, do: 60, shag: 1 }],
@@ -3017,6 +3019,18 @@ function katFaza(q) {
 }
 function katPrognat(cel) { katPusk(!!cel, true); }
 function katZamedli(m) { zamedlenieM = Math.max(1, m || 1); }
+/* Срез момента: фазы всех трёх движений в общий момент q — соотнесение
+   ниток вычислением. Тот же прогон, что ставит фазу. */
+var KATSLOVA = ['уменьшение', 'отмотка', 'соседи'];
+function katSrez(q) {
+  var byloCel = katCel; katCel = 1;                 // срез меряется по ходу «в каталог»
+  var D = skrabD || katProgon(null).t;
+  var sost = katProgon(Math.max(0, Math.min(1, q)) * D);
+  katCel = byloCel;
+  return sost.d.map(function (m, i) {
+    return KATSLOVA[i] + ' ' + m.q.toFixed(2);
+  }).join(' \u00b7 ');
+}
 
 function katPusk(v, bezAdresa) {
   v = v ? 1 : 0;

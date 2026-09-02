@@ -12,18 +12,8 @@
      faza(null)  — рука отпустила: продолжить живой ход с этого места
      pusk(cel)   — прогнать переход целиком (true — туда, false — обратно)
      zamedli(M)  — временная лупа: живой ход в M раз медленнее
-     imya        — имя перехода: оно уходит в адрес момента
-     srez(q)     — срез фаз всех движений в момент q, текстом:
-                   «уменьшение 1.00 · отмотка 0.35 · соседи 0.00»
 
-   МЕТКА МОМЕНТА (⚑). Переход составной, но время у него одно — потому
-   адрес момента живёт на переходе, а нитки-движения соотносятся срезом,
-   вычислением, не записью. Кнопка кладёт в буфер воспроизводимый адрес:
-   имя · момент · срез · URL с уведёнными ручками и &moment=имя:q.
-   Открытие по такому адресу ставит переход в тот самый кадр — читающий
-   видит ровно то, что видел пишущий.
-
-   Объявление:  ['kat', 'Переход', 'скраб', { opcii: { faza, pusk, zamedli, imya, srez } }]
+   Объявление:  ['kat', 'Переход', 'скраб', { opcii: { faza, pusk, zamedli } }]
    Значения в P не живут: фаза — жест, а не настройка, замедление — вид.  */
 (function () {
   var STIL = '.st-skrab{width:100%;display:flex;align-items:center;gap:8px;margin-top:5px}' +
@@ -36,8 +26,6 @@
     '.st-skrab-lupa button{all:unset;box-sizing:border-box;cursor:pointer;padding:3px 7px;' +
     'font:11px/1 var(--st-font);color:var(--st-text-2);border-radius:5px}' +
     '.st-skrab-lupa button[aria-checked="true"]{background:var(--st-accent);color:#fff}' +
-    '.st-skrab-srez{width:100%;margin-top:3px;font:10px/1.4 var(--st-font);' +
-    'color:var(--st-text-2);font-variant-numeric:tabular-nums}' +
     '.row:has(>.st-skrab){flex-wrap:wrap}';
 
   StendPanel.tip('skrab', function (row, d, P, api) {
@@ -49,17 +37,8 @@
     var faza = o.faza || function () {};
     var pusk = o.pusk || null;
     var zamedli = o.zamedli || null;
-    var imya = o.imya || d[0];
-    var srez = o.srez || null;
 
     var box = document.createElement('div'); box.className = 'st-skrab';
-    // срез момента: общая доля + фазы всех движений — соотнесение ниток
-    var pod = srez ? document.createElement('div') : null;
-    if (pod) pod.className = 'st-skrab-srez';
-    function pokazatSrez(q) {
-      if (!pod) return;
-      pod.textContent = imya + ' \u00b7 ' + q.toFixed(2) + '  \u2014  ' + srez(q);
-    }
 
     // пуск: туда и обратно — прогон перехода без ухода из панели
     if (pusk) {
@@ -76,10 +55,7 @@
     // сам скраб: рука держит фазу, отпустила — ход продолжается
     var inp = document.createElement('input');
     inp.type = 'range'; inp.min = 0; inp.max = 1; inp.step = 0.002; inp.value = 0;
-    inp.addEventListener('input', function () {
-      var q = parseFloat(inp.value);
-      faza(q); pokazatSrez(q);
-    });
+    inp.addEventListener('input', function () { faza(parseFloat(inp.value)); });
     ['pointerup', 'pointercancel'].forEach(function (s) {
       inp.addEventListener(s, function () { faza(null); });
     });
@@ -102,47 +78,6 @@
       });
       box.appendChild(lupa);
     }
-    // метка момента: воспроизводимый адрес кадра — в буфер
-    var fl = document.createElement('button');
-    fl.type = 'button'; fl.className = 'st-skrab-k';
-    fl.textContent = '\u2691';
-    fl.title = 'скопировать момент: имя, срез и адрес этого кадра';
-    fl.addEventListener('click', function () {
-      var q = parseFloat(inp.value);
-      var kus = [];
-      (api.uvedennye ? api.uvedennye() : []).forEach(function (u) {
-        kus.push(encodeURIComponent(u.k) + '=' +
-          encodeURIComponent(Array.isArray(u.stalo) ? u.stalo.join(',') : u.stalo));
-      });
-      kus.push('moment=' + encodeURIComponent(imya + ':' + q.toFixed(3)));
-      var url = location.origin + location.pathname + '?' + kus.join('&');
-      var tekst = 'Момент: ' + imya + ' \u00b7 ' + q.toFixed(2) +
-        (srez ? '\nСрез: ' + srez(q) : '') + '\n' + url;
-      var bylo = fl.textContent;
-      var skazal = function (t) { fl.textContent = t; setTimeout(function () { fl.textContent = bylo; }, 1200); };
-      if (navigator.clipboard) {
-        navigator.clipboard.writeText(tekst).then(
-          function () { skazal('\u2713'); },
-          function () { prompt('Момент:', tekst); });
-      } else prompt('Момент:', tekst);
-    });
-    box.appendChild(fl);
     row.appendChild(box);
-    if (pod) row.appendChild(pod);
-
-    /* ?moment=имя:q — открыть стенд в этом кадре. Фаза ставится после
-       загрузки с отступом: стенд ещё строит ленту, мгновенная постановка
-       увидела бы полмакета. Рука «держит» кадр — прогон ▸ отпустит. */
-    var m0 = (location.search.match(/[?&]moment=([^&]+)/) || [])[1];
-    if (m0) {
-      var t0 = decodeURIComponent(m0).split(':');
-      if (t0[0] === imya) {
-        var q0 = Math.max(0, Math.min(1, parseFloat(t0[1]) || 0));
-        inp.value = q0;
-        var postav = function () { setTimeout(function () { faza(q0); pokazatSrez(q0); }, 600); };
-        if (document.readyState === 'complete') postav();
-        else window.addEventListener('load', postav);
-      }
-    }
   });
 })();

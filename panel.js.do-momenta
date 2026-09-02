@@ -546,9 +546,6 @@
           save: function () { izmenilos(d[0]); }, host: host, bindTip: bindTip,
           accent: accent, repaints: repaints, controls: controls,
           defaults: DEFAULTS, storageKey: o.storageKey,
-          // отбор уведённых ручек — тот же, что у кнопок копирования:
-          // метка момента (скраб) собирает воспроизводимый адрес кадра
-          uvedennye: function () { return uvedennye(); },
           onChange: function () { if (typeof o.onChange === 'function') o.onChange(d[0], P); },
         });
         host.appendChild(row);
