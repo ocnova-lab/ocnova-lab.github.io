@@ -1,4 +1,4 @@
-/* © Сергей Гуров, 2026 · панель стендов · метод Гурова · stendy.vercel.app */
+/* © Сергей Гуров · Михаил Матвеев · Александр Копинов, 2026 · панель стендов · метод Гурова · stendy.vercel.app */
 /* Наследование — сквозной закон и отступление от него в одной строке.
    Приём снят со стенда индексального контента (Копинов, 2026-08): общий стиль
    задаёт норму, отдельный блок держит своё исключение, пустое поле означает
@@ -199,7 +199,10 @@
       function prinyat(ok) {
         if (gotovo) return; gotovo = true;
         box.replaceChild(val, ked);
-        var v = parseFloat(String(ked.value).replace(',', '.'));
+        var v = StendPanel.vyrazhenie
+          ? StendPanel.vyrazhenie(ked.value, parseFloat(inp.value))
+          : parseFloat(String(ked.value).replace(',', '.'));
+        if (isNaN(v)) v = parseFloat(String(ked.value).replace(',', '.'));
         if (ok && !isNaN(v)) zapisat(Math.max(lo, Math.min(hi, v)) / n.mul);
         else narisovat();
       }

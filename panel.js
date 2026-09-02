@@ -1,4 +1,4 @@
-/* © Сергей Гуров, 2026 · панель стендов · метод Гурова · stendy.vercel.app */
+/* © Сергей Гуров · Михаил Матвеев · Александр Копинов, 2026 · панель стендов · метод Гурова · stendy.vercel.app */
 /* ────────────────────────────────────────────────────────────────────
    Панель стенда — единая логика (пара к /panel.css).
 
@@ -42,6 +42,62 @@
     });
   }
   function chislo(v) { return parseFloat(String(v).replace(',', '.')); }
+
+  /* Математика в поле числа — снято с eval-number-expression из раздатки
+     Михаила Матвеева: «700/2» → 350, «(3+1)*20» → 80, запятая как точка.
+     Ведущий «+» — относительный ввод: «+50» прибавляет к текущему
+     (поэтому «+50-20» прибавляет 30). Кривой ввод возвращает NaN —
+     вызывающий решает, что делать с отказом. */
+  function vyrazhenie(syroj, tekushchee) {
+    var t = String(syroj).trim();
+    if (!t) return NaN;
+    var otnositelno = t.charAt(0) === '+';
+    if (otnositelno) t = t.slice(1);
+    t = t.replace(/,/g, '.');
+    if (!/^[-+*/().\d\s]+$/.test(t)) return NaN;
+    var poz = 0;
+    function summa() {
+      var v = proizvedenie();
+      while (poz < t.length) {
+        var z = t.charAt(poz);
+        if (z === '+') { poz++; v += proizvedenie(); }
+        else if (z === '-') { poz++; v -= proizvedenie(); }
+        else break;
+      }
+      return v;
+    }
+    function proizvedenie() {
+      var v = mnozhitel();
+      while (poz < t.length) {
+        var z = t.charAt(poz);
+        if (z === '*') { poz++; v *= mnozhitel(); }
+        else if (z === '/') { poz++; v /= mnozhitel(); }
+        else break;
+      }
+      return v;
+    }
+    function mnozhitel() {
+      while (t.charAt(poz) === ' ') poz++;
+      var z = t.charAt(poz);
+      if (z === '(') {
+        poz++;
+        var v = summa();
+        if (t.charAt(poz) === ')') poz++;
+        while (t.charAt(poz) === ' ') poz++;
+        return v;
+      }
+      if (z === '-') { poz++; return -mnozhitel(); }
+      var m = /^\d*\.?\d+/.exec(t.slice(poz));
+      if (!m) return NaN;
+      poz += m[0].length;
+      while (t.charAt(poz) === ' ') poz++;
+      return parseFloat(m[0]);
+    }
+    var itog = summa();
+    if (poz < t.length || isNaN(itog) || !isFinite(itog)) return NaN;
+    itog = otnositelno ? (tekushchee || 0) + itog : itog;
+    return parseFloat(itog.toFixed(6));
+  }
   // Реестр органов управления (библиотека /panel-lib): StendPanel.tip('имя', fn).
   // fn(row, d, P, api) строит строку панели; api = {save, host, bindTip, accent, repaints, controls}
   var TIPY = {};
@@ -589,7 +645,9 @@
         function commit(ok) {
           if (done) return; done = true;
           if (ok) {
-            var v = chislo(ked.value);
+            // поле принимает выражения: «700/2», «(3+1)*20», «+50» к текущему
+            var v = vyrazhenie(ked.value, P[d[0]] * mul);
+            if (isNaN(v)) v = chislo(ked.value);
             if (!isNaN(v)) {
               v = Math.max(parseFloat(inp.min), Math.min(parseFloat(inp.max), v));
               P[d[0]] = v / mul;
@@ -605,11 +663,28 @@
         });
         ked.addEventListener('blur', function () { commit(true); });
       });
+      /* Точка увода от умолчания — снято с reset-dot из раздатки Михаила
+         Матвеева: видно, ЧТО уведено, клик возвращает умолчание. Отбор
+         тот же, что у «Скопировать правки», — точка и есть его глаза. */
+      var uvod = document.createElement('button');
+      uvod.type = 'button'; uvod.className = 'st-uvod';
+      uvod.title = 'уведено от умолчания — вернуть';
+      function uvodObnovit() {
+        var d0 = DEFAULTS[d[0]];
+        uvod.hidden = d0 === undefined || String(P[d[0]]) === String(d0);
+      }
+      uvod.addEventListener('click', function () {
+        if (DEFAULTS[d[0]] === undefined) return;
+        P[d[0]] = DEFAULTS[d[0]];
+        izmenilos(d[0]); controls[d[0]]();
+      });
       controls[d[0]] = function () {
         inp.value = P[d[0]] * mul; val.textContent = fmt(P[d[0]]); paintFill(inp);
+        uvodObnovit();
       };
       repaints.push(function () { paintFill(inp); });
-      row.appendChild(inp); row.appendChild(val);
+      row.appendChild(inp); row.appendChild(val); row.appendChild(uvod);
+      uvodObnovit();
       host.appendChild(row);
       paintFill(inp);
     });
@@ -1165,5 +1240,6 @@
     klavishi: klavishiChisla, // стрелки ±1 / Shift ±10 / запятая — для полей органов
     tip: function (imya, fn) { TIPY[imya] = fn; return this; },
     tipy: TIPY,
+    vyrazhenie: vyrazhenie, // математика в полях числа — и органам тоже
   };
 })();
