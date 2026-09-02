@@ -1,0 +1,7 @@
+# кухня не публикуется — бэкапы, спеки, документация, сборщики
+*.do-*
+pravka-*.md
+dokumentaciya.md
+*.py
+.site
+publish.sh
