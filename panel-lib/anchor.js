@@ -7,14 +7,15 @@
   var TOCHKI = [['tl', 'Верх слева'], ['t', 'Верх'], ['tr', 'Верх справа'],
                 ['l', 'Слева'], ['c', 'Центр'], ['r', 'Справа'],
                 ['bl', 'Низ слева'], ['b', 'Низ'], ['br', 'Низ справа']];
-  var STIL = '.st-anchor{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;width:68px;' +
-    'margin-left:auto;background:var(--st-hairline);padding:2px;border-radius:6px}' +
-    '.st-anchor button{all:unset;height:20px;cursor:pointer;border-radius:3px;' +
+  var STIL = '.st-anchor{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;width:90px;' +
+    'margin:0 auto;background:var(--st-hairline);padding:3px;border-radius:8px}' +
+    '.st-anchor button{all:unset;height:26px;cursor:pointer;border-radius:4px;' +
     'background:var(--st-card);transition:background .12s}' +
     '.st-anchor button:hover{background:var(--st-border)}' +
     '.st-anchor button[aria-checked="true"]{background:var(--st-accent)}';
 
   StendPanel.tip('anchor', function (row, d, P, api) {
+    row.classList.add('dva');   // имя этажом выше, сетка по центру (рисунок Сергея 03.09)
     if (!document.getElementById('st-anchor-css')) {
       var s = document.createElement('style'); s.id = 'st-anchor-css';
       s.textContent = STIL; document.head.appendChild(s);

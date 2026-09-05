@@ -18,7 +18,7 @@
     'border:0.5px solid var(--st-hairline)}' +
     '.st-pr-row{display:flex;align-items:center;gap:8px;margin-top:5px;font-size:11px;' +
     'color:var(--st-text-2)}' +
-    '.st-pr-row input{flex:1;accent-color:var(--st-accent);height:14px}' +
+    '.st-pr-row .st-nitka{flex:1}' +
     '.st-pr-row span{min-width:5ch;text-align:right;font-variant-numeric:tabular-nums}' +
     '.row:has(>.st-pruzhina){flex-wrap:wrap}';
 
@@ -62,19 +62,22 @@
      ['затухание', 1, ZAT[0], ZAT[1], 0.01]].forEach(function (p) {
       var r = document.createElement('div'); r.className = 'st-pr-row';
       var lab = document.createElement('label'); lab.textContent = p[0];
+      /* Г9: нитка — блок ядра (ход 64). Своя нитка не красилась и падала
+         в запасной стиль: ползунок старого образца без заливки и пилюли. */
       var inp = document.createElement('input');
-      inp.type = 'range'; inp.min = p[2]; inp.max = p[3]; inp.step = p[4];
       inp.value = P[d[0]][p[1]];
-      var val = document.createElement('span'); val.textContent = P[d[0]][p[1]];
-      inp.addEventListener('input', function () {
-        var z = P[d[0]].slice();
-        z[p[1]] = parseFloat(inp.value);
-        P[d[0]] = z;
-        val.textContent = parseFloat(z[p[1]].toFixed(3));
-        pusk(); api.save();
+      var val = document.createElement('span'); val.className = 'val';
+      var nb = StendPanel.nitkaBlok({
+        inp: inp, val: val, min: p[2], max: p[3], shag: p[4],
+        znachenie: function () { return P[d[0]][p[1]]; },
+        postavit: function (v) {
+          var z = P[d[0]].slice(); z[p[1]] = v; P[d[0]] = z;
+          pusk(); api.save();
+        },
+        tekst: function () { return String(parseFloat((+P[d[0]][p[1]]).toFixed(3))); }
       });
-      polzunki.push(function () { inp.value = P[d[0]][p[1]]; val.textContent = parseFloat(P[d[0]][p[1]].toFixed(3)); });
-      r.appendChild(lab); r.appendChild(inp); r.appendChild(val); box.appendChild(r);
+      polzunki.push(nb.obnovit);
+      r.appendChild(lab); r.appendChild(nb.obl); box.appendChild(r);
     });
     row.appendChild(box);
 

@@ -550,7 +550,7 @@ var ui = StendPanel.build({
     ['track', 'Трекинг, ‰ кегля', -40, 150, 1],
     ['h', 'Ось сверху'],
     ['osFit', 'Вписывать в экран', 'select', [['on', 'весь ряд в ширину'], ['off', 'свой кегль']]],
-    ['osSize', 'Кегль оси, px', 6, 28, 0.5],
+    ['osSize', 'Кегль оси, px', 6, 28, 0.5, { pole: true }],
     ['osLineW', 'Ширина строки, кегли', 3, 60, 0.5],
     ['osGap', 'Промежуток, доли кегля', 0.4, 5, 0.01],
     ['osTrack', 'Разрядка, ‰ кегля', 0, 400, 5],
@@ -614,7 +614,8 @@ var ui = StendPanel.build({
   cv.style.cssText = 'width:100%;display:block;border-radius:6px;cursor:crosshair;touch-action:none';
   wrap.appendChild(cv);
 
-  var panel = ui.panel;
+  // содержимое панели живёт в теле (.st-telo), а не в самой панели
+  var panel = ui.telo || ui.panel;
   panel.insertBefore(cap, panel.firstChild);
   panel.insertBefore(wrap, cap.nextSibling);
 

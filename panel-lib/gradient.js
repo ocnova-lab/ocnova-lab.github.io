@@ -27,7 +27,7 @@
     '.st-grad-row{display:flex;align-items:center;gap:8px;margin-top:5px;font-size:11px;' +
     'color:var(--st-text-2)}' +
     '.st-grad-row b{min-width:8ch;font-weight:400}' +
-    '.st-grad-row input{flex:1;accent-color:var(--st-accent);height:14px}' +
+    '.st-grad-row .st-nitka{flex:1}' +
     '.st-grad-row span{min-width:4ch;text-align:right;font-variant-numeric:tabular-nums}' +
     '.row:has(>.st-grad){flex-wrap:wrap}';
 
@@ -84,21 +84,23 @@
      ['Частота', 3, 0.25, 3, 0.05], ['Сдвиг', 4, 0, 1, 0.01]].forEach(function (r) {
       var rw = document.createElement('div'); rw.className = 'st-grad-row';
       var lb = document.createElement('b'); lb.textContent = r[0];
+      /* Г9: нитка — блок ядра (ход 64). Своя нитка тут ничего не красила
+         вовсе и падала в запасной стиль ядра — ползунок старого образца
+         без заливки и пилюли. */
       var inp = document.createElement('input');
-      inp.type = 'range'; inp.min = r[2]; inp.max = r[3]; inp.step = r[4];
       inp.value = P[d[0]][r[1]];
-      var val = document.createElement('span'); val.textContent = P[d[0]][r[1]];
-      inp.addEventListener('input', function () {
-        var z = P[d[0]].slice();
-        z[r[1]] = +inp.value;
-        P[d[0]] = z;
-        risuj(); api.save();
+      var val = document.createElement('span'); val.className = 'val';
+      var nb = StendPanel.nitkaBlok({
+        inp: inp, val: val, min: r[2], max: r[3], shag: r[4],
+        znachenie: function () { return P[d[0]][r[1]]; },
+        postavit: function (v) {
+          var z = P[d[0]].slice(); z[r[1]] = v; P[d[0]] = z;
+          risuj(); api.save();
+        },
+        tekst: function () { return String(parseFloat((+P[d[0]][r[1]]).toFixed(2))); }
       });
-      polzunki.push(function () {
-        inp.value = P[d[0]][r[1]];
-        val.textContent = parseFloat((+P[d[0]][r[1]]).toFixed(2));
-      });
-      rw.appendChild(lb); rw.appendChild(inp); rw.appendChild(val);
+      polzunki.push(nb.obnovit);
+      rw.appendChild(lb); rw.appendChild(nb.obl);
       box.appendChild(rw);
     });
     row.appendChild(box);

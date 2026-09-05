@@ -64,9 +64,11 @@
     // «Длина» оказалась слишком широка: замер 54 длин показал пять разных
     // назначений с разными диапазонами. Один тип на все пять не работает —
     // в diagonal из-за этого перебивались руками две трети границ.
-    'кегль':    { organ: 'слайдер', ot0: 6, do: 48, edinica: 'px' },
+    // Кегль правят числом, не ниткой (правило Сергея 02.09, П16): поле ввода,
+    // коридор кегля — двумя полями без нитки.
+    'кегль':    { organ: 'слайдер', ot0: 6, do: 48, edinica: 'px', pole: true },
     // Титульные кегли живут в другом порядке величин: 20…140 против 8…40.
-    'кегль крупный': { organ: 'слайдер', ot0: 12, do: 200, edinica: 'px' },
+    'кегль крупный': { organ: 'слайдер', ot0: 12, do: 200, edinica: 'px', pole: true },
     'зазор':    { organ: 'слайдер', ot0: 0, do: 120, edinica: 'px' },
     'поле':     { organ: 'слайдер', ot0: 0, do: 400, edinica: 'px' },
     'путь':     { organ: 'слайдер', ot0: 0, do: 2000, edinica: 'px' },
@@ -84,7 +86,22 @@
     'ход':      { organ: 'слайдер', ot0: -1, do: 1, edinica: '', trebuet: 'датчик', otnositelno: true },
     'инерция':  { organ: 'слайдер', ot0: 0, do: 100, edinica: '%', trebuet: 'сила' },
     'сила':     { organ: 'слайдер', ot0: 0, do: 100, edinica: '%' },
-    'счёт':     { organ: 'слайдер', ot0: 0, do: 12, minShag: 1, edinica: '' },
+    // Счёт — степпер: шагов мало, каждый щелчок виден (П9; снят с системы Миши 02.09).
+    'счёт':     { organ: 'schyot', ot0: 0, do: 12, minShag: 1, edinica: '' },
+    // Качественные словари сегментера (значки): выключка и её родня — с
+    // дизайн-системы панелек Миши; «владелец размера» — перевод Fixed /
+    // Hug / Fill из панели Фигмы: размером владеет формат, содержимое или
+    // контейнер (оценка 02.09). Значение — ключ варианта из словаря.
+    'выключка':    { organ: 'segment', slovar: 'выключка', edinica: '' },
+    'вертикаль':   { organ: 'segment', slovar: 'вертикаль', edinica: '' },
+    'горизонталь': { organ: 'segment', slovar: 'горизонталь', edinica: '' },
+    'ориентация':  { organ: 'segment', slovar: 'ориентация', edinica: '' },
+    'владелец размера': { organ: 'segment', slovar: 'владелец', edinica: '' },
+    // Фазы — переход одной строкой (фаза · пауза · фаза), время видно полосой.
+    // Дети — величины типа «время»; пауза помечается { pauza: true }.
+    'фазы':     { organ: 'fazy', edinica: 'мс' },
+    'заметка':  { organ: 'zametka', edinica: '' },   // закон словами в секции, ручки нет
+    'снимки':   { organ: 'sloty', edinica: '' },     // пять снимков состояния
     // Круговой орган по умолчанию СВОБОДЕН: полный круг 0…360. Так было
     // записано в каталоге органов с самого начала («сектор задаётся
     // только если он есть по смыслу»), а таблица разошлась с этим,
@@ -128,11 +145,15 @@
     'строка':  { ot0: 0, do: 100, edinica: '% строки' },
     'колонка': { ot0: 0, do: 200, edinica: '% колонки' },
     'лента':   { ot0: 20, do: 100, edinica: '% ленты' },
-    'знак':    { ot0: 8, do: 60, edinica: 'знаков' },
+    'знак':    { ot0: 8, do: 60, edinica: 'знаков', pole: true },   // мера в знаках — числом, не ниткой (Сергей 03.09)
     // Группа с ведущим: величина ведомого элемента меряется от ведущего
     // соседа, не от формата. Первое употребление — отбивка даты от кегля
     // титула (gorizont, 02.09): растёт титул — растёт отбивка.
     'сосед':   { ot0: 0, do: 200, edinica: '% кегля соседа' },
+    // Поле от поля: боковое меряется от вертикального, а не своим числом.
+    // Первое употребление — поля оригинала в галерее M7 (06.09): по бокам
+    // половина от полей сверху и снизу, и это закон, а не совпадение чисел.
+    'поле':    { ot0: 0, do: 200, edinica: '% полей' },
     'своё':    { ot0: 0, do: 100, edinica: '%' }, // «своё» — свалка: опору надо называть
   };
   // Множитель — та же доля, записанная не процентом: интерлиньяж 1.26.
@@ -231,7 +252,17 @@
     // Первый проход: из чего состоит каждая секция — для проверки обязательств,
     // где действует каждый закон — для карты мест, при чём живёт — для фазы.
     var gdeSekcii = null, priSekcii = null, inspektorKlyuch = null;
-    (zakon || []).forEach(function (s) {
+    /* ПУСТАЯ СТРОКА ОБЪЯВЛЕНИЯ НЕ РОНЯЕТ ПАНЕЛЬ (04.09). Дырка в массиве
+       (лишняя запятая, вычисление, вернувшее undefined) валила сборку с
+       «Cannot read properties of undefined», и стенд открывался БЕЗ панели
+       вовсе — молча, без слова о причине. Так на горизонте пропала указка:
+       не она пропала, а панель не строилась. Компилятор обязан назвать
+       место, а не умереть на нём. */
+    (zakon || []).forEach(function (s, nomer) {
+      if (!s || !s.length) {
+        pretenzii.push('строка объявления № ' + (nomer + 1) + ' пуста — лишняя запятая или значение, которого нет');
+        return;
+      }
       if (s[0] === 'h') {
         sekcii.push(tek); tek = { imya: s[1], tipy: {} };
         gdeSekcii = s[2] && s[2].gde !== undefined ? s[2].gde : null;
@@ -279,7 +310,8 @@
 
     // Второй проход: сборка строк панели.
     (zakon || []).forEach(function (s) {
-      if (s[0] === 'h') { defs.push(['h', s[1]]); return; }
+      if (!s || !s.length) return;   // о дырке уже сказано первым проходом
+      if (s[0] === 'h') { defs.push(s[2] && s[2].glaz ? ['h', s[1], { glaz: s[2].glaz }] : ['h', s[1]]); return; }
       var klyuch = s[0], imya = s[1], tip = s[2], o = s[3] || {};
       var baza = TABLICA[tip];
       if (!baza && tip !== 'доля') {
@@ -322,7 +354,8 @@
         var klo = o.ot0 !== undefined ? o.ot0 : baza.ot0;
         var khi = o.do !== undefined ? o.do : baza.do;
         defs.push([klyuch, nadpis, 'koridor', klo, khi,
-                   o.shag !== undefined ? o.shag : shagIzDiapazona(klo, khi, baza.minShag)]);
+                   o.shag !== undefined ? o.shag : shagIzDiapazona(klo, khi, baza.minShag),
+                   baza.pole ? { nitka: false } : undefined]);
         return;
       }
       if (tip === 'пара') {
@@ -344,10 +377,33 @@
 
       if (tip === 'выбор') {
         // Принцип 9: закрытый короткий список — сегментер, длинный — селект.
-        var organ = o.organ || (o.iz && o.iz.length <= 5 ? 'segment' : 'select');
+        // Порог 4 (Сергей 03.09): на 3–4 варианта сегментер, дальше селект;
+        // список, который будет расти (тип сетки), объявляется селектом сразу.
+        var organ = o.organ || (o.iz && o.iz.length <= 4 ? 'segment' : 'select');
         defs.push([klyuch, nadpis, organ, o.iz || [], o.opcii]);
         return;
       }
+      if (baza.slovar) {   // сегментер со значками по словарю
+        defs.push([klyuch, nadpis, 'segment', baza.slovar, o.opcii]);
+        return;
+      }
+      if (tip === 'фазы') {
+        var fz = (o.iz || []).map(function (r) {
+          var dd = r[3] || {}, b = TABLICA[r[2] || 'время'] || TABLICA['время'];
+          var plo = dd.ot0 !== undefined ? dd.ot0 : b.ot0, phi = dd.do !== undefined ? dd.do : b.do;
+          return [r[0], r[1], plo, phi,
+                  dd.shag !== undefined ? dd.shag : shagIzDiapazona(plo, phi, b.minShag),
+                  dd.pauza ? { pauza: true } : undefined];
+        });
+        if (!fz.length) pretenzii.push('фазы «' + imya + '» без детей: iz пуст');
+        defs.push([klyuch || '', nadpis, 'fazy', fz, o.opcii]);
+        return;
+      }
+      if (tip === 'заметка') { defs.push(['', '', 'zametka', o.tekst || imya]); return; }
+      /* Ключ у снимков сохраняется, как у фаз строкой выше: без него
+         строка приходит в панель безымянной, и карта desc к ней
+         привязаться не может — подсказка молча пропадает. */
+      if (tip === 'снимки') { defs.push([klyuch || '', imya, 'sloty', o.opcii]); return; }
       var tipy = (typeof StendPanel !== 'undefined' && StendPanel.tipy) || {};
       if (tip === 'этажи' && !tipy.inspektor) {
         pretenzii.push('«этажи» (' + klyuch + ') требуют /panel-lib/inspektor.js — строка пропущена');
@@ -382,11 +438,16 @@
       var lo = o.ot0 !== undefined ? o.ot0 : baza.ot0;
       var hi = o.do !== undefined ? o.do : baza.do;
       var sh = o.shag !== undefined ? o.shag : shagIzDiapazona(lo, hi, baza.minShag);
+      if ((o.organ || baza.organ) === 'schyot') {
+        defs.push([klyuch, nadpis, 'schyot', lo, hi, sh, o.opcii]);
+        return;
+      }
       if (o.k === 'этаж') {
         defs.push([klyuch, nadpis, 'nasledovanie', lo, hi, sh]);
         return;
       }
-      defs.push([klyuch, nadpis, lo, hi, sh, o.opcii]);
+      // поле вместо нитки: ставит тип (кегль) или сама величина (pole: true — мера в знаках)
+      defs.push([klyuch, nadpis, lo, hi, sh, (baza.pole || o.pole) ? Object.assign({ pole: true }, o.opcii || {}) : o.opcii]);
     });
 
     // Датчик на саму таблицу. Считать просто «сколько перебито» мало:
@@ -395,7 +456,7 @@
     // НЕ ВМЕЩАЕТ нужный стенду: тогда перебивка вынужденная.
     var nuzhno = 0, zrya = 0, vsego = 0;
     (zakon || []).forEach(function (s) {
-      if (s[0] === 'h') return;
+      if (!s || !s.length || s[0] === 'h') return;   // дырка уже названа выше
       vsego += 1;
       var o = s[3]; if (!o) return;
       if (o.ot0 === undefined && o.do === undefined && o.shag === undefined) return;
@@ -416,7 +477,7 @@
        в стендах — отдельным решением: настоящая опора двигает границы
        (своё 0…100, колонка 0…200), каждую надо смотреть глазами. */
     var svalka = (zakon || []).filter(function (s) {
-      return s[0] !== 'h' && s[2] === 'доля' && s[3] && s[3].ot === 'своё';
+      return s && s.length && s[0] !== 'h' && s[2] === 'доля' && s[3] && s[3].ot === 'своё';
     }).map(function (s) { return s[0]; });
     if (svalka.length) {
       var nS = svalka.length;
@@ -443,7 +504,7 @@
     } else if (inspektorKlyuch) {
       var punkty = {};
       (zakon || []).forEach(function (z) {
-        if (z[0] !== inspektorKlyuch) return;
+        if (!z || !z.length || z[0] !== inspektorKlyuch) return;
         var iz = (z[3] && z[3].iz) || [];
         iz.forEach(function (r) { punkty[Array.isArray(r) ? r[0] : r] = 1; });
       });

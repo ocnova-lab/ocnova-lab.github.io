@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Этаж — headconf по этажам</title>
+<link rel="stylesheet" href="/panel.css" />
+<style>
+  /* Этаж — страница headconf по этажам: дом задаёт закон, этаж отступает.
+     Смотрит: на окно (ширина) и на положение блока по высоте.
+     Реагирует: плавно до порога, на пороге щелчком; блоки приходят протяжкой.
+     Законы 3 (доли и коридор), 1 (перелом), 2 (пересчёт), 15 (протяжка),
+     13 (рубеж ◌ — первый прецедент). Приёмы: «Расфокус», наследование дом→этаж. */
+  /* hh sans — гарнитура макета, три веса одним семейством (как на боевом сайте) */
+  @font-face { font-family:'hh sans'; src:url('/fonts/hhSans-Regular.woff2') format('woff2');
+               font-weight:400; font-style:normal; font-display:swap; }
+  @font-face { font-family:'hh sans'; src:url('/fonts/hhSans-Medium.woff2') format('woff2');
+               font-weight:500; font-style:normal; font-display:swap; }
+  @font-face { font-family:'hh sans'; src:url('/fonts/hhSans-Display.woff2') format('woff2');
+               font-weight:700; font-style:normal; font-display:swap; }
+  @font-face { font-family:'Pragmatica Next VF'; src:url('/fonts/PragmaticaNextVF.woff') format('woff');
+               font-weight:100 900; font-display:swap; }
+  @font-face { font-family:'Even Mono'; src:url('/fonts/EvenMono-Regular.woff2') format('woff2'); font-display:swap; }
+  @font-face { font-family:'Editorial New'; src:url('/fonts/EditorialNew-Regular.woff') format('woff'); font-display:swap; }
+  @font-face { font-family:'JetBrains Mono'; src:url('/fonts/JetBrainsMono-Regular.woff2') format('woff2'); font-display:swap; }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scrollbar-width:none; -ms-overflow-style:none; }
+  html::-webkit-scrollbar { display:none; }
+  body { background:var(--fon-doma); color:var(--tsvet-nabora); overscroll-behavior:none;
+         font-family:var(--garnitura); font-synthesis-weight:none; }
+  img { display:block; max-width:100%; }
+
+  /* Неподвижный слой: фон не едет с содержимым, этаж зажигает свой. */
+  #fony { position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden; }
+  .fon { position:absolute; inset:0; opacity:0; will-change:opacity,transform;
+         background-size:cover; background-position:center; }
+  .fon-shtora { position:absolute; inset:0; }
+
+  /* Навбар — левая колонка во всю высоту: верх (меню) и низ (виджет) разведены.
+     Поля 38 сверху и снизу, 24 слева — из сборки макета, в модулях. */
+  #navbar { position:fixed; z-index:100; top:0; left:0; height:100vh; pointer-events:none;
+            display:flex; flex-direction:column; justify-content:space-between;
+            padding-block:calc(var(--poleVerh) * var(--vw));
+            padding-left:calc(var(--polyaDoma) * var(--vw)); }
+  #menu { display:grid; grid-template-columns:calc(var(--kolonkaNav) * var(--vw)) 1fr;
+          gap:calc(20 * var(--vw)); pointer-events:all;
+          font-size:calc(var(--keglMenu) * var(--vw)); font-weight:var(--vesZag);
+          line-height:1.43; letter-spacing:-.02em; }
+  #menu .stranicy { grid-column:1; }
+  #menu .stranica + .stranica { margin-top:calc(10 * var(--vw)); }
+  #menu .glava { cursor:pointer; width:max-content; }
+  #menu .page { list-style:none; margin-top:calc(20 * var(--vw));
+                margin-left:calc(24 * var(--vw)); }
+  #menu .page li { width:max-content; cursor:pointer; color:var(--tsvet-tusklyy);
+                   transition:color .2s ease; }
+  #menu .page li[data-tut="1"] { color:var(--tsvet-nabora); }
+
+  /* Нижний виджет: дата, кнопка, адрес, логотип — высота 130 модулей. */
+  #widget { height:calc(var(--vysotaWidget) * var(--vw)); pointer-events:all;
+            display:flex; flex-direction:column; justify-content:flex-end; align-items:flex-start;
+            font-size:calc(var(--keglSlug) * var(--vw)); line-height:1.5; }
+  #widget .w-top { display:flex; gap:calc(20 * var(--vw)); }
+  #widget .w-date { width:calc(var(--kolonkaNav) * var(--vw)); display:grid; }
+  #widget .w-month { grid-area:1/1/2/-1; margin-left:calc(24 * var(--vw)); }
+  #widget .w-year { grid-area:1/1/2/-1; margin-left:auto; opacity:.3; }
+  #widget .w-main { display:grid; grid-template-columns:auto 1fr; gap:calc(20 * var(--vw)); }
+  #widget .w-knopka { grid-area:2/1; width:calc(var(--kolonkaNav) * var(--vw));
+            aspect-ratio:170/41; border:0; border-radius:100vw; cursor:pointer;
+            background:var(--tsvet-nabora); color:var(--fon-doma);
+            font-family:inherit; font-size:calc(var(--keglSlug) * var(--vw));
+            font-weight:var(--vesZag); letter-spacing:-.01em;
+            display:flex; align-items:center; justify-content:center;
+            gap:calc(10 * var(--vw)); }
+  #widget .w-adres-box { grid-area:1/2/3; display:flex; flex-direction:column;
+            gap:calc(6 * var(--vw)); }
+  #widget .w-adres { display:flex; flex-wrap:wrap; column-gap:calc(9 * var(--vw));
+            max-width:calc(var(--kolonkaNav) * var(--vw) * 1.2); }
+  #widget .w-tau { width:calc(40 * var(--vw)); height:calc(10 * var(--vw)); opacity:.3; }
+  #widget .w-tau svg { width:100%; height:100%; }
+  #widget .w-logo { grid-area:2/2; position:relative;
+            width:calc(var(--logoW) * var(--vw));
+            height:calc(var(--logoW) * var(--vw) * 44 / 134);
+            transform:translateY(calc(-80 * var(--vw))); }
+  #widget .w-logo svg { width:100%; height:100%; }
+
+  /* Видео-виджет справа: чёрная плашка 182×228, обложка внизу, подпись сверху. */
+  #video { position:fixed; z-index:100; top:0; right:0; height:100vh; pointer-events:none;
+           padding-right:calc(5 * var(--vw)); }
+  #video .v-box { position:relative; top:calc(5 * var(--vw)); background:#000; overflow:hidden;
+           width:calc(var(--videoW) * var(--vw)); height:calc(var(--videoH) * var(--vw)); }
+  #video .v-title { position:absolute; top:calc(59 * var(--vw)); left:50%;
+           transform:translateX(-50%); white-space:nowrap;
+           font-size:calc(var(--keglSlug) * var(--vw)); font-weight:var(--vesZag); }
+  #video .v-cover { position:absolute; left:calc(10 * var(--vw)); right:calc(10 * var(--vw));
+           bottom:calc(55 * var(--vw)); aspect-ratio:2; background:var(--tsvet-akcenta);
+           display:grid; place-items:center; overflow:hidden; }
+  #video .v-box { background:transparent; }
+  #video .v-cover svg { width:44%; height:auto; }
+  #video .v-cover svg path { fill:var(--tsvet-nabora); }
+
+  /* Ниже порога навбар уходит вниз строкой — тот же рубеж, что у модуля. */
+  #navbar[data-tesno="1"] { top:auto; bottom:0; height:auto; width:100vw; padding:calc(12 * var(--vw));
+           flex-direction:row; align-items:center; justify-content:space-between;
+           background:color-mix(in srgb, var(--fon-doma) 90%, transparent); backdrop-filter:blur(10px); }
+  #navbar[data-tesno="1"] #menu { grid-template-columns:1fr; gap:0; }
+  #navbar[data-tesno="1"] #menu .page { display:flex; gap:calc(16 * var(--vw));
+           margin:0; overflow-x:auto; }
+  #navbar[data-tesno="1"] #menu .stranica:last-child, #navbar[data-tesno="1"] #widget,
+  #navbar[data-tesno="1"] #menu .glava { display:none; }
+  #navbar[data-tesno="1"] ~ #video { display:none; }
+
+  #dom { position:relative; z-index:1; padding-bottom:var(--mesto-lifta, 0px); }
+
+  /* ── Общее устройство этажа ─────────────────────────────────────── */
+  .etazh { display:flex; flex-direction:column; align-items:center;
+           gap:calc(var(--ritm) * var(--vw));
+           padding-top:calc(var(--vozduh) * var(--vw));
+           padding-bottom:calc(var(--podval) * 1vh);
+           padding-inline:calc(var(--polyaDoma) * var(--vw)); }
+  .stopka { width:100%; display:flex; flex-direction:column; align-items:center;
+            gap:calc(var(--ritm) * var(--vw));
+            max-width:min(calc(var(--lenta) * var(--opora) * var(--vw) / 100),
+                          calc(100vw - var(--polyaDoma) * var(--vw) * 2)); }
+  .kart { position:relative; width:100%;
+          border-radius:calc(var(--radius) * var(--vw));
+          padding:calc(var(--poleV) * var(--vw)) calc(var(--poleH) * var(--vw));
+          display:flex; flex-direction:column; gap:calc(var(--zazor) * var(--vw));
+          background:var(--zalivka); will-change:opacity,transform; }
+  .zag { font-size:calc(var(--kegl) * var(--vw)); line-height:var(--inter);
+         font-weight:var(--vesZag); }
+  .opis { font-size:calc(var(--kegl) * var(--vw) * .84); line-height:calc(var(--inter) * 1.1);
+          font-weight:var(--vesOpis); opacity:.62; }
+
+  /* ── Герой ──────────────────────────────────────────────────────── */
+  /* Титул прижат к низу экрана отбивкой, а не поставлен в середину:
+     justify-content:flex-end + padding-bottom. Ширина колонки титула —
+     та самая, из-за которой строка ломается на три. */
+  .geroy { height:100vh; justify-content:flex-end; align-items:center; gap:0;
+           padding-bottom:calc(var(--otbivka) * var(--vw)); padding-top:0; }
+  /* Титул живёт своим кеглем: до 04.09 здесь стоял --kegl, и ручка
+     «Кегль титула» (96) не двигала титул вовсе — она правила одну лишь
+     цену билета, которая от неё считается. */
+  .geroy .titul { max-width:calc(var(--kolonkaTitula) * var(--vw)); text-align:center;
+                  font-size:calc(var(--keglTitul) * var(--vw)); font-weight:var(--vesZag);
+                  line-height:var(--inter); letter-spacing:-.02em; }
+  .geroy .stroka { display:block; }
+  .geroy .data { margin-top:calc(10 * var(--vw)); font-weight:var(--vesZag);
+                 letter-spacing:-.01em; font-size:calc(var(--kegl) * var(--vw) * .67); }
+  .geroy .shevron { margin-top:calc(20 * var(--vw)); opacity:.65;
+                    font-size:calc(var(--kegl) * var(--vw) * .8); }
+
+  /* ── Лента карточек с картинками ────────────────────────────────── */
+  /* Закон 2 «Пересчёт»: колонок столько, сколько влезет. Задана только
+     минимальная колонка; ниже порога модуль замер — сетка сама сходится в одну. */
+  .lenta-ryad { display:grid; width:100%;
+                grid-template-columns:repeat(auto-fit,
+                    minmax(min(calc(var(--kolonka) * var(--vw)), 100%), 1fr));
+                gap:calc(var(--ritm) * var(--vw)); }
+  .lenta-ryad .kart { padding:calc(var(--poleV) * var(--vw) * .5); }
+  .lenta-ryad img { width:100%; aspect-ratio:1; object-fit:cover;
+                    border-radius:calc(var(--radius) * var(--vw) * .7); }
+
+  /* ── Спикеры ────────────────────────────────────────────────────── */
+  .spikery-setka { display:grid; width:100%;
+                   grid-template-columns:repeat(auto-fit,
+                       minmax(min(calc(var(--kolonka) * var(--vw)), 100%), 1fr));
+                   gap:calc(var(--ritm) * var(--vw)); }
+  .spiker { display:flex; flex-direction:column; gap:calc(var(--zazor) * var(--vw) * .5);
+            align-items:flex-start; }
+  .spiker img { width:calc(var(--foto) * var(--vw)); height:calc(var(--foto) * var(--vw));
+                object-fit:cover; border-radius:50%; }
+  .spiker .imya { font-size:calc(var(--kegl) * var(--vw) * .9); font-weight:var(--vesZag); }
+  .spiker .dolzh { font-size:calc(var(--kegl) * var(--vw) * .74); opacity:.55;
+                   line-height:calc(var(--inter) * 1.05); }
+  .spiker > div { min-width:0; }
+  .spiker[data-hed="1"] img { width:calc(var(--foto) * var(--vw) * 1.5);
+                              height:calc(var(--foto) * var(--vw) * 1.5); }
+
+  /* ── Столбец нумерованных карточек ──────────────────────────────── */
+  .stolbec .kart { max-width:min(calc(var(--kart) * var(--opora) * var(--vw) / 100),
+                                 calc(100vw - var(--polyaDoma) * var(--vw) * 2));
+                   align-self:center; text-align:center;
+                   padding-bottom:calc(var(--poleV) * var(--vw) * 1.34); }
+  .nomer { width:calc(var(--nomer) * var(--vw)); height:calc(var(--nomer) * var(--vw));
+           border-radius:50%; margin-left:auto; display:grid; place-content:center;
+           background:var(--tsvet-akcenta); color:var(--fon-doma);
+           font-size:calc(var(--nomer) * var(--vw) * .52); font-weight:var(--vesZag); line-height:1; }
+
+  /* ── Программа ──────────────────────────────────────────────────── */
+  .blok { width:100%; }
+  .blok .metka { font-size:calc(var(--keglSlug) * var(--vw)); opacity:.45;
+                 margin-bottom:calc(var(--zazor) * var(--vw)); }
+  .blok ul { list-style:none; display:flex; flex-direction:column;
+             gap:calc(var(--zazor) * var(--vw) * .6); margin-top:calc(var(--zazor) * var(--vw)); }
+  .blok li { position:relative; padding-left:calc(var(--zazor) * var(--vw) * 1.6);
+             font-size:calc(var(--kegl) * var(--vw) * .84); line-height:calc(var(--inter) * 1.1);
+             opacity:.72; }
+  .blok li:before { content:''; position:absolute; left:0; top:calc(var(--kegl) * var(--vw) * .38);
+             width:calc(var(--nomer) * var(--vw) * .22); height:calc(var(--nomer) * var(--vw) * .22);
+             border-radius:50%; background:var(--tsvet-akcenta); }
+  .blok .ryad-spikerov { display:flex; flex-wrap:wrap; gap:calc(var(--ritm) * var(--vw));
+             margin-top:calc(var(--ritm) * var(--vw)); }
+  .blok .ryad-spikerov .spiker { flex-direction:row; align-items:center;
+             gap:calc(var(--zazor) * var(--vw)); }
+  .blok .ryad-spikerov img { width:calc(var(--foto) * var(--vw) * .62);
+             height:calc(var(--foto) * var(--vw) * .62); }
+
+  /* ── Билеты ─────────────────────────────────────────────────────── */
+  .bilet .cena { font-size:calc(var(--keglCeny) * var(--vw)); font-weight:var(--vesZag); }
+  .bilet ul { list-style:none; display:flex; flex-direction:column;
+              gap:calc(var(--zazor) * var(--vw) * .5); }
+  .bilet li { font-size:calc(var(--kegl) * var(--vw) * .84); opacity:.72; }
+  .bilet .snoska { font-size:calc(var(--keglSlug) * var(--vw)); opacity:.4; }
+  .knopka { align-self:flex-start; padding:calc(14 * var(--vw)) calc(28 * var(--vw));
+            border-radius:calc(40 * var(--vw)); background:var(--tsvet-akcenta);
+            color:var(--fon-doma); font-weight:var(--vesZag); border:0; cursor:pointer;
+            font-size:calc(var(--kegl) * var(--vw) * .84); font-family:inherit; }
+
+  /* ── Контакты ───────────────────────────────────────────────────── */
+  .kontakty .karta { width:100%; border-radius:calc(var(--radius) * var(--vw));
+                     aspect-ratio:16/7; object-fit:cover; }
+  .kontakty .pochta { font-size:calc(var(--kegl) * var(--vw) * 1.1);
+                      font-weight:var(--vesZag); color:var(--tsvet-akcenta); }
+
+  /* ── Подвал ─────────────────────────────────────────────────────── */
+  #podval { position:relative; z-index:1; display:flex; flex-wrap:wrap;
+            justify-content:space-between; gap:calc(var(--ritm) * var(--vw));
+            padding:calc(var(--vozduh) * var(--vw) * .4) calc(var(--polyaDoma) * var(--vw));
+            font-size:calc(var(--keglSlug) * var(--vw)); opacity:.6; }
+</style>
+</head>
+<body>
+
+<div id="fony"></div>
+<nav id="navbar">
+  <div id="menu"></div>
+  <div id="widget"></div>
+</nav>
+<aside id="video"></aside>
+<main id="dom"></main>
+<footer id="podval"></footer>
+
+<script src="/headconf-data.js"></script>
+<script src="/panel.js"></script>
+<script src="/panel-lib/obyavlenie.js"></script>
+<script src="/panel-lib/inspektor.js"></script>
+<script src="/panel-lib/nasledovanie.js"></script>
+<script src="/panel-lib/garnitura.js"></script>
+<script src="/panel-lib/zametka.js"></script>
+<script src="/panel-lib/datchik.js"></script>
+<script src="/panel-lib/para.js"></script>
+<script src="/panel-lib/palitra.js"></script>
+<script src="/panel-lib/sloty.js"></script>
+<script src="/panel-lib/otkat.js"></script>
+<script>
+/* ─────────────────────────────────────────────────────────────────────
+   ЭТАЖ — страница headconf, разобранная на этажи и собранная заново
+   на панельной библиотеке. Семь этажей, у каждого своя конструкция,
+   размеры у всех — из одного дом-закона.
+
+   ЗАКОН ДОМА. Смотрит: на окно (ширина). Реагирует: плавно до порога,
+   на пороге — щелчком. Закон 3 (Доли и коридор) + закон 1 (Перелом):
+   размеры считаются от модуля --vw = 100vw / опорная ширина, поэтому
+   на любой ширине это та же композиция в другом кегле. Ниже порога
+   модуль замирает (--vw = 1px), числа становятся пиксельными, лифт
+   уходит вниз строкой. Один рубеж на дом, других переломов нет.
+
+   ЗАКОН ЭТАЖА. Смотрит: на окно (положение блока по высоте).
+   Реагирует: плавно. Закон 15 (Протяжка): непрозрачность, подъём и
+   масштаб блока — функция расстояния его середины до середины окна,
+   пропущенная через кривую. Номер блока в счёте не участвует.
+
+   ФОН. Смотрит: на окно (какой этаж занял середину). Реагирует:
+   щелчком. Закон 13 (Рубеж ◌) — кандидат, стенд первый прецедент:
+   фон живёт на неподвижном слое, этаж зажигает свой.
+
+   ПРИЁМЫ. «Расфокус» (склад): величина берётся из положения на
+   экране, а не из номера. «Наследование дом → этаж» (панель): закон
+   один на страницу, этаж отступает, точка справа возвращает к закону.
+
+   ПАНЕЛЬ одна на весь дом. Этажи разведены адресом правки: инспектор
+   держит, кого правим, наследование — значения по адресу. Клик по
+   этажу на макете ставит адрес сам.
+
+   ГАРНИТУРА. hh sans — гарнитура макета, три веса одним семейством
+   (400 / 500 / 700 Display), взята из сборки сайта по прямой просьбе
+   ради аутентичности. В алфавите свода её нет: заимствование названо
+   здесь. Файлы и фотографии лицензионные — стенд остаётся локальным.
+
+   ПАМЯТЬ. Значения живут в localStorage под ключом etazh-params и
+   помечены версией набора (DEFAULTS.v). Сменился СОСТАВ ручек — версия
+   поднимается, сохранёнка отбрасывается вместе с привычками руки
+   (набор вида, свёрнутые секции, порядок кластеров): иначе стенд
+   открывается вперемешку двух своих редакций и выглядит чужим.
+   Заводские отступления этажей лежат в самих умолчаниях, поэтому
+   сброс возвращает не голый закон, а макет.
+
+   Параметры адреса: ?stop=мс (стоп-кадр: мс переводятся в прокрутку
+   из расчёта экран в секунду), ?reset=1, ?theme=nothing, ?mesto=Имя,
+   ?nabor=имя.
+   ───────────────────────────────────────────────────────────────── */
+
+var EASES = {
+  'линейный':   function (t) { return t; },
+  'разгон':     function (t) { return t * t * t; },
+  'торможение': function (t) { return 1 - Math.pow(1 - t, 3); },
+  'плавный':    function (t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; },
+  'выброс':     function (t) { var c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); },
+};
+var BEZ_APPROX = {
+  'линейный':   [0.25, 0.25, 0.75, 0.75], 'разгон': [0.32, 0, 0.67, 0],
+  'торможение': [0.33, 1, 0.68, 1], 'плавный': [0.65, 0, 0.35, 1],
+  'выброс':     [0.34, 1.56, 0.64, 1],
+};
+function cubicBezierY(b, t) {
+  var x1 = b[0], y1 = b[1], x2 = b[2], y2 = b[3], s = t;
+  for (var i = 0; i < 8; i++) {
+    var x = 3 * (1 - s) * (1 - s) * s * x1 + 3 * (1 - s) * s * s * x2 + s * s * s;
+    var dx = 3 * (1 - s) * (1 - s) * x1 + 6 * (1 - s) * s * (x2 - x1) + 3 * s * s * (1 - x2);
+    if (Math.abs(dx) < 1e-6) break;
+    s -= (x - t) / dx; if (s < 0) s = 0; if (s > 1) s = 1;
+  }
+  return 3 * (1 - s) * (1 - s) * s * y1 + 3 * (1 - s) * s * s * y2 + s * s * s;
+}
+function evalEase(name, bez, t) {
+  if (name === 'bezier') return cubicBezierY(bez, t);
+  return (EASES[name] || EASES['торможение'])(t);
+}
+function bezCss(name, bez) {
+  var b = name === 'bezier' ? bez : (BEZ_APPROX[name] || BEZ_APPROX['торможение']);
+  return 'cubic-bezier(' + b.join(',') + ')';
+}
+
+/* ── ЗНАЧЕНИЯ ─────────────────────────────────────────────────────── */
+var DEFAULTS = {
+  // дом
+  opora: 1400, porog: 1200, polyaDoma: 24,
+  garnitura: 'hh sans', vesZag: '700', vesOpis: '400',
+  fonDoma: '#1d0202', akcent: '#f80c24', nabor: '#ffbfef',
+  plotnost: 15, mutnost: 34, inter: 118, keglSlug: 12, tusklyy: '#774e61',
+  shtora: 46, poleVerh: 38, kolonkaNav: 170, keglMenu: 14, vysotaWidget: 130,
+  logoW: 134, videoW: 182, videoH: 228, palitra: 'maket',
+  // закон этажа — у каждого может быть отступление
+  kegl: 21, keglTitul: 21, keglCeny: 40, otbivka: 195, kolonkaTitula: 444, lenta: 62, kart: 24, radius: 40,
+  poleV: 30, poleH: 30, zazor: 15, ritm: 20, vozduh: 140, podval: 30,
+  nomer: 21, foto: 100, kolonka: 300, fonEtazha: '#340000',
+  // приход блока
+  koridor: 60, podem: 90, masshtab: 6, tusklost: 12,
+  prihodEase: 'торможение', prihodBez: [0.33, 1, 0.68, 1],
+  // фон
+  fonMs: 420, fonEase: 'плавный', fonBez: [0.65, 0, 0.35, 1], glubina: 22,
+  // адрес правки и отступления этажей (завод — ниже, в DEFAULTS.otkloneniya)
+  aktivnyi: '', otkloneniya: {},
+  /* Версия набора значений (служебное, объявлено в sluzhebnye — в отчёт
+     правок и в адрес не идёт). Ключ хранилища у стенда один, а состав
+     ручек за день менялся дважды: сначала три выдуманных этажа, потом
+     семь настоящих с другими величинами. Сохранёнка от прежнего состава
+     подмешивалась в новый молча — ручки стояли не там, куда их ставит
+     закон, а заводские отступления не ставились вовсе, потому что их
+     ставило условие «хранилище пусто», а оно было ложно. Версия — застава:
+     не совпала, сохранённое не подмешиваем и завод ставим заново.
+     Поднимать при смене СОСТАВА ручек, а не при правке числа. */
+  v: 3,   // служебное: версия набора значений, без ручки
+};
+/* ЗАВОДСКИЕ ОТСТУПЛЕНИЯ — часть умолчаний, а не разовая посадка.
+   Этаж не обязан жить законом, если по макету он другой. Раньше завод
+   ставился условием «хранилище пусто» — и не ставился уже никогда,
+   стоило один раз открыть стенд; а сброс (кнопка и ?reset=1) возвращал
+   этажи к голому закону, потому что в умолчаниях завода не было. Место
+   заводу — в DEFAULTS: тогда первый заход и сброс дают одно и то же. */
+var ZAVOD = {
+  glavnaya:     { vozduh: 0, podval: 0, koridor: 100 },
+  meropriyatie: { kolonka: 300, lenta: 78, ritm: 16 },
+  spikery:      { kolonka: 250, lenta: 78, ritm: 40, foto: 100 },
+  temy:         { lenta: 24, ritm: 20, podval: 40 },
+  programma:    { lenta: 62, ritm: 64, kegl: 28 },
+  bilety:       { lenta: 62, ritm: 24 },
+  kontakty:     { lenta: 78, ritm: 20, podval: 10 },
+};
+function kopiya(o) { return JSON.parse(JSON.stringify(o)); }
+DEFAULTS.otkloneniya = kopiya(ZAVOD);
+
+/* ЧТЕНИЕ СОХРАНЁНКИ ЧЕРЕЗ ЗАСТАВУ. Две проверки, обе нужны:
+   версия — от смены состава ручек, отбор по ключам DEFAULTS — от ключей,
+   которых в стенде уже нет (--liftZazor жил так полдня). */
+var P = Object.assign({}, DEFAULTS);
+/* Гнездо-объект — копией, не ссылкой: Object.assign копирует ссылку, и
+   правка отступления этажа писалась бы разом в P и в DEFAULTS. Тогда
+   отчёт правок не видит ни одного отступления (они «равны умолчанию»),
+   а сброс не возвращает закон. */
+P.otkloneniya = kopiya(DEFAULTS.otkloneniya);
+var SOHR = null;
+try { SOHR = JSON.parse(localStorage.getItem('etazh-params') || 'null'); } catch (e) {}
+if (SOHR && SOHR.v === DEFAULTS.v) {
+  Object.keys(DEFAULTS).forEach(function (k) {
+    if (SOHR[k] !== undefined) P[k] = SOHR[k];
+  });
+} else {
+  if (SOHR) console.info('Этаж: сохранённые значения от версии ' + SOHR.v +
+    ' отброшены — состав ручек с тех пор сменился (сейчас ' + DEFAULTS.v + ').');
+  /* Привычки руки хранятся отдельными ключами библиотеки и переживают
+     и сброс значений, и ?reset=1: выбранный набор вида, свёрнутые
+     секции, переставленные кластеры. От прежнего состава секций они
+     врут громче самих значений — набор «дом» показывает одну секцию из
+     шести, и панель выглядит чужой. Сносим вместе с версией.
+     (Заявка в свод: это дело библиотеки — StendPanel.zabyt(storageKey).) */
+  ['etazh-params', 'stend-nabor:etazh-params', 'stend-panel-folds:etazh-params',
+   'stend-panel-poryadok:etazh-params'].forEach(function (k) {
+    try { localStorage.removeItem(k); } catch (e) {}
+  });
+  SOHR = null;
+}
+if (!P.otkloneniya || typeof P.otkloneniya !== 'object') P.otkloneniya = kopiya(ZAVOD);
+function zn(k, id) { return StendPanel.znachenie(P, k, id); }
+
+var MESTA = {}, IMENA_MEST = [];
+ETAZHI.forEach(function (e) {
+  MESTA[e.imya] = { gde: '#etazh-' + e.id, etazh: e.id };
+  IMENA_MEST.push(e.imya);
+});
+/* Навбар и видео-виджет этажами не являются: они стоят на неподвижном
+   слое и живут поверх всех семи. Место у них есть — правка двигает их и
+   только их, — а адреса правки нет: клик по ним инспектор не переводит
+   (форма без поля etazh). IMENA_MEST остаётся списком одних этажей:
+   секции этажей ссылаются на него, и навбар туда попасть не должен. */
+MESTA['Навбар'] = '#navbar';
+MESTA['Видео'] = '#video';
+
+/* ── ПАНЕЛЬ (ручки раньше эффекта) ───────────────────────────────── */
+var PANEL = StendPanel.build({
+  storageKey: 'etazh-params',
+  params: P, defaults: DEFAULTS,
+  sluzhebnye: ['v'],   // версия набора — не величина: в отчёт правок и адрес не идёт
+  eases: EASES, evalEase: evalEase, bezApprox: BEZ_APPROX,
+  zakon: [
+    ['h', 'Дом'],
+    ['', 'Закон дома', 'заметка', { tekst: 'Все размеры считаются от одного модуля: ' +
+      '100vw ÷ опорная ширина. Ниже порога модуль замирает, числа становятся ' +
+      'пиксельными, навбар уходит вниз строкой. Это единственный рубеж дома.' }],
+    // Сетка дома
+    /* Опорная ширина в таблицу не влезла: «размер» кончается на 800, а
+       ширина макета начинается за тысячей. Перебивка вынужденная —
+       кандидат в свод отдельным типом («формат»: ширина макета/полосы). */
+    ['opora',     'Опорная ширина макета', 'размер',    { ot0: 800, do: 2400, shag: 20 }],
+    ['porog',     'Порог замирания',       'порог'],
+    ['polyaDoma', 'Поля дома',             'поле',      { do: 120 }],
+    // Набор
+    ['garnitura', 'Гарнитура',             'гарнитура', { iz: [
+        ['hh sans', 'гарнитура макета'], ['Pragmatica Next VF', 'переменный гротеск'],
+        ['Editorial New', 'антиква набора'], ['Even Mono', 'моно'],
+        ['JetBrains Mono', 'моно'], ['Times New Roman', 'системная антиква']] }],
+    ['vesZag',    'Вес заголовка',         'выбор',     { iz: [
+        ['400', 'обычный'], ['500', 'средний'], ['700', 'плотный']] }],
+    ['vesOpis',   'Вес описания',          'выбор',     { iz: [
+        ['400', 'обычный'], ['500', 'средний'], ['700', 'плотный']] }],
+    ['keglSlug',  'Кегль служебного слоя', 'кегль'],
+    ['inter',     'Интерлиньяж',           'доля',      { ot: 'кегль', ot0: 90, do: 200 }],
+    // Цвет
+    ['fonDoma',   'Фон дома',              'цвет'],
+    ['akcent',    'Акцент',                'цвет'],
+    ['nabor',     'Набор',                 'цвет'],
+    ['tusklyy',   'Приглушённый',          'цвет'],
+    ['plotnost',  'Заливка карточки',      'сила',      { do: 60 }],
+    ['mutnost',   'Мутность карточки',     'сила'],
+    ['shtora',    'Штора над фоном',       'сила'],
+
+    ['h', 'Навбар', { gde: 'Навбар' }],
+    ['poleVerh',  'Поле сверху и снизу',   'поле',      { do: 120 }],
+    ['kolonkaNav','Колонка навбара',       'размер',    { ot0: 80, do: 400 }],
+    ['keglMenu',  'Кегль меню',            'кегль'],
+    ['vysotaWidget','Высота виджета',      'размер',    { ot0: 40, do: 400 }],
+    ['logoW',     'Ширина логотипа',       'размер',    { ot0: 40, do: 400 }],
+
+
+    ['h', 'Этажи и закон', { gde: IMENA_MEST }],
+    ['', 'Закон и отступление', 'заметка', { tekst: 'Величина живёт одна на весь дом. ' +
+      'Выбери этаж в «Правим» — точка справа даст ему отступление, нажатие на неё ' +
+      'вернёт к закону. Клик по этажу на макете ставит адрес правки сам.' }],
+    ['aktivnyi',  'Правим',                'этажи',     { iz: ETAZHI.map(function (e) { return [e.id, e.imya]; }) }],
+    ['kegl',      'Кегль',                 'кегль',     { k: 'этаж' }],
+    ['keglCeny',  'Кегль цены',            'кегль крупный', { k: 'этаж' }],
+    ['keglTitul', 'Кегль титула',          'кегль крупный', { k: 'этаж' }],
+    ['otbivka',   'Отбивка титула снизу',  'поле',      { k: 'этаж' }],
+    ['kolonkaTitula', 'Колонка титула',    'размер',    { k: 'этаж', ot0: 100 }],
+    /* Ширина ленты за таблицу вылезла по делу: опора «ширина» кончается
+       на 70%, а по макету лента спикеров и контактов идёт в 78%, полный
+       разворот — 100%. Вторая заявка в свод: потолок опоры «ширина». */
+    ['lenta',     'Ширина ленты',          'доля',      { ot: 'ширина', k: 'этаж', ot0: 10, do: 100, shag: 1 }],
+    ['kart',      'Ширина карточки',       'доля',      { ot: 'ширина', k: 'этаж', ot0: 8, shag: 1 }],
+    ['kolonka',   'Минимальная колонка',   'размер',    { k: 'этаж', ot0: 80 }],
+    ['radius',    'Скругление',            'длина',     { k: 'этаж', do: 120 }],
+    ['poleV',     'Поле сверху и снизу',   'поле',      { k: 'этаж', do: 120 }],
+    ['poleH',     'Поле по бокам',         'поле',      { k: 'этаж', do: 120 }],
+    ['zazor',     'Зазор внутри',          'зазор',     { k: 'этаж' }],
+    ['ritm',      'Пауза между блоками',   'зазор',     { k: 'этаж' }],
+    ['vozduh',    'Воздух сверху',         'поле',      { k: 'этаж' }],
+    ['podval',    'Подвал этажа',          'доля',      { ot: 'экран', k: 'этаж' }],
+    /* Кружок номера и кружок портрета меряются диаметром и обязаны
+       доходить до нуля («этаж без номеров», «этаж без портретов»).
+       «Размер» начинается с 20 и нуля не даёт — поэтому оба идут
+       «длиной» (0…160), общим случаем длины, а не размером элемента. */
+    ['nomer',     'Номер: диаметр',        'длина',     { k: 'этаж' }],
+    ['foto',      'Портрет: диаметр',      'длина',     { k: 'этаж' }],
+    ['fonEtazha', 'Фон этажа',             'цвет',      { k: 'этаж' }],
+
+    ['h', 'Приход блока', { gde: IMENA_MEST }],
+    ['', 'Закон прихода', 'заметка', { tekst: 'Сила прихода берётся из расстояния блока ' +
+      'до середины окна, а не из его номера. Коридор задаёт, где приход завершён; ' +
+      'датчик ниже показывает форму закона.' }],
+    ['koridor',    'Коридор прихода',      'доля',      { ot: 'экран', k: 'этаж', ot0: 5, do: 100, shag: 1 }],
+    ['podem',      'Подъём',               'путь',      { k: 'этаж', do: 400 }],
+    ['masshtab',   'Съём масштаба',        'сила',      { k: 'этаж', do: 40 }],
+    ['tusklost',   'Тусклость вдали',      'сила'],
+    ['prihodEase', 'Кривая прихода',       'кривая'],
+
+    ['h', 'Фон этажа', { gde: IMENA_MEST }],
+    ['', 'Закон фона', 'заметка', { tekst: 'Фон живёт на неподвижном слое. Этаж, занявший ' +
+      'середину окна, зажигает свой — смена идёт временем и кривой, а не положением.' }],
+    ['fonMs',     'Проявление фона',       'время'],
+    ['fonEase',   'Кривая проявления',     'кривая'],
+    ['glubina',   'Глубина параллакса',    'сила'],
+    ['h', 'Профиль и инструмент'],
+    // Датчик рисует тот же закон, который крутят ручки выше: вслепую не крутится.
+    // Опции идут через iz — объявление кладёт их в ту позицию, откуда орган читает.
+    ['profil',  'Профиль прихода',  'датчик',  { iz: {
+        fn: function (x) {
+          var s = evalEase(P.prihodEase, P.prihodBez, Math.max(0, Math.min(1, 1 - x)));
+          return P.tusklost / 100 + (1 - P.tusklost / 100) * s;
+        }, x: [0, 1], y: [0, 1] } }],
+    /* Сцепки здесь нет намеренно: плашка видео не квадрат, замок свёл бы
+       ширину с высотой. (Через объявление она и не доехала бы: ветка
+       «пара» в obyavlenie.js opcii не передаёт — заявка в свод.) */
+    ['videoPara', 'Видео',          'пара',    { gde: 'Видео', iz: [
+        ['videoW', 'ширина', 'размер', { ot0: 60, do: 500 }],
+        ['videoH', 'высота', 'размер', { ot0: 60, do: 500 }]] }],
+    ['palitra', 'Палитра',          'палитра', { iz: [
+        ['maket', 'Макет headconf',  { fonDoma: '#1d0202', akcent: '#f80c24',
+                                       nabor: '#ffbfef', tusklyy: '#774e61' }],
+        ['noch',  'Ночь',            { fonDoma: '#0b0b0e', akcent: '#4d8dff',
+                                       nabor: '#e8e8ef', tusklyy: '#5a5a6b' }],
+        ['bw',    'Чёрное на белом', { fonDoma: '#ffffff', akcent: '#111111',
+                                       nabor: '#111111', tusklyy: '#8a8a8a' }]] }],
+    ['snimki',  'Снимки',           'снимки'],
+    ['pravki',  'Шаг назад',        'откат'],
+  ],
+  mesta: MESTA,
+  nabory: {
+    'все ручки': null,
+    'дом': ['Дом', 'Навбар'],
+    'этаж': ['Этажи и закон', 'Приход блока', 'Фон этажа'],
+    'инструмент': ['Профиль и инструмент'],
+  },
+  desc: {
+    opora: 'ширина макета, на которой числа закона равны пикселям; всё остальное — доля от неё',
+    porog: 'ниже этой ширины модуль замирает, раскладка переходит на пиксели, навбар уходит вниз строкой — единственный рубеж дома',
+    lenta: 'ширина содержимого этажа долей опорной ширины: у ленты и спикеров она шире, у столбца тем — уже',
+    keglTitul: 'кегль титула на главной; от него же считается цена билета',
+    fonEtazha: 'своё свечение этажа; на этажах с фотографией фон берётся с неё, и ручка там молчит — там правит «Штора над фоном»',
+    foto: 'диаметр круглого портрета спикера; хедлайнер берёт полтора от него, ноль убирает портреты вовсе',
+    nomer: 'диаметр кружка с номером в столбце тем; от него же считается точка маркера в программе',
+    kolonka: 'минимальная колонка сетки: счёт колонок из неё считается сам, числом не задаётся',
+    koridor: 'на каком расстоянии от середины окна блок приходит целиком, долей высоты экрана',
+    shtora: 'затемнение поверх фоновой фотографии, чтобы набор читался',
+    kegl: 'закон один на дом; выбери этаж в «Правим» — и точка справа даст ему отступление',
+    profil: 'форма закона прихода: слева блок в середине окна, справа — на краю коридора',
+    aktivnyi: 'адрес правки: пусто — правится закон, этаж — только его отступление; клик по этажу на макете ставит адрес сам',
+  },
+  onChange: perestroit,
+});
+
+/* ── СБОРКА ЭТАЖЕЙ ───────────────────────────────────────────────── */
+var dom = document.getElementById('dom'), fony = document.getElementById('fony'),
+    navbar = document.getElementById('navbar'), menu = document.getElementById('menu'),
+    widget = document.getElementById('widget'), video = document.getElementById('video'),
+    podval = document.getElementById('podval');
+var uzly = [];
+
+function el(tag, kl, tekst) {
+  var n = document.createElement(tag);
+  if (kl) n.className = kl;
+  if (tekst !== undefined) n.textContent = tekst;
+  return n;
+}
+function vstavitSvg(uzel, put) {
+  fetch(put).then(function (r) { return r.text(); })
+            .then(function (t) { uzel.innerHTML = t; })
+            .catch(function () {});
+}
+function kartinka(src, alt) {
+  var i = document.createElement('img');
+  i.src = src; i.alt = alt || ''; i.loading = 'lazy';
+  return i;
+}
+function spikerEl(s, hed) {
+  var w = el('div', 'spiker');
+  if (hed) w.dataset.hed = '1';
+  if (s.foto) w.appendChild(kartinka(s.foto, s.imya));
+  var t = el('div');
+  t.appendChild(el('div', 'imya', s.imya));
+  t.appendChild(el('div', 'dolzh', s.dolzh));
+  w.appendChild(t);
+  return w;
+}
+
+var RODY = {
+  geroy: function (e, sek) {
+    var t = el('h1', 'titul');
+    [e.titul].concat(e.stroki).forEach(function (x) { t.appendChild(el('span', 'stroka', x)); });
+    sek.appendChild(t);
+    sek.appendChild(el('div', 'data', e.data));
+    sek.appendChild(el('div', 'shevron', '⌄'));
+    return [t];
+  },
+  lenta: function (e, sek) {
+    var r = el('div', 'lenta-ryad');
+    var bloki = e.karty.map(function (k) {
+      var kart = el('article', 'kart');
+      kart.appendChild(kartinka(k.img, k.t));
+      kart.appendChild(el('div', 'zag', k.t));
+      r.appendChild(kart);
+      return kart;
+    });
+    var s = el('div', 'stopka'); s.appendChild(r); sek.appendChild(s);
+    return bloki;
+  },
+  spikery: function (e, sek) {
+    var g = el('div', 'spikery-setka');
+    var bloki = e.spikery.map(function (sp, i) {
+      var n = spikerEl(sp, sp.hedliner); g.appendChild(n); return n;
+    });
+    var s = el('div', 'stopka'); s.appendChild(g);
+    var b = el('button', 'knopka', e.eshchyo); s.appendChild(b);
+    sek.appendChild(s);
+    return bloki;
+  },
+  stolbec: function (e, sek) {
+    var s = el('div', 'stopka stolbec');
+    var bloki = e.karty.map(function (k, i) {
+      var kart = el('article', 'kart');
+      kart.appendChild(el('div', 'nomer', String(i + 1)));
+      kart.appendChild(el('h3', 'zag', k.z));
+      kart.appendChild(el('p', 'opis', k.o));
+      s.appendChild(kart);
+      return kart;
+    });
+    sek.appendChild(s);
+    return bloki;
+  },
+  programma: function (e, sek) {
+    var s = el('div', 'stopka');
+    var bloki = e.bloki.map(function (b) {
+      var n = el('article', 'blok');
+      n.appendChild(el('div', 'metka', 'Блок программы'));
+      n.appendChild(el('h3', 'zag', b.t));
+      n.appendChild(el('p', 'opis', b.o));
+      var ul = el('ul');
+      b.punkty.forEach(function (p) { ul.appendChild(el('li', '', p)); });
+      n.appendChild(ul);
+      if (b.spikery.length) {
+        var r = el('div', 'ryad-spikerov');
+        b.spikery.forEach(function (sp) { r.appendChild(spikerEl(sp)); });
+        n.appendChild(r);
+      }
+      s.appendChild(n);
+      return n;
+    });
+    sek.appendChild(s);
+    return bloki;
+  },
+  bilety: function (e, sek) {
+    var s = el('div', 'stopka');
+    var k1 = el('article', 'kart bilet');
+    k1.appendChild(el('h3', 'zag', e.bilet.t));
+    var ul = el('ul');
+    e.bilet.chto.forEach(function (x) { ul.appendChild(el('li', '', x)); });
+    k1.appendChild(ul);
+    k1.appendChild(el('div', 'cena', e.bilet.cena));
+    k1.appendChild(el('div', 'snoska', e.bilet.snoska));
+    k1.appendChild(el('button', 'knopka', e.bilet.knopka));
+    var k2 = el('article', 'kart');
+    k2.appendChild(el('h3', 'zag', e.skidka.t));
+    k2.appendChild(el('p', 'opis', e.skidka.o));
+    k2.appendChild(el('p', 'opis', e.skidka.kak));
+    k2.appendChild(el('div', 'pochta', e.skidka.pochta));
+    s.appendChild(k1); s.appendChild(k2); sek.appendChild(s);
+    return [k1, k2];
+  },
+  kontakty: function (e, sek) {
+    var s = el('div', 'stopka kontakty');
+    var karta = kartinka(e.karta, 'Карта'); karta.className = 'karta';
+    var k = el('article', 'kart');
+    k.appendChild(el('div', 'opis', 'Адрес:'));
+    k.appendChild(el('div', 'zag', e.ploshchadka));
+    k.appendChild(el('div', 'opis', e.adres));
+    k.appendChild(el('button', 'knopka', e.knopka));
+    var k2 = el('article', 'kart');
+    k2.appendChild(el('div', 'opis', e.pripiska));
+    k2.appendChild(el('div', 'pochta', e.pochta));
+    s.appendChild(karta); s.appendChild(k); s.appendChild(k2);
+    sek.appendChild(s);
+    return [karta, k, k2];
+  },
+};
+
+function sobrat() {
+  dom.innerHTML = ''; fony.innerHTML = ''; menu.innerHTML = ''; uzly = [];
+  var stranicy = el('div', 'stranicy');
+  var stranica = el('div', 'stranica'), spisok = el('ul', 'page');
+  stranica.appendChild(el('div', 'glava', ETAZHI[0].imya));
+  stranica.appendChild(spisok);
+  stranicy.appendChild(stranica); menu.appendChild(stranicy);
+  ETAZHI.forEach(function (e) {
+    var fon = el('div', 'fon');
+    if (e.fon) fon.style.backgroundImage = 'url("' + e.fon + '")';
+    fon.appendChild(el('div', 'fon-shtora'));
+    fony.appendChild(fon);
+
+    var sek = el('section', 'etazh ' + e.rod);
+    sek.id = 'etazh-' + e.id;
+    var bloki = RODY[e.rod](e, sek);
+    dom.appendChild(sek);
+
+    var knop = el('li', '', e.imya);
+    knop.onclick = function () { sek.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+    if (e !== ETAZHI[0]) spisok.appendChild(knop);   // первый этаж — заголовок страницы
+
+    uzly.push({ e: e, el: sek, bloki: bloki, fon: fon, knop: knop });
+  });
+
+  var proshloe = el('div', 'stranica');
+  proshloe.appendChild(el('div', 'glava', SHAPKA.proshloe));
+  stranicy.appendChild(proshloe);
+
+  // Нижний виджет навбара: дата, кнопка, адрес, логотип
+  widget.innerHTML = '';
+  var top = el('div', 'w-top'), data = el('div', 'w-date');
+  data.appendChild(el('span', 'w-month', SHAPKA.data[0]));
+  data.appendChild(el('span', 'w-year', SHAPKA.data[1]));
+  top.appendChild(data); widget.appendChild(top);
+  var main = el('div', 'w-main');
+  var kn = el('button', 'w-knopka');
+  kn.appendChild(el('span', 'plus', '+'));
+  kn.appendChild(el('span', '', SHAPKA.knopka));
+  main.appendChild(kn);
+  var ab = el('div', 'w-adres-box'), ad = el('div', 'w-adres');
+  SHAPKA.mesto.forEach(function (x) { ad.appendChild(el('span', '', x)); });
+  ab.appendChild(ad);
+  var tau = el('div', 'w-tau'); ab.appendChild(tau);
+  main.appendChild(ab);
+  var logo = el('a', 'w-logo'); main.appendChild(logo);
+  widget.appendChild(main);
+  vstavitSvg(tau, '/headconf-img/logo-tau.svg');
+  vstavitSvg(logo, '/headconf-img/logo-headconf.svg');
+
+  // Видео-виджет справа
+  video.innerHTML = '';
+  var box = el('div', 'v-box');
+  box.appendChild(el('div', 'v-title', SHAPKA.video));
+  var cover = el('div', 'v-cover'); box.appendChild(cover);
+  video.appendChild(box);
+  vstavitSvg(cover, '/headconf-img/rings-1.svg');
+
+  podval.innerHTML = '';
+  podval.appendChild(el('div', '', PODVAL.pochta));
+  podval.appendChild(el('div', '', PODVAL.god + ' · ' + PODVAL.firma));
+  PODVAL.ssylki.forEach(function (s) { podval.appendChild(el('div', '', s)); });
+}
+
+/* ── ЗАКОН ДОМА ──────────────────────────────────────────────────── */
+function perestroit() {
+  var r = document.documentElement.style;
+  var uzko = innerWidth < P.porog;
+  r.setProperty('--vw', uzko ? '1px' : (100 / P.opora) + 'vw');
+  r.setProperty('--opora', P.opora);
+  r.setProperty('--fon-doma', P.fonDoma);
+  r.setProperty('--tsvet-akcenta', P.akcent);
+  r.setProperty('--tsvet-nabora', P.nabor);
+  r.setProperty('--garnitura', '"' + String(P.garnitura).replace(/"/g, '') + '", "hh sans", sans-serif');
+  r.setProperty('--inter', P.inter / 100);
+  r.setProperty('--polyaDoma', P.polyaDoma);
+  r.setProperty('--keglSlug', P.keglSlug);
+  r.setProperty('--vesZag', P.vesZag);
+  r.setProperty('--vesOpis', P.vesOpis);
+  r.setProperty('--zalivka', P.nabor + ('0' + Math.round(P.plotnost * 2.55).toString(16)).slice(-2));
+  ['poleVerh', 'kolonkaNav', 'keglMenu', 'vysotaWidget', 'logoW', 'videoW', 'videoH']
+    .forEach(function (k) { r.setProperty('--' + k, P[k]); });
+  r.setProperty('--tsvet-tusklyy', P.tusklyy);
+  navbar.dataset.tesno = uzko ? '1' : '0';
+  r.setProperty('--mesto-lifta', uzko ? (navbar.getBoundingClientRect().height + 'px') : '0px');
+
+  uzly.forEach(function (u) {
+    var id = u.e.id, s = u.el.style;
+    ['kegl', 'keglTitul', 'keglCeny', 'otbivka', 'kolonkaTitula', 'lenta', 'kart', 'radius',
+     'poleV', 'poleH', 'zazor', 'ritm', 'vozduh', 'podval', 'nomer', 'foto', 'kolonka']
+      .forEach(function (k) { s.setProperty('--' + k, zn(k, id)); });
+    var fonEt = zn('fonEtazha', id);
+    if (!u.e.fon) {
+      u.fon.style.background =
+        'radial-gradient(120% 90% at 50% 30%, ' + fonEt + ' 0%, ' + P.fonDoma + ' 78%)';
+    }
+    u.fon.style.transition = 'opacity ' + P.fonMs + 'ms ' + bezCss(P.fonEase, P.fonBez);
+    u.fon.querySelector('.fon-shtora').style.background = u.e.fon
+      ? 'color-mix(in srgb, ' + P.fonDoma + ' ' + P.shtora + '%, transparent)' : 'transparent';
+    u.bloki.forEach(function (b) {
+      if (b.classList.contains('kart')) b.style.backdropFilter = P.mutnost ? 'blur(' + (P.mutnost / 4) + 'px)' : 'none';
+    });
+  });
+  prihod();
+}
+
+/* ── ЗАКОН ЭТАЖА: протяжка ───────────────────────────────────────── */
+function prihod() {
+  var seredina = innerHeight / 2, glavnyi = null, luchshe = Infinity;
+  uzly.forEach(function (u) {
+    var id = u.e.id;
+    var koridor = zn('koridor', id) / 100 * innerHeight;
+    var podem = zn('podem', id), mash = zn('masshtab', id) / 100, min = P.tusklost / 100;
+    u.bloki.forEach(function (b) {
+      var k = b.getBoundingClientRect();
+      var d = Math.abs(k.top + k.height / 2 - seredina);
+      var t = koridor > 0 ? Math.max(0, Math.min(1, 1 - d / koridor)) : 1;
+      var s = evalEase(P.prihodEase, P.prihodBez, t);
+      b.style.opacity = min + (1 - min) * s;
+      b.style.transform = 'translateY(' + ((1 - s) * podem) + 'px) scale(' + (1 - (1 - s) * mash) + ')';
+    });
+    var e = u.el.getBoundingClientRect();
+    var d2 = Math.abs(e.top + e.height / 2 - seredina);
+    if (e.bottom > seredina && e.top < seredina) d2 = 0;
+    if (d2 < luchshe) { luchshe = d2; glavnyi = u; }
+  });
+  uzly.forEach(function (u) {
+    var tut = u === glavnyi;
+    u.fon.style.opacity = tut ? 1 : 0;
+    u.fon.style.transform = 'translateY(' + (-scrollY * (P.glubina / 100) * 0.06) + 'px)';
+    u.knop.dataset.tut = tut ? '1' : '0';
+    if (u === uzly[0]) { var g = menu.querySelector('.glava');
+      if (g) g.style.color = tut ? 'var(--tsvet-nabora)' : 'var(--tsvet-tusklyy)'; }
+  });
+}
+
+var zhdyot = false;
+function poSkrollu() {
+  if (zhdyot) return;
+  zhdyot = true;
+  requestAnimationFrame(function () { zhdyot = false; prihod(); });
+}
+
+sobrat();
+perestroit();
+
+var adres = new URLSearchParams(location.search), stop = adres.get('stop');
+if (stop !== null) { scrollTo(0, Number(stop) / 1000 * innerHeight); prihod(); }
+else { addEventListener('scroll', poSkrollu, { passive: true }); }
+addEventListener('resize', function () { perestroit(); });
+</script>
+</body>
+</html>

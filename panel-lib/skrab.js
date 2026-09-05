@@ -42,7 +42,7 @@
    Значения в P не живут: фаза — жест, а не настройка, замедление — вид.  */
 (function () {
   var STIL = '.st-skrab{width:100%;display:flex;align-items:center;gap:8px;margin-top:5px}' +
-    '.st-skrab input{flex:1;accent-color:var(--st-accent);height:14px}' +
+    '.st-skrab .st-nitka{flex:1}' +
     '.st-skrab-k{all:unset;box-sizing:border-box;cursor:pointer;border-radius:6px;' +
     'padding:3px 8px;font:12px/1 var(--st-font);color:var(--st-text-2);' +
     'border:0.5px solid var(--st-hairline)}' +
@@ -119,19 +119,28 @@
       });
     }
 
-    // сам скраб: рука держит фазу, отпустила — ход продолжается
+    /* Сам скраб: рука держит фазу, отпустила — ход продолжается.
+       Г9: нитка — блок ядра (ход 64); прежде тут была своя, без заливки и
+       пилюли. Рука теперь берётся и за пилюлю, поэтому «держит» и «отпустила»
+       слушаются обоих: инпута и пилюли. */
     var inp = document.createElement('input');
-    inp.type = 'range'; inp.min = 0; inp.max = 1; inp.step = 0.002; inp.value = 0;
+    inp.value = 0;
+    var nb = StendPanel.nitkaBlok({
+      inp: inp, min: 0, max: 1, shag: 0.002,
+      tekst: function () { return (+inp.value).toFixed(2); }
+    });
     inp.addEventListener('pointerdown', function () { ruka = true; });
     inp.addEventListener('input', function () {
       ruka = true;
       var q = parseFloat(inp.value);
       faza(q); pokazatSrez(q);
     });
+    nb.pil.addEventListener('pointerdown', function () { ruka = true; });
     ['pointerup', 'pointercancel'].forEach(function (s) {
       inp.addEventListener(s, function () { ruka = false; faza(null); });
+      nb.pil.addEventListener(s, function () { ruka = false; faza(null); });
     });
-    box.appendChild(inp);
+    box.appendChild(nb.obl);
 
     /* Отражение: бегунок показывает правду стенда, когда рука не держит.
        Опрос таймером, не rAF: чтение одно, а таймеры живут и там, где
@@ -144,6 +153,7 @@
         var q = Math.max(0, Math.min(1, t.q));
         if (Math.abs(parseFloat(inp.value) - q) > 0.004) {
           inp.value = q;
+          nb.obnovit();          // пилюля и заливка идут за правдой стенда
           pokazatSrez(q);
         }
       }, 100);

@@ -110,30 +110,17 @@
   /* невидимая строка-линейка: в ней меряются слова для переноса */
   .meas{ position:absolute; left:0; top:0; visibility:hidden; white-space:pre; }
   /* степпер числа вершин оси */
-  .st-panel .ax-pts{ display:flex; gap:8px; align-items:center; }
-  .st-panel .ax-pts button{
-    width:26px; height:22px; border-radius:6px; border:0; cursor:pointer;
-    background:rgba(255,255,255,.14); color:#fff; font-size:14px; line-height:1;
-  }
-  .st-panel .ax-pts span{ min-width:18px; text-align:center; }
+  /* Г6, Г9: счёт вершин — общий степпер ядра (.st-stepper), а не свои
+     кнопки врозь. Здесь остаётся только место органа в строке. */
+  .st-panel .ax-pts{ margin-left:auto; }
   /* цвет оси/фона — образец, открывающий системную палитру */
   .st-panel .ax-colors{ display:flex; justify-content:flex-end; }
-  .st-panel .ax-colors input[type=color]{
-    width:48px; height:26px; padding:0; border:0;
-    border-radius:6px; background:none; cursor:pointer;
-  }
-  .st-panel .ax-colors input[type=color]::-webkit-color-swatch-wrapper{ padding:2px; }
+  /* свотч рисует ядро (.st-svotch) — свои стили нативного инпута сняты */
   .st-panel .ax-colors select{ margin-right:8px; }
   /* градиент оси: полоса с двумя стопами, как в графических редакторах */
   .st-panel .ax-grad{ display:flex; gap:8px; align-items:center; margin:2px 0 10px; }
-  .st-panel .ax-grad input[type=color]{
-    width:30px; height:22px; padding:0; border:0; border-radius:6px;
-    background:none; cursor:pointer; flex:none;
-  }
-  .st-panel .ax-grad input[type=color]::-webkit-color-swatch-wrapper{ padding:2px; }
-  .st-panel .ax-grad input[type=color]::-webkit-color-swatch{
-    border:none; border-radius:4px;
-  }
+  /* цвет стопа — свотч ядра (.st-svotch), нативного инпута здесь больше нет */
+  .st-panel .ax-grad .st-svotch{ flex:none; }
   .st-panel .ax-grad-strip{
     position:relative; flex:1; height:14px; border-radius:7px;
     box-shadow:inset 0 0 0 1px rgba(127,127,127,.35);
@@ -147,9 +134,7 @@
   .st-panel .ax-grad-strip .stop.sel{
     box-shadow:0 0 0 2px var(--st-accent, #0A84FF);
   }
-  .st-panel .ax-colors input[type=color]::-webkit-color-swatch{
-    border:1.5px solid rgba(255,255,255,.5); border-radius:5px;
-  }
+
   /* редактор оси: холст с пропорциями экрана, живёт в панели */
   .st-panel canvas.axis-ed{
     display:block; width:calc(100% - 24px); height:auto;
@@ -212,22 +197,86 @@
     position:fixed; inset:0; z-index:40; width:100vw; height:100vh;
     cursor:crosshair; touch-action:none;
   }
+  /* ── ВЕРХНИЙ РЯД ЭКРАННОЙ ЛЕПКИ (правка Сергея 04.09) ──────────────
+     Инструмент и выход стоят рядом, одним рядом в правом верхнем углу.
+     Прежде «гнуть» жила в левом нижнем — там же, где шестерня панели,
+     язык и меню стенда, и капсула пряталась под ними. Ряд держит зазор 8
+     и общую среднюю линию; «гнуть» — ЧИП ЯДРА (Г9), своей капсулы у неё
+     больше нет. */
+  .axis-verh{ position:fixed; top:16px; right:16px; z-index:41;
+    display:flex; align-items:center; gap:8px; }
   .axis-done{
-    position:fixed; top:16px; right:16px; z-index:41;
     padding:10px 18px; border:none; border-radius:999px;
     background:#ffffff; color:#4a4a4a; cursor:pointer;
     font:600 13px/1 -apple-system,"Helvetica Neue",Arial,sans-serif;
   }
   .axis-done:hover{ background:#f2f2f2; }
-  .st-panel .ax-screen{ margin-top:8px; }
+  /* На экране чип стоит поверх макета, а не на карточке панели: своя
+     подложка и размытие, чтобы читался на любой ленте. Высота остаётся
+     чиповой — 22 по Г8. */
+  .axis-verh .st-chip{ background:rgba(28,28,32,.86); border-color:transparent;
+    box-shadow:inset 0 0 0 .5px rgba(255,255,255,.16);
+    backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); }
+  /* Кнопка внутри КАРТОЧКИ, а не в подвале панели: там у кнопок свой ритм
+     (14 сверху, 2 снизу — они идут стопкой, и низ одной есть верх другой).
+     Здесь такого ритма нет, и двойка снизу прижимала кнопку к кромке: 19 px
+     сверху против 3 снизу (поймано Сергеем 03.09). Воздух вокруг неё —
+     ровно 10, как воздух в начале кластера. */
+  .st-panel .ax-screen{ margin-top:0; margin-bottom:10px; }
+  /* ── КНОПКА «ГНУТЬ» ЖИВЁТ НА ХОЛСТЕ (правка Сергея 03.09) ──────────
+     Инструмент стоит там, где работает рука, а не строкой выше: тянешься
+     к линии — тянешься и к режиму. Левый нижний угол холста и тот же угол
+     экрана в полноэкранной лепке: одно место в обоих окнах, привычка руки
+     одна. Г9 (04.09): в панели это ЧИП ЯДРА (.st-chip), своей кнопки больше
+     нет — от неё осталось только место на холсте: отступ от кромки 8, поле
+     малого органа по Г8. На экране стиль чипа ядра не действует (он живёт
+     под .st-panel), и капсула повторена своей: высота 34 — цель под руку
+     вдали от панели. Это Г9-хвост ядра, не стенда. */
+  /* Холст держит вертикаль кнопок панели — 14 по бокам, не 12 (П17:
+     рифмовка). Воздух сверху и снизу один: 10. */
+  .st-panel .axis-obl{ position:relative; margin:10px 14px; }
+  /* Пропорция холста — полтора экрана в ширину при экране в высоту (ED_X0…ED_X1),
+     как у прежнего буфера 600×380; сам буфер и dpr ставит ядро */
+  .st-panel .axis-obl canvas.axis-ed{ display:block; width:100%; aspect-ratio:600/380; margin:0; }
+  .st-panel .axis-obl .st-chip.axis-gnut{ position:absolute; left:8px; bottom:8px; z-index:2; }
   /* поле снимка настроек: видно глазами, что именно скопировано */
+  /* ── ПОЛЕ СНИМКА (правки Сергея 03.09) ────────────────────────────
+     По ширине КНОПОК, а не панели: оно стоит в их ряду и обязано держать
+     ту же вертикаль — иначе ряд рвётся. Полоса прокрутки — только бегунок,
+     без дорожки и без стрелок: дорожка белой лентой перебивала и текст, и
+     кнопки, а стрелка внизу давала цель, за которой никто не тянется.
+     Уголок тяги снят вместе с resize: высота поля — закон, а не настроение. */
+  .st-panel .snap-obl{ position:relative; margin: 6px 14px 0; }
   .st-panel .snap-box{
-    display:block; width:100%; height:120px; margin-top:6px;
-    box-sizing:border-box; padding:6px 8px; border-radius:8px;
+    display:block; width:100%; height:120px;
+    box-sizing:border-box; padding:6px 44px 6px 8px; border-radius:8px;
     border:1px solid rgba(255,255,255,.12); background:rgba(0,0,0,.35);
     color:#dcdcdc; font:400 10px/1.35 ui-monospace,Menlo,Consolas,monospace;
-    resize:vertical;
+    resize:none;
+    scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.35) transparent;
   }
+  .st-panel .snap-box::-webkit-scrollbar{ width:8px; }
+  .st-panel .snap-box::-webkit-scrollbar-track{ background:transparent; }
+  .st-panel .snap-box::-webkit-scrollbar-thumb{
+    background:rgba(255,255,255,.32); border-radius:4px;
+    border:2px solid transparent; background-clip:content-box;
+  }
+  .st-panel .snap-box::-webkit-scrollbar-thumb:hover{ background:rgba(255,255,255,.5); background-clip:content-box; }
+  /* стрелки полосы: цель, за которую никто не берётся */
+  .st-panel .snap-box::-webkit-scrollbar-button{ display:none; height:0; width:0; }
+  .st-panel .snap-box::-webkit-scrollbar-corner{ background:transparent; }
+  /* закрыть — крестик в углу поля, цель 22 по Г8 */
+  /* крестик левее полосы прокрутки: она идёт по самому краю поля,
+     и на одной вертикали они спорили за место */
+  .st-panel .snap-x{
+    all:unset; box-sizing:border-box; position:absolute; top:6px; right:14px;
+    width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center;
+    border-radius:50%; cursor:pointer; color:rgba(255,255,255,.6);
+    background:rgba(28,28,32,.9); box-shadow:inset 0 0 0 .5px rgba(255,255,255,.16);
+    font:13px/1 -apple-system,"Helvetica Neue",Arial,sans-serif;
+  }
+  .st-panel .snap-x:hover{ color:#fff; }
+  .st-panel .snap-x:focus-visible{ outline:2px solid #0A84FF; outline-offset:2px; }
   /* ── сотовое меню вариантов (перенос стенда «Hi Five») ──
      клик в любой точке экрана раскрывает шесть гекс-ячеек — по ячейке
      на вариант композиции; сота НЕПРОЗРАЧНА, в цветах текущего профиля */
@@ -292,6 +341,7 @@
 <div id="band"></div>
 
 <script src="/panel.js"></script>
+<script src="/panel-lib/uzly.js"></script>
 <script>
 (function () {
   'use strict';
@@ -517,7 +567,6 @@
     // ось = список вершин [t, x] в долях экрана (t — высота, x — ширина),
     // отсортирован по t; первая вершина на верхней кромке (t=0), последняя
     // на нижней (t=1), между ними сколько угодно свободных (2–12 всего).
-    // острота: 0 — гладкая кривая, 1 — ломаная.
     // нейтральные контуры «своей» лепки (наследие варианта A до
     // 2026-08-07 — с его третьей редакции инвариант «умолчания =
     // контуры A» закрыт): текст — трёхвершинная ломаная, номера —
@@ -525,8 +574,7 @@
     textPts: [[0, 0.35], [0.85, 0.755], [1, -0.215]],   // без ручки: холст-редактор оси
     // усики вершин [сдвиг по высоте, сдвиг по ширине] — направление
     // касательной вниз по потоку; null — авто (гладкая кривая как раньше)
-    textH: [[0.67, -0.77], [0.05, 0.13], [0.055, -0.9]], // без ручки: усики того же холста
-    textSharp: 1,
+    textH: [[0.67, 0.135, 0.67, -0.77], [0.05, -0.3233, 0.05, 0.135], [0.055, -0.9, 0.055, -0.3233]], // без ручки: усики того же холста
     textFlow: 0,          // ход между точками: 0 ровно, + липнет к вершинам
     textColor: '#7a7a7a',  // без ручки: орган «Заливка» текстовой оси (верхняя кромка)
     textColor2: '#7a7a7a', // без ручки: тот же орган, нижняя кромка (пара даёт градиент)
@@ -539,8 +587,7 @@
     bgColor: '#ffffff',   // без ручки: орган «Полоса → Фон»
     bgImage: '',          // без ручки: картинка фона грузится тем же органом
     numPts: [[0, 1.15], [1, 1.235]],   // без ручки: холст-редактор оси номеров
-    numH: [[0.595, -1.385], [0.165, 1.475]], // без ручки: усики того же холста
-    numSharp: 0,
+    numH: [[0.595, -1.385, 0.595, -1.385], [0.165, 1.475, 0.165, 1.475]], // без ручки: усики того же холста
     numFlow: 0,    // ход между точками оси номеров
     numSize: 18,   // кегль заголовков оси номеров, px; 0 — как основной кегль
     numWght: 700,  // толщина заголовков: два жирных веса на выбор (700/850)
@@ -551,8 +598,7 @@
     // плашки едут по текстовой оси, как раньше
     rectAxisOwn: 0,                // 0 — по текстовой оси, 1 — по своей
     rectPts: [[0, 0.5], [1, 0.5]], // без ручки: холст-редактор оси плашек
-    rectH: [null, null],           // без ручки: усики того же холста
-    rectSharp: 1,
+    rectH: [[0.3333, 0, 0, 0], [0, 0, 0.3333, 0]],           // без ручки: усики того же холста
     rectFlow: 0,
     textStops: null,    // без ручки: стопы градиента лепятся в органе заливки
     numStops: null,     // без ручки: то же для оси номеров
@@ -575,7 +621,12 @@
     hlColor: '#ffffff', // без ручки: орган «Полоса → Цвет выделений»
     comp: 'a',     // вариант композиции осей
     prof: 'own',   // цветовой профиль ('own' — своя лепка цветов)
-    v: 24,         // служебное: версия пресета для одноразовых миграций
+    /* Версия схемы в умолчаниях идёт вровень с последней миграцией: иначе
+       после её проката P.v уходит вперёд, и отчёт правок числит расхождение
+       правкой руки (так `v: 24 → 25` попал в эталон Сергея 03.09). Это
+       вторая застава к `sluzhebnye`, и она не зависит от того, свежий ли
+       код держит открытая вкладка. */
+    v: 25,         // служебное: версия пресета для одноразовых миграций
   };
   // мобильная версия — перефиксирована Сергеем 2026-08-06 и ПРИОРИТЕТНА:
   // на тач-устройствах и узких экранах всегда только эта композиция,
@@ -594,14 +645,14 @@
       trackFrom: 0, trackTo: 0.225, trackRes: 0.3, trackRel: 0.02, trackDist: 400,
       textPts: [[0, 0.535], [0.06, 0.045], [0.965, 0.055], [1, 0.575]],
       textH: [[0.055, -0.495], [0.035, -1.005], [0.05, 0.395], [0.05, -0.015]],
-      textSharp: 1, textFlow: 0,
+      textFlow: 0,
       textColor: '#adadad', textColor2: '#adadad',
       numColor: '#ff4015', numColor2: '#ff4015',
       textGrad: false, textPos1: 0, textPos2: 1, numGrad: false, numPos1: 0, numPos2: 1,
       bgColor: '#ffffff', bgImage: '',
       numPts: [[0, 0.13], [0.54, 0.405], [1, 1.185]],
       numH: [[0.405, 0.025], [0.09, 0.335], [0.29, 0.045]],
-      numSharp: 0, numFlow: -0.05,
+      numFlow: 0,
       comp: 'c',
     });
   }
@@ -798,6 +849,32 @@
     P.hexCrack = 8; P.hexVol = 0.6;
     P.v = 24;
   }
+  /* 2026-09-03: острота снята как величина — угол задаёт режим точки.
+     Сохранённая лепка переносится тем же счётом, каким пересчитаны
+     варианты: смешивание шло только по x, поэтому правятся x-половины
+     усиков, а t-половины остаются — параметр решается по ним, и форма
+     совпадает точка в точку. Без этого шага чужая ломаная стала бы
+     гладкой волной при первом же заходе. */
+  if ((P.v || 0) < 25) {
+    [['textPts', 'textH', 'textSharp'],
+     ['numPts', 'numH', 'numSharp'],
+     ['rectPts', 'rectH', 'rectSharp']].forEach(function (os) {
+      var k = P[os[0]], s = P[os[2]];
+      if (!Array.isArray(k) || !s) { delete P[os[2]]; return; }
+      var H = [], n = k.length;
+      for (var j = 0; j < n; j++) {
+        var p = polovinki(os[0], j);
+        var outX = p.out[1], vhX = p.vh[1];
+        if (j < n - 1) outX = outX * (1 - s) + (k[j + 1][1] - k[j][1]) / 3 * s;
+        if (j > 0)     vhX  = vhX  * (1 - s) + (k[j][1] - k[j - 1][1]) / 3 * s;
+        var okr = function (v) { return Math.round(v * 10000) / 10000; };
+        H.push([okr(p.out[0]), okr(outX), okr(p.vh[0]), okr(vhX)]);
+      }
+      P[os[1]] = H;
+      delete P[os[2]];
+    });
+    P.v = 25;
+  }
 
   // ── изинги хода ленты: пресеты, безье-приближения и вычислитель ──
   var EASES = {
@@ -844,7 +921,7 @@
   // сегмент с нулевым изгибом идёт гладким катмулл-ромом через вершины;
   // согнутый рукой сегмент — квадратичная безье через свой изгиб:
   // горизонталь изгиба гнёт траекторию, вертикаль — местный ход
-  // (перекос распределения строк к одной из вершин). острота
+  // (перекос распределения строк к одной из вершин). угол в точке
   // подмешивает ломаную до чистых углов. УСИК ВЕРШИНЫ: null — авто,
   // пара [t,x] — симметричный (вторая половина зеркалится), четвёрка
   // [outT,outX,inT,inX] — РАЗОРВАННЫЙ (острый угол как в фигме, обе
@@ -868,14 +945,24 @@
     var t0 = k[i][0], t1 = k[i + 1][0], v0 = k[i][1], v1 = k[i + 1][1];
     var h = Math.max(1e-6, t1 - t0);
     var c1, c2;
-    if (H[i]) {
+    /* РЕЖИМ ТОЧКИ «БЕЗ УСИКОВ» — ноль в списке усиков (правка Сергея 03.09).
+       Плечо нулевое: контрольная точка садится на саму вершину, и кривая
+       входит в неё прямой — чистый острый угол в ОДНОЙ точке, а не по всей
+       оси. Раньше угол давала только общая острота, и вместе с ней с холста
+       уходили все усики. Проверять приходится явно: ноль ложен, и `if (H[i])`
+       уводил его в ветку авто. */
+    if (H[i] === 0) {
+      c1 = [t0, v0];
+    } else if (H[i]) {
       c1 = [t0 + H[i][0], v0 + H[i][1]];
     } else {
       var p0 = k[Math.max(0, i - 1)], pn = k[Math.min(n - 1, i + 1)];
       var m0 = (pn[1] - p0[1]) / Math.max(1e-6, pn[0] - p0[0]);
       c1 = [t0 + h / 3, v0 + m0 * h / 3];
     }
-    if (H[i + 1]) {
+    if (H[i + 1] === 0) {
+      c2 = [t1, v1];
+    } else if (H[i + 1]) {
       var hb = H[i + 1].length > 2 ? 2 : 0; // разорванный усик: своя входящая половина
       c2 = [t1 - H[i + 1][hb], v1 - H[i + 1][hb + 1]];
     } else {
@@ -887,6 +974,8 @@
     c2[0] = Math.max(t0, Math.min(t1, c2[0]));
     return [c1, c2];
   }
+  /* Второй довод остался в подписи ради вызовов по всему стенду, но больше
+     не значит ничего: острота снята. */
   function axisXf(axKey, sharp, t) {
     t = Math.max(0, Math.min(1, t));
     var k = P[axKey];
@@ -913,11 +1002,16 @@
       var ua = Math.pow(u, g);
       u = ua / (ua + Math.pow(1 - u, g));
     }
-    var lin = v0 + (v1 - v0) * u;
+    /* ОСТРОТА СНЯТА (Сергей 03.09). Она была величиной ВСЕЙ оси и
+       смешивала кривую с ломаной, а угол в ТОЧКЕ теперь задаёт режим её
+       усиков — две величины про одно спорили: точка «симметрично», а
+       острота 1, и усики ни на что не влияют. Формы вариантов уцелели:
+       смешивание шло только по x, поэтому x-половины усиков пересчитаны
+       раз и навсегда (out_x' = out_x·(1−s) + (v1−v0)/3·s), а t-половины
+       остались — параметр u решается по ним, и кривая совпадает точно. */
     var mu2 = 1 - u;
-    var val = mu2 * mu2 * mu2 * v0 + 3 * mu2 * mu2 * u * c1x +
-              3 * mu2 * u * u * c2x + u * u * u * v1;
-    return val * (1 - sharp) + lin * sharp;
+    return mu2 * mu2 * mu2 * v0 + 3 * mu2 * mu2 * u * c1x +
+           3 * mu2 * u * u * c2x + u * u * u * v1;
   }
 
   // ── варианты композиции Сергея: оси + цветовая схема + типографика ──
@@ -929,19 +1023,19 @@
         // (острота 0.25), ход 0.05; номера у левой кромки; плашки на
         // своей оси — пологая дуга слева
         ['a', 'Вариант A', {
-          textPts: [[0, 0.375], [0.75, 0.375], [0.77, 0.01], [1, 0.37]],
-          textH: [[0.295, 0], [0, 0], [0, -0.11], [0, 0.205]],
-          textSharp: 0.25, textFlow: 0.05,
-          numPts: [[0, 0.04], [1, 0.13]],
-          numH: [[0.495, 1.04], [0.135, -1.13]],
-          numSharp: 0, numFlow: 0,
+          textPts: [[0, 0.205], [0.565, 0.46], [0.585, 0.12], [1, 0.365]],
+          textH: [0, 0, 0, 0],
+          textFlow: 0,
+          numPts: [[0, 0.04], [1, 0.02]],
+          numH: [[0.495, 1.04, 0.495, 1.04], [0.135, -1.13, 0.09, -1.165]],
+          numFlow: 0,
           gap: 8, numTrack: 0.235,
           rectStretch: 1.4,
           textRectStretch: 0.5, textRectH: 0.75, textRectLeft: 0.5,
           rectAxisOwn: '1',
-          rectPts: [[0, 0.23], [0.16, 0.135], [1, 0.22]],
-          rectH: [[0.01, -0.11], [0.145, 0.23], [0.17, -1.42]],
-          rectSharp: 0, rectFlow: 0,
+          rectPts: [[0, 0.035], [1, 0.22]],
+          rectH: [0, [0.17, -1.42, 0.17, -1.42]],
+          rectFlow: 0,
         }],
         // «Вариант B» переснят Сергеем 2026-08-07 (двенадцатая
         // редакция): свои кегль и кернинг заголовков; текст
@@ -951,19 +1045,19 @@
         // плашки короче вверху и длиннее внизу и справа, блок 0.55
         ['b', 'Вариант B', {
           textPts: [[0, 0.57], [1, 0.01]],
-          textH: [[0.305, 0.125], [0.295, -0.35]],
-          textSharp: 1, textFlow: 0,
+          textH: [[0.305, -0.1867, 0.305, 0.125], [0.295, -0.35, 0.295, -0.1867]],
+          textFlow: 0,
           numPts: [[0, 0.965], [1, 0.12]],
-          numH: [[0.315, -0.115], [0.315, -0.275]],
-          numSharp: 1, numFlow: 0,
+          numH: [[0.315, -0.2817, 0.315, -0.115], [0.315, -0.275, 0.315, -0.2817]],
+          numFlow: 0,
           width: 440, gap: 4, parGap: 3,
           numSize: 16, numTrack: 0.11,
           rectStretch: 0.8,
           textRectStretch: 0.5, textRectLeft: 0.5,
           rectAxisOwn: '1',
           rectPts: [[0, 0.015], [1, 0.375]],
-          rectH: [[0.15, 0.74], [0.325, -0.9]],
-          rectSharp: 0, rectFlow: 0,
+          rectH: [[0.15, 0.74, 0.15, 0.74], [0.325, -0.9, 0.325, -0.9]],
+          rectFlow: 0,
         }],
         // «Вариант C» переснят Сергеем 2026-08-09 (семнадцатая
         // редакция): текст — диагональ от левого верха через три
@@ -973,19 +1067,19 @@
         // строка, пауза и правила плашек
         ['c', 'Вариант C', {
           textPts: [[0, 0.055], [0.755, 0.355], [1, 1.24]],
-          textH: [[0.325, 0.14], null, [0.065, 0.41]],
-          textSharp: 1, textFlow: 0,
+          textH: [[0.325, 0.1, 0.325, 0.14], [0.0817, 0.295, 0.2517, 0.1], [0.065, 0.41, 0.065, 0.295]],
+          textFlow: 0,
           numPts: [[0, 0.39], [1, 0.405]],
-          numH: [[0.24, 0.425], [0.335, -0.45]],
-          numSharp: 0, numFlow: -0.05,
+          numH: [[0.24, 0.425, 0.24, 0.425], [0.335, -0.45, 0.335, -0.45]],
+          numFlow: 0,
           width: 440, gap: 8,
           numTrack: 0.07,
           rectStretch: 1.4,
           textRectStretch: 0.5, textRectH: 0.75, textRectLeft: 0.5,
           rectAxisOwn: '1',
           rectPts: [[0, 0.935], [1, -0.185]],
-          rectH: [[0.5, 0.01], [0.105, -0.825]],
-          rectSharp: 0, rectFlow: 0,
+          rectH: [[0.5, 0.01, 0.5, 0.01], [0.105, -0.825, 0.105, -0.825]],
+          rectFlow: 0,
         }],
         // «Вариант D» переснят Сергеем 2026-08-07 (тринадцатая
         // редакция): текст
@@ -995,19 +1089,19 @@
         // по вертикали, блок растянут наполовину, горизонталь в силе)
         ['d', 'Вариант D', {
           textPts: [[0, -0.005], [1, 0.795]],
-          textH: [[0.325, 0.28], [0.345, 0.265]],
-          textSharp: 1, textFlow: 0,
+          textH: [[0.325, 0.2667, 0.325, 0.28], [0.345, 0.265, 0.345, 0.2667]],
+          textFlow: 0,
           numPts: [[0, 0.07], [1, 0.005]],
-          numH: [[0.135, 0.82], [0.52, -1.03]],
-          numSharp: 0, numFlow: 0,
+          numH: [[0.135, 0.82, 0.135, 0.82], [0.52, -1.03, 0.52, -1.03]],
+          numFlow: 0,
           width: 440, gap: 6, parGap: 3,
           numTrack: 0.09,
           rectStretch: 1.7,
           textRectStretch: 1.05, textRectH: 0.75, textRectLeft: 2,
           rectAxisOwn: '1',
           rectPts: [[0, 0.25], [1, -0.135]],
-          rectH: [[0.225, 1.065], [0.23, -0.6]],
-          rectSharp: 0, rectFlow: 0,
+          rectH: [[0.225, 1.065, 0.225, 1.065], [0.23, -0.6, 0.23, -0.6]],
+          rectFlow: 0,
         }],
         // «Вариант E» переснят Сергеем 2026-08-09 (тринадцатая
         // редакция, ПЕРВАЯ СЛЕПЛЕННАЯ НА ЭКРАНЕ): текст — колонна
@@ -1019,21 +1113,22 @@
         // перевёрнутым нижним усиком; плашки НА СВОЕЙ ОСИ —
         // вертикаль у правой кромки с петлёй влево
         ['e', 'Вариант E', {
-          textPts: [[0, 0.66], [0.69, 0.595], [0.715, 0.04], [0.875, 0.41], [1, 0.385]],
-          textH: [[0.23, -0.025], [0.005, -0.08, 0.23, -0.025],
-                  [0.12, 0.135, 0, -0.06], [0.05, -0.01, 0, 0.04],
-                  [0.045, 0.085, 0.05, -0.005]],
-          textSharp: 1, textFlow: 0,
-          numPts: [[0, 0.875], [1, 0.99]],
-          numH: [[0.53, -1.035], [-0.12, 1.175]],
-          numSharp: 0, numFlow: -0.05,
+          // ось переснята Сергеем 03.09 (эталон 16:37): колонна круче, скачок к
+          // левой кромке на трёх четвертях, возврат вправо у самого низа;
+          // усики сняты — при остроте 1 ось ломаная, и они ни на что не влияют
+          textPts: [[0, 0.765], [0.75, 0.5], [0.77, 0.035], [1, 0.455]],
+          textH: [null, null, null, null],
+          textFlow: 0,
+          numPts: [[0, 0.86], [1, 0.99]],
+          numH: [[0.555, -1.025], [0.255, 1.375]],
+          numFlow: 0,
           width: 440, gap: 8,
           numTrack: 0.14,
           rectStretch: 0.85, textRectStretch: 1.05, textRectLeft: 1.05,
           rectAxisOwn: '1',
-          rectPts: [[0, 0.915], [1, 0.955]],
-          rectH: [[0.305, -0.94], [0.19, 1.02]],
-          rectSharp: 0, rectFlow: 0,
+          rectPts: [[0, 0.98], [1, 0.97]],
+          rectH: [[0.4, -1.345], [0.125, 1.225]],
+          rectFlow: 0,
         }],
         // «Вариант F» — собран «со своей» лепки (2026-08-07; красная
         // схема третьей редакции ушла в профиль «Красный»): текст —
@@ -1043,18 +1138,18 @@
         // с разрядкой 0.235
         ['f', 'Вариант F', {
           textPts: [[0, 0.595], [0.695, 0.24], [0.73, 0.53], [1, 0.03]],
-          textH: [[0.275, -0.065], [0.23, -0.16], [0.08, -0.075], [0.1, -0.2]],
-          textSharp: 1, textFlow: 0,
+          textH: [[0.275, -0.1183, 0.275, -0.065], [0.23, 0.0967, 0.23, -0.1183], [0.08, -0.1667, 0.08, 0.0967], [0.1, -0.2, 0.1, -0.1667]],
+          textFlow: 0,
           numPts: [[0, -0.015], [0.67, 0.87], [1, 0.045]],
-          numH: [[0.205, 0.405], [0.175, 0], [0.045, -0.475]],
-          numSharp: 0, numFlow: 0,
+          numH: [[0.205, 0.405, 0.205, 0.405], [0.175, 0, 0.175, 0], [0.045, -0.475, 0.045, -0.475]],
+          numFlow: 0,
           gap: 8, numTrack: 0.235,
           rectStretch: 1.4,
           textRectStretch: 0.5, textRectH: 0.75, textRectLeft: 0.5,
           rectAxisOwn: '1',
           rectPts: [[0, 0.04], [1, 0.28]],
-          rectH: [[0.22, 0.98], [0.17, -0.925]],
-          rectSharp: 0, rectFlow: 0,
+          rectH: [[0.22, 0.98, 0.22, 0.98], [0.17, -0.925, 0.17, -0.925]],
+          rectFlow: 0,
         }],
   ];
   // каждый вариант несёт полную типографику и правила плашек: свои
@@ -1145,6 +1240,8 @@
 
   var pan = StendPanel.build({
     storageKey: 'diagonal-params',
+    // версия схемы — служебное: в отчёт правок и в адрес не идёт
+    sluzhebnye: ['v'],
     params: P,
     defaults: DEFAULTS,
     eases: EASES,
@@ -1158,9 +1255,9 @@
       ['comp', 'Вариант', 'preset', [['own', '— своя —', {}]].concat(VARIANTS)],
       ['prof', 'Профиль', 'preset', [['own', '— свой —', {}]].concat(PROFILES)],
       ['h', 'Шрифт'],
-      ['kegl', 'Кегль', 8, 40, 1],
+      ['kegl', 'Кегль', 8, 40, 1, { pole: true }],
       ['fontRef', 'Опорная ширина', 600, 2600, 20],
-      ['btm', 'Кегль внизу, %', 50, 150, 1],
+      ['btm', 'Кегль внизу, %', 50, 150, 1, { pole: true }],
       ['h', 'Полоса'],
       ['width', 'Ширина строки', 120, 800, 10],
       ['leading', 'Интерлиньяж', 0.5, 3, 0.02],
@@ -1173,21 +1270,18 @@
       ['textRectLeft', 'Плашки текста: слева', 0.5, 2, 0.05],
       ['textRectInv', 'Плашки текста: излом', 'select', [['0', 'у низа'], ['1', 'у верха']]],
       ['h', 'Текстовая ось'],
-      ['textSharp', 'Острота', 0, 1, 0.05],
       ['textFlow', 'Ход', -1, 1, 0.05],
       ['h', 'Ось номеров'],
-      ['numSharp', 'Острота', 0, 1, 0.05],
       ['numFlow', 'Ход', -1, 1, 0.05],
       ['h', 'Шрифт оси номеров'],
-      ['numSize', 'Заголовки: кегль', 0, 40, 1],
+      ['numSize', 'Заголовки: кегль', 0, 40, 1, { pole: true }],
       ['numWght', 'Заголовки: толщина', 'select', [['700', 'жирная'], ['850', 'жирнее']]],
       ['numTrack', 'Заголовки: кернинг', -0.1, 0.5, 0.005],
-      ['digSize', 'Цифры: кегль', 6, 48, 1],
+      ['digSize', 'Цифры: кегль', 6, 48, 1, { pole: true }],
       ['digWght', 'Цифры: толщина', 'select', [['400', 'обычная'], ['500', 'средняя'], ['700', 'жирная']]],
       ['digTrack', 'Цифры: кернинг', -0.1, 0.5, 0.005],
       ['h', 'Ось плашек'],
       ['rectAxisOwn', 'Ось', 'select', [['0', 'по текстовой'], ['1', 'своя']]],
-      ['rectSharp', 'Острота', 0, 1, 0.05],
       ['rectFlow', 'Ход', -1, 1, 0.05],
       ['h', 'Меню вариантов'],
       ['hexR', 'Сота', 40, 140, 1],
@@ -1233,17 +1327,14 @@
       textRectH: 'Высота текстового кластера: пробелы между шестью плашками растут пропорционально ряду 1, 1, 2, 3, 5 — кратность Фибоначчи сохраняется. Ноль — базовый ритм, единица — блок высотой с экран.',
       textRectLeft: 'Плашки текстового кластера по горизонтали: чем левее на экране, тем длиннее. Значение — множитель длины у левой кромки, у правой — обратный (2 слева даёт 0.5 справа), в середине единица. Перемножается с вертикальным правилом; единица выключает.',
       textRectInv: 'Где сгущаются фибоначчиевы шаги вертикального правила длины текстовых плашек: «у низа» — длина почти не меняется сверху и резко доходит у нижней кромки; «у верха» — перелом сразу от верхней кромки, рост виден в блоке, прижатом к верху. Концы правила те же — меняется только характер хода.',
-      textSharp: 'Ноль — гладкая кривая, единица — ломаная с острыми углами. Холст ниже: рамка — экран, вход сверху, выход снизу, вершины 2–12 (ряд «Точки»). Клик по вершине выбирает её и показывает усики-рукоятки с ромбиками — тяни ромбик, чтобы задать угол отклонения. Хват за сам отрезок гнёт его (вбок — изгиб, по вертикали — местный ход) и выставляет усики его вершин. Двойной клик по линии — новая вершина, по вершине — удалить. Серым — ось номеров.',
       textFlow: 'Как строка движется между вершинами траектории. Ноль — равномерно; вправо — замедляется у вершин, липнет к точкам и быстро пролетает середину; влево — наоборот, спешит от вершин и медлит в середине.',
       numFlow: 'То же для оси номеров: характер хода заголовков и цифр между вершинами их траектории.',
-      numSharp: 'Ноль — гладкая кривая, единица — ломаная с острыми углами. Устройство холста то же, что у текстовой оси: клик по вершине показывает усики-рукоятки, ромбики задают углы отклонения; хват за отрезок гнёт его; двойной клик по линии добавляет вершину, по вершине — убирает. Серым — текстовая ось.',
       numSize: 'Кегль заголовков на оси номеров. Ноль — как основной кегль ленты, меньше — заголовки мельче набора.',
       numWght: 'Толщина заголовков оси номеров — два жирных веса вариативного шрифта на выбор.',
       digWght: 'Толщина цифровых меток «(N)». Even Mono несёт один начертательный вес — жирнее рисует браузер синтетикой.',
       digTrack: 'Межбуквие цифровых меток, в долях их кегля.',
       numTrack: 'Межбуквие заголовков оси номеров, в долях кегля. Ноль — естественный набор; в живом разгоне кернинга ось номеров не участвует.',
       rectAxisOwn: 'По какой траектории едут плашки текстового кластера: по текстовой оси (как весь набор) или по своей собственной — редактор ниже. Кривая на холсте красится цветом оси номеров, как сами плашки.',
-      rectSharp: 'Острота своей оси плашек: ноль — гладкая кривая, единица — ломаная. Холст устроен как у других осей: вершины таскаются, усики-ромбики задают углы, двойной клик добавляет и убирает вершины. Серым — текстовая ось.',
       rectFlow: 'Ход плашек между вершинами своей оси: ноль — равномерно, вправо — липнут к вершинам, влево — спешат от них и медлят в середине.',
       hexR: 'Радиус соты сотового меню вариантов — задаёт и размер ячеек, и шаг гекс-сетки.',
       hexGap: 'Шов между сотами: ячейка меньше шага сетки на эту величину.',
@@ -1269,7 +1360,7 @@
     },
   });
 
-  // ── кнопка «Скопировать настройки»: снимает текущие параметры в
+  // ── кнопка «Снимок всех ручек»: снимает текущие параметры в
   // буфер, чтобы фиксировать их как умолчания и собирать пресеты.
   // С 2026-08-09 клик ВСЕГДА раскрывает поле со снимком и пишет в
   // подпись, ЧЕЙ это снимок (вариант и профиль) — буфер обмена может
@@ -1277,11 +1368,28 @@
   (function buildCopyBtn() {
     var btn = document.createElement('button');
     btn.className = 'st-reset';
-    btn.textContent = 'Скопировать настройки';
+    btn.textContent = 'Снимок всех ручек';
+    btn.title = 'Снимок ВСЕХ ручек стенда одним объектом — и в буфер, и в поле ниже (буфер может молча не обновиться, поле показывает правду). Отсюда собирают новый вариант или профиль целиком. Не путать с «Правки для кода»: там только уведённое от основы.';
     var box = document.createElement('textarea');
     box.className = 'snap-box';
     box.spellcheck = false;
-    box.hidden = true;
+    box.readOnly = true;          // снимок читают и копируют, а не правят
+    /* ПОЛЕ ЗАКРЫВАЕТСЯ (правка Сергея 03.09): открыть было чем, а закрыть
+       нечем — оно висело до перезагрузки. Три двери на одно дело: крестик,
+       Escape и повторный клик по той же кнопке. */
+    var obl = document.createElement('div');
+    obl.className = 'snap-obl';
+    obl.hidden = true;
+    var zakryt = document.createElement('button');
+    zakryt.type = 'button'; zakryt.className = 'snap-x';
+    zakryt.textContent = '\u2715';
+    zakryt.title = 'закрыть снимок (Esc)';
+    zakryt.setAttribute('aria-label', 'закрыть снимок');
+    function spryatat() { obl.hidden = true; btn.setAttribute('aria-expanded', 'false'); }
+    zakryt.addEventListener('click', spryatat);
+    box.addEventListener('keydown', function (e) { if (e.key === 'Escape') { spryatat(); btn.focus(); } });
+    obl.appendChild(box); obl.appendChild(zakryt);
+    btn.setAttribute('aria-expanded', 'false');
     function whose() {
       var vn = P.comp === 'own' ? 'своя' : 'вариант ' + String(P.comp).toUpperCase();
       var pf = 'свой';
@@ -1289,14 +1397,16 @@
       return vn + ' · ' + pf;
     }
     btn.addEventListener('click', function () {
+      if (!obl.hidden) { spryatat(); return; }   // та же кнопка и закрывает
       var txt = JSON.stringify(P, null, 1);
       box.value = txt;
-      box.hidden = false;
+      obl.hidden = false;
+      btn.setAttribute('aria-expanded', 'true');
       box.focus();
       box.select();
       var mark = function (ok) {
         btn.textContent = (ok ? 'Скопировано: ' : 'Выдели и скопируй: ') + whose();
-        setTimeout(function () { btn.textContent = 'Скопировать настройки'; }, 4000);
+        setTimeout(function () { btn.textContent = 'Снимок всех ручек'; }, 4000);
       };
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(txt).then(function () { mark(true); }, function () { mark(false); });
@@ -1304,33 +1414,19 @@
         mark(false);
       }
     });
-    // выгрузка файлом — страховка мимо буфера обмена: он может молча
-    // не обновиться, и в работу уходит снимок прошлой лепки
-    var dl = document.createElement('button');
-    dl.className = 'st-reset';
-    dl.textContent = 'Скачать настройки файлом';
-    dl.addEventListener('click', function () {
-      var txt = JSON.stringify(P, null, 1);
-      var a = document.createElement('a');
-      var url = URL.createObjectURL(new Blob([txt], { type: 'application/json' }));
-      a.href = url;
-      a.download = 'diagonal-' + P.comp + '-' + P.prof + '.json';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
-      dl.textContent = 'Скачан: ' + whose();
-      setTimeout(function () { dl.textContent = 'Скачать настройки файлом'; }, 4000);
-    });
-    var rst = pan.panel.querySelector('.st-reset');
-    if (rst) {
-      pan.panel.insertBefore(btn, rst);
-      pan.panel.insertBefore(box, rst);
-      pan.panel.insertBefore(dl, rst);
+    /* «Скачать настройки файлом» снята (Сергей 04.09). Она была страховкой
+       на случай, когда буфер обмена молча не обновляется, — но с тех пор у
+       кнопки снимка появилось ПОЛЕ с тем же текстом: правду видно глазами и
+       можно выделить руками. Две двери в одно место, вторая лишняя. */
+    // содержимое панели живёт в теле (.st-telo), а не в самой панели
+    var host = pan.telo || pan.panel;
+    var rst = host.querySelector('.st-reset');
+    if (rst && rst.parentNode === host) {
+      host.insertBefore(btn, rst);
+      host.insertBefore(obl, rst);      // поле снимка — в обёртке с крестиком
     } else {
-      pan.panel.appendChild(btn);
-      pan.panel.appendChild(box);
-      pan.panel.appendChild(dl);
+      host.appendChild(btn);
+      host.appendChild(obl);
     }
   })();
 
@@ -2140,27 +2236,31 @@
     return st.map(function (s) { return [s[0], hexRgb(s[1])]; });
   }
 
-  // ── цвет каждой оси и фона — системная палитра (спектр, пипетка) ──
+  /* ── цвет каждой оси и фона — СВОЙ пикер, а не системное окно ──
+     Нативный input[type=color] поднимал палитру macOS поверх стенда:
+     чужая раскладка вместо своей, и цвет не подобрать по макету. Ядро
+     сняло это ходом 32 у своих ручек; здесь цвет рисовался в обход
+     библиотеки и системное окно осталось (правка 03.09). Пикер тот же,
+     что у панели: квадрат насыщенность×яркость, полоса тона, пипетка,
+     поле HEX. Значение живёт в P, читается и пишется колбэками. */
   function buildColorRow(title, labelText, key) {
     var row = document.createElement('div'); row.className = 'row';
     var lab = document.createElement('label'); lab.textContent = labelText;
     var box = document.createElement('div'); box.className = 'ax-colors';
-    var inp = document.createElement('input');
-    inp.type = 'color';
-    inp.value = P[key];
-    inp.addEventListener('input', function () {
-      P[key] = inp.value;
-      pan.save();
+    var pk = StendPanel.piker({
+      znachenie: function () { return P[key]; },
+      postavit: function (hex) { P[key] = hex; pan.save(); },
     });
-    box.appendChild(inp);
-    function refresh() {
-      // не дёргаем значение, пока палитра открыта и цвет крутится рукой
-      if (document.activeElement !== inp && inp.value !== P[key]) inp.value = P[key];
-    }
+    box.appendChild(pk.svotch);
+    function refresh() { pk.obnovit(); }
     row.appendChild(lab); row.appendChild(box);
     var hs = pan.panel.querySelectorAll('h4');
     for (var i2 = 0; i2 < hs.length; i2++) {
-      if (hs[i2].textContent === title) { hs[i2].nextElementSibling.appendChild(row); break; }
+      if (hs[i2].textContent === title) {
+        var karta = hs[i2].nextElementSibling;
+        karta.appendChild(row); karta.appendChild(pk.pole);
+        break;
+      }
     }
     return refresh;
   }
@@ -2189,26 +2289,40 @@
       op.value = o[0]; op.textContent = o[1];
       sel.appendChild(op);
     });
-    var inpSolid = document.createElement('input'); inpSolid.type = 'color';
+    /* Свой пикер вместо системного окна — и у сплошной заливки, и у
+       выбранного стопа градиента (правка 03.09). */
+    var pkSolid = StendPanel.piker({
+      znachenie: function () { return P[cKey] || '#000000'; },
+      postavit: function (hex) { var st = cloneStops(); st[0][1] = hex; syncPair(); pan.save(); },
+    });
+    var inpSolid = pkSolid.svotch;
     box.appendChild(sel); box.appendChild(inpSolid);
     row.appendChild(lab); row.appendChild(box);
-    if (card) card.appendChild(row);
+    if (card) { card.appendChild(row); card.appendChild(pkSolid.pole); }
 
     var gw = document.createElement('div'); gw.className = 'ax-grad';
     var strip = document.createElement('div'); strip.className = 'ax-grad-strip';
-    var inpStop = document.createElement('input'); inpStop.type = 'color';
+    var pkStop = StendPanel.piker({
+      znachenie: function () { var st = stops(); return (st[selStop] && st[selStop][1]) || '#000000'; },
+      postavit: function (hex) { var st = cloneStops(); if (st[selStop]) st[selStop][1] = hex; syncPair(); pan.save(); },
+    });
+    var inpStop = pkStop.svotch;
     gw.appendChild(strip); gw.appendChild(inpStop);
-    if (card) card.appendChild(gw);
+    if (card) { card.appendChild(gw); card.appendChild(pkStop.pole); }
 
     var selStop = 0;
+    /* ЧТЕНИЕ НЕ МЕНЯЕТ СОСТОЯНИЕ (правка 03.09). Стопы собираются из пары
+       Color/Color2 профиля — и прежде эта сборка ЗАПИСЫВАЛАСЬ в P при
+       первом же показе панели. Рука цвета не трогала, а отчёт правок
+       показывал textStops и numStops уведёнными: человек читал их как свою
+       работу. Теперь сборка только возвращается; в P стопы попадают,
+       когда их правда правят (cloneStops). */
     function stops() { // канон — массив [позиция, цвет]; собирается из пары
-      if (!Array.isArray(P[sKey]) || P[sKey].length < 2) {
-        P[sKey] = [
-          [P[p1Key] || 0, P[cKey]],
-          [P[p2Key] == null ? 1 : P[p2Key], P[c2Key] || P[cKey]],
-        ];
-      }
-      return P[sKey];
+      if (Array.isArray(P[sKey]) && P[sKey].length >= 2) return P[sKey];
+      return [
+        [P[p1Key] || 0, P[cKey]],
+        [P[p2Key] == null ? 1 : P[p2Key], P[c2Key] || P[cKey]],
+      ];
     }
     function cloneStops() { // правки — только по копии: литералы вариантов
       P[sKey] = stops().map(function (s) { return [s[0], s[1]]; }); // не мутируем
@@ -2276,29 +2390,20 @@
       syncPair(); pan.save();
       rebuildHandles();
     });
-    inpStop.addEventListener('input', function () {
-      var st = cloneStops();
-      if (st[selStop]) st[selStop][1] = inpStop.value;
-      syncPair(); pan.save();
-    });
-
     sel.addEventListener('input', function () {
       P[gKey] = sel.value === 'grad';
       pan.save();
     });
-    inpSolid.addEventListener('input', function () {
-      var st = cloneStops();
-      st[0][1] = inpSolid.value;
-      syncPair(); pan.save();
-    });
-
     function refresh() {
       var grad = !!P[gKey];
       var want = grad ? 'grad' : 'solid';
       if (document.activeElement !== sel && sel.value !== want) sel.value = want;
       inpSolid.style.display = grad ? 'none' : '';
+      pkSolid.pole.hidden = pkSolid.pole.hidden || grad;   // в градиенте сплошного пикера нет
+      if (grad) pkSolid.pole.hidden = true;
       gw.style.display = grad ? '' : 'none';
-      if (document.activeElement !== inpSolid && inpSolid.value !== P[cKey]) inpSolid.value = P[cKey];
+      if (!grad) { pkStop.pole.hidden = true; }
+      pkSolid.obnovit();
       if (!grad) return;
       var st = stops();
       if (selStop >= st.length) selStop = 0;
@@ -2311,8 +2416,7 @@
         h.style.background = s[1];
         h.classList.toggle('sel', si === selStop);
       });
-      var selCol = st[selStop] ? st[selStop][1] : '#000000';
-      if (document.activeElement !== inpStop && inpStop.value !== selCol) inpStop.value = selCol;
+      pkStop.obnovit();
     }
     refresh();
     return refresh;
@@ -2325,339 +2429,361 @@
     buildFillControl('Ось номеров', 'num'),
   ];
 
-  // ── редакторы-экраны осей: вершин от 2 до 12; вершины таскаются,
-  // хват за саму линию рождает новую вершину, двойной клик убирает,
-  // степпер «Точки» меняет число с сохранением формы ──
+  // ── редакторы осей: вершин от 2 до 12; вершины таскаются, двойной
+  // клик по линии рождает вершину, ✕ и минус убирают, степпер «Точки»
+  // меняет число с сохранением формы; руки — у ядра uzly.js (ниже) ──
   var ED_X0 = -0.25, ED_X1 = 1.25; // холст шире экрана — точки ходят за кромку
   var ED_MAX = 12;
   function hKeyOf(k) { return k === 'textPts' ? 'textH' : k === 'rectPts' ? 'rectH' : 'numH'; }
+
+  /* ── ПОЛОВИНКИ УСИКА В ЯВНОМ ВИДЕ ──────────────────────────────────
+     Хранение у вершины экономное: 0 — без усиков, null — по закону
+     соседей, пара — симметрично, четвёрка — врозь. Всякий раз разбирать
+     эти четыре случая на месте — плодить ошибки, поэтому здесь они один
+     раз разложены на «исходящую» и «входящую». */
+  function polovinki(axKey, j) {
+    var H = handlesOf(axKey)[j];
+    if (H === 0) return { out: [0, 0], vh: [0, 0] };
+    if (H && H.length > 2) return { out: [H[0], H[1]], vh: [H[2], H[3]] };
+    if (H) return { out: [H[0], H[1]], vh: [H[0], H[1]] };
+    /* Усик по закону соседей: НАКЛОН один (по хорде соседей точки), а ДЛИНА
+       у половин разная — каждая берёт свой сегмент. Прежде обе половины
+       брали длину правого, и входящая врала на всякой оси с неравными
+       участками: формы вариантов C и E разошлись на 0.035 доли, поймано
+       сверкой до/после (03.09). Здесь повторён счёт segCtrl, а не autoHandle:
+       autoHandle рисует усик, segCtrl строит кривую — правда у второго. */
+    var k = P[axKey], n = k.length;
+    var p0 = k[Math.max(0, j - 1)], p2 = k[Math.min(n - 1, j + 1)];
+    var m = (p2[1] - p0[1]) / Math.max(1e-6, p2[0] - p0[0]);
+    var hOut = j < n - 1 ? (k[j + 1][0] - k[j][0]) / 3 : 0;
+    var hVh = j > 0 ? (k[j][0] - k[j - 1][0]) / 3 : 0;
+    return { out: [hOut, m * hOut], vh: [hVh, m * hVh] };
+  }
+
+  /* Параметр u внутри сегмента по высоте t — тот же ньютон, что решает
+     t(u) в axisXf: параметризация не равномерна, и делить на глазок нельзя. */
+  function uVSegmente(axKey, i, t) {
+    var k = P[axKey], cc = segCtrl(axKey, i);
+    var t0 = k[i][0], t1 = k[i + 1][0], c1t = cc[0][0], c2t = cc[1][0];
+    var u = t1 > t0 ? (t - t0) / (t1 - t0) : 0;
+    for (var it = 0; it < 8; it++) {
+      var mu = 1 - u;
+      var tu = mu * mu * mu * t0 + 3 * mu * mu * u * c1t + 3 * mu * u * u * c2t + u * u * u * t1;
+      var dtu = 3 * mu * mu * (c1t - t0) + 6 * mu * u * (c2t - c1t) + 3 * u * u * (t1 - c2t);
+      if (Math.abs(dtu) < 1e-6) break;
+      u -= (tu - t) / dtu;
+      if (u < 0) u = 0; if (u > 1) u = 1;
+    }
+    return u;
+  }
+
+  /* Прямой ли сегмент: обе опорные точки лежат на хорде. Порог в долях —
+     около полутора пикселей на панельном холсте. */
+  function segmentPryamoy(axKey, i) {
+    var k = P[axKey], cc = segCtrl(axKey, i);
+    var a = [k[i][0], k[i][1]], b = [k[i + 1][0], k[i + 1][1]];
+    var dt = b[0] - a[0], dx = b[1] - a[1];
+    var len2 = dt * dt + dx * dx;
+    function otklon(c) {
+      if (len2 < 1e-12) return Math.hypot(c[0] - a[0], c[1] - a[1]);
+      var q = ((c[0] - a[0]) * dt + (c[1] - a[1]) * dx) / len2;
+      return Math.hypot(c[0] - (a[0] + dt * q), c[1] - (a[1] + dx * q));
+    }
+    return otklon(cc[0]) < 0.004 && otklon(cc[1]) < 0.004;
+  }
+  /* ── РЕЖИМ ВЕРШИНЫ (Сергей 03.09) ──────────────────────────────────
+     Три состояния, как в векторных редакторах, и все три названы:
+       'net'   — без усиков: кривая входит прямой, угол острый;
+       'oba'   — усики симметрично относительно точки (одна прямая, одна длина);
+       'vroz'  — усики независимы друг от друга (излом).
+     В хранении: 0 — без усиков, [dt, dx] или null — симметрично
+     (null значит «по закону соседей»), четвёрка — врозь. */
+  var REZHIMY = [['net', 'без усиков'], ['oba', 'симметрично'], ['vroz', 'врозь']];
+  /* РЕЖИМ «ГНУТЬ» — ОДИН НА ВСЕ ОКНА. Это привычка руки, а не свойство
+     холста: включил в панели, перешёл в лепку на экране — рука делает то
+     же самое. Держать состояние у каждого редактора значило бы включать
+     режим заново при каждом переходе (правка 03.09). */
+  var GNEM = false;
+  function rezhimVershiny(axKey, j) {
+    var h = handlesOf(axKey)[j];
+    if (h === 0) return 'net';
+    if (h && h.length > 2) return 'vroz';
+    return 'oba';
+  }
+  function postavitRezhim(axKey, j, rezhim) {
+    var H = handlesOf(axKey).map(function (v) { return v && v.slice ? v.slice() : v; });
+    var bylo = H[j];
+    if (rezhim === 'net') {
+      H[j] = 0;
+    } else if (rezhim === 'oba') {
+      /* СИММЕТРИЧНО — ПЕРЕСТРОИТЬ ПО ЗАКОНУ СОСЕДЕЙ (Сергей 04.09): из «без
+         усиков» и из «врозь» линия скругляется, усики встают на одну прямую
+         по хорде соседей. Раньше из четвёрки бралась исходящая половина, и
+         после нулевых усов угол так и оставался углом. Пара — не трогаем. */
+      H[j] = (bylo && bylo.length === 2) ? bylo : null;
+    } else {
+      /* ВРОЗЬ — УГОЛ, ИЗ КОТОРОГО ТЯНУТ ПО ОДНОЙ ПОЛОВИНЕ (Сергей 04.09).
+         Усики есть, но нулевые, как у точки без усиков: форма не
+         скругляется сама, а ядро показывает плечи на отлёте (Г10) — есть
+         за что взяться и вытянуть каждую половину отдельно. Так и из
+         симметрии: «врозь» приводит линию к углу с усами. Раньше половины
+         брались из симметрии или закона соседей, и линия округлялась
+         без просьбы. Уже врозь — не трогаем. */
+      H[j] = (bylo && bylo.length > 2) ? bylo : [0, 0, 0, 0];
+    }
+    P[hKeyOf(axKey)] = H;
+  }
   var axisEditOn = function () { return false; }; // читают драг ленты и соты
   var enterScreenEd = function () {};             // назначает экранный модуль ниже
 
-  // ── общее ядро редактора оси: живёт и в панельном холсте, и в
-  // полноэкранном режиме лепки; cfg читается динамически — экранный
-  // редактор подменяет в нём ось. Alt-тяга за ромбик РАЗРЫВАЕТ усик
-  // (половины расходятся, угол острый), Alt-клик по вершине склеивает ──
-  function attachAxisEditor(cv, cfg) {
-    function ex(v) { return (v - cfg.x0()) / (cfg.x1() - cfg.x0()) * cv.width; }
-    function ey(t) { return t * cv.height; }
-    function clonePts() { return P[cfg.axKey].map(function (p) { return p.slice(); }); }
-    function cloneH() {
-      return handlesOf(cfg.axKey).map(function (v) { return v ? v.slice() : null; });
-    }
-    var sel = -1; // выбранная вершина — у неё видны усики
+  /* ── РЕДАКТОР ОСИ НА ЯДРЕ «УЗЛЫ ПОД РУКОЙ» (04.09, фаза 3 хвоста 1) ────
+     Руки — у ядра panel-lib/uzly.js: жесты, попадание, оснастка (цель 22,
+     отлёт плеча 22, крестик за отлётом на свой диаметр), инструмент «гнуть»,
+     порог хода 3 px, клавиши. Здесь остался ПРЕДМЕТ оси: как хранятся усики,
+     откуда берутся плечи, как ходят точки, что значит клик. Одна модель
+     питает два холста — панельный и экранный, — разница в области и в том,
+     что рисует предмет. Прежде редактор держал свои руки на пятистах
+     строках (ходы 39–50); сводятся руки, не предметы (Г10).
 
-    function insertPointAt(t, x) {
-      if (P[cfg.axKey].length >= ED_MAX) return;
-      var pts = clonePts();
-      var at = pts.length - 1;
-      for (var j = 1; j < pts.length; j++) {
-        if (pts[j][0] > t) { at = j; break; }
-      }
-      var H = cloneH();
-      H.splice(at, 0, null); // новая вершина рождается с авто-усиками
-      pts.splice(at, 0, [t, x]);
-      P[cfg.axKey] = pts;
-      P[hKeyOf(cfg.axKey)] = H;
-      pan.save();
-    }
-    function removePoint(i) {
-      if (i <= 0 || i >= P[cfg.axKey].length - 1) return;
-      var pts = clonePts();
-      var H = cloneH();
-      H.splice(i, 1);
-      pts.splice(i, 1);
-      P[cfg.axKey] = pts;
-      P[hKeyOf(cfg.axKey)] = H;
-      sel = -1;
-      pan.save();
-    }
-    function insertMid() {
-      var k = P[cfg.axKey];
-      if (k.length >= ED_MAX) return;
-      // вершина встаёт на середину самого длинного отрезка, x берём
-      // с текущей кривой — форма не прыгает
-      var bi = 0, bl = -1;
-      for (var j = 0; j < k.length - 1; j++) {
-        var l = k[j + 1][0] - k[j][0];
-        if (l > bl) { bl = l; bi = j; }
-      }
-      var tm = (k[bi][0] + k[bi + 1][0]) / 2;
-      insertPointAt(Math.round(tm * 200) / 200,
-                    Math.round(axisXf(cfg.axKey, P[cfg.sharpKey], tm) * 200) / 200);
-    }
-    function removeBest() {
-      var k = P[cfg.axKey];
-      if (k.length <= 2) return;
-      // убираем вершину, чьё выпадение меньше всего меняет форму
-      var bi = 1, bd = Infinity;
-      for (var j = 1; j < k.length - 1; j++) {
-        var t0 = k[j - 1][0], t1 = k[j + 1][0];
-        var u = t1 > t0 ? (k[j][0] - t0) / (t1 - t0) : 0.5;
-        var lin = k[j - 1][1] + (k[j + 1][1] - k[j - 1][1]) * u;
-        var d = Math.abs(k[j][1] - lin);
-        if (d < bd) { bd = d; bi = j; }
-      }
-      removePoint(bi);
-    }
+     КООРДИНАТЫ ДЛЯ ЯДРА. Ядро знает доли ОБЛАСТИ. Область оси — рамка
+     экрана: x — доля ширины экрана, y — высота t. Точка оси [t, x] отдаётся
+     как {x: pt[1], y: pt[0]}. Панельный холст шире экрана (ED_X0…ED_X1):
+     область стоит внутри него, за кромкой видно то, что ушло; экранный
+     режим — область во всё окно, dpr ставит ядро.
 
-    function axPath(g, key, sharp) {
-      g.beginPath();
-      for (var s = 0; s <= 100; s++) {
-        var t = s / 100;
-        var px = ex(axisXf(key, sharp, t));
-        if (s === 0) g.moveTo(px, ey(t)); else g.lineTo(px, ey(t));
-      }
-      g.stroke();
-    }
-    function draw() {
-      var g = cv.getContext('2d');
-      var w = cv.width, h = cv.height, K = cfg.k();
-      var ac = (getComputedStyle(pan.panel).getPropertyValue('--st-accent') || '#0A84FF').trim();
-      g.clearRect(0, 0, w, h);
-      cfg.drawBg(g, w, h, ex, ey);
-      // соседние оси — серым, для контекста
-      g.strokeStyle = cfg.otherStroke; g.lineWidth = 2 * K;
-      cfg.others().forEach(function (o) { axPath(g, o[0], P[o[1]]); });
-      if (cfg.halo) { // подложка: кривая читается на ленте её же цвета
-        g.strokeStyle = 'rgba(255,255,255,.6)'; g.lineWidth = 5 * K;
-        axPath(g, cfg.axKey, P[cfg.sharpKey]);
-      }
-      // своя ось — в собственном цвете
-      g.strokeStyle = P[cfg.colorKey] || '#fff'; g.lineWidth = 3 * K;
-      axPath(g, cfg.axKey, P[cfg.sharpKey]);
-      // вершины с белым кольцом — как в редакторе кривых панели
-      P[cfg.axKey].forEach(function (pt, pi) {
-        g.beginPath(); g.arc(ex(pt[1]), ey(pt[0]), (pi === sel ? 9 : 8) * K, 0, Math.PI * 2);
-        g.fillStyle = ac; g.fill();
-        g.lineWidth = 2.5 * K; g.strokeStyle = '#fff'; g.stroke();
-      });
-      drawHandles(g, K);
-    }
-    // усики выбранной вершины: линии через вершину и ромбики, как в
-    // векторных редакторах; разорванный усик даёт излом линий
-    function autoHandle(j) {
-      var k = P[cfg.axKey], n = k.length;
-      var p0 = k[Math.max(0, j - 1)], p2 = k[Math.min(n - 1, j + 1)];
-      var m = (p2[1] - p0[1]) / Math.max(1e-6, p2[0] - p0[0]);
-      var hh = (j < n - 1 ? k[j + 1][0] - k[j][0] : k[j][0] - k[j - 1][0]) / 3;
-      return [hh, m * hh];
-    }
-    function handleOf(j) { // нормальный вид: четвёрка [outT,outX,inT,inX]
-      var H = handlesOf(cfg.axKey);
-      var h = H[j] ? H[j] : autoHandle(j);
-      return h.length > 2 ? h : [h[0], h[1], h[0], h[1]];
-    }
-    function drawHandles(g, K) {
-      var k = P[cfg.axKey];
-      if (sel < 0 || sel >= k.length) return;
-      var j = sel, h = handleOf(j);
-      var vx = ex(k[j][1]), vy = ey(k[j][0]);
-      var ox = ex(k[j][1] + h[1]), oy = ey(k[j][0] + h[0]);
-      var ix = ex(k[j][1] - h[3]), iy = ey(k[j][0] - h[2]);
-      g.strokeStyle = cfg.hstroke; g.lineWidth = 1.5 * K;
-      g.beginPath();
-      if (j > 0) { g.moveTo(ix, iy); g.lineTo(vx, vy); }
-      if (j < k.length - 1) { g.moveTo(vx, vy); g.lineTo(ox, oy); }
-      g.stroke();
-      function dia(x, y) {
-        var s = 6 * K;
-        g.beginPath();
-        g.moveTo(x, y - s); g.lineTo(x + s, y); g.lineTo(x, y + s); g.lineTo(x - s, y);
-        g.closePath();
-        g.fillStyle = cfg.diaFill; g.fill();
-        g.lineWidth = 2 * K; g.strokeStyle = '#fff'; g.stroke();
-      }
-      if (j < k.length - 1) dia(ox, oy);
-      if (j > 0) dia(ix, iy);
-    }
+     СОГЛАШЕНИЕ ПЛЕЧ — своё, противоположное траектории. Усик у вершины:
+     0 — без усиков, null — по закону соседей, [outT, outX] — симметрично,
+     [outT, outX, inT, inX] — врозь; обе половины хранятся «вниз по потоку»,
+     входящее плечо есть УЗЕЛ МИНУС КОНТРОЛЬНАЯ. Ядро при разрезе отдаёт
+     контрольные ТОЧКИ, знак считает модель здесь (ход 60).
 
-    // указатель в долях холста и попадания
-    function toF(e) {
-      var r = cv.getBoundingClientRect();
-      return {
-        fx: cfg.x0() + (e.clientX - r.left) / r.width * (cfg.x1() - cfg.x0()),
-        fy: (e.clientY - r.top) / r.height,
-        r: r,
-      };
-    }
-    function nearKnot(e) {
-      var f = toF(e);
-      var k = P[cfg.axKey];
-      var best = -1, bd = Infinity;
-      for (var j = 0; j < k.length; j++) {
-        var hx = f.r.left + ex(k[j][1]) / cv.width * f.r.width;
-        var hy = f.r.top + ey(k[j][0]) / cv.height * f.r.height;
-        var d = Math.hypot(e.clientX - hx, e.clientY - hy);
-        if (d < bd) { bd = d; best = j; }
-      }
-      return { i: best, d: bd };
-    }
-    function nearCurve(e) {
-      var f = toF(e);
-      var best = 0.5, bd = Infinity;
-      for (var s = 0; s <= 120; s++) {
-        var t = s / 120;
-        var hx = f.r.left + ex(axisXf(cfg.axKey, P[cfg.sharpKey], t)) / cv.width * f.r.width;
-        var hy = f.r.top + ey(t) / cv.height * f.r.height;
-        var d = Math.hypot(e.clientX - hx, e.clientY - hy);
-        if (d < bd) { bd = d; best = t; }
-      }
-      return { t: best, d: bd };
-    }
+     ЗАЖИМЫ — у модели: кромочные точки ходят только по x, внутренние по
+     высоте не сходятся с соседями ближе ZAZOR, точек не больше ED_MAX;
+     всё пишется с квантом хранения оси — полпроцента. */
+  var ZAZOR = 0.02;                                          // соседние точки — не ближе по высоте
+  function okr200(v) { return Math.round(v * 200) / 200; }  // квант хранения оси: полпроцента
+  function okr4(v) { return Math.round(v * 10000) / 10000; } // квант разреза: форма не шелохнётся
+  function clonePts(axKey) { return P[axKey].map(function (p) { return p.slice(); }); }
+  /* НОЛЬ «БЕЗ УСИКОВ» ЛОЖЕН, И КОПИЯ ОБЯЗАНА ЕГО СОХРАНИТЬ (находка 04.09).
+     Прежняя копия писала `v ? v.slice() : null` и обращала ноль в null —
+     «по закону соседей»: любая вставка точки или тяга усика на оси без
+     усиков сгибала чужие точки. Вариант A, «+» на текстовой оси:
+     [0,0,0,0] → [null,0,null,null,null], линия уехала на 0.05 экрана. */
+  function cloneH(axKey) { return handlesOf(axKey).map(function (v) { return v && v.slice ? v.slice() : v; }); }
 
-    var drag = -1;        // вершина в перетаскивании
-    var dragSeg = -1;     // отрезок в изгибе
-    var dragH = 0;        // усик: 1 — нижний ромбик, −1 — верхний
-    var dragBreak = false;// Alt-тяга — разрыв усика
-    function applyDrag(e) {
-      var f = toF(e);
-      var fx = Math.max(cfg.x0(), Math.min(cfg.x1(), Math.round(f.fx * 200) / 200));
-      var fy = Math.max(0, Math.min(1, Math.round(f.fy * 200) / 200));
-      var pts = clonePts();
-      var last = pts.length - 1;
-      if (drag === 0 || drag === last) {
-        pts[drag][1] = fx; // кромочные вершины ходят только по горизонтали
-      } else {
-        pts[drag][1] = fx;
-        pts[drag][0] = Math.max(pts[drag - 1][0] + 0.02,
-                       Math.min(pts[drag + 1][0] - 0.02, fy));
-      }
-      P[cfg.axKey] = pts;
-      pan.save();
+  /* Кубические сегменты оси для ядра: концы — вершины, контрольные — из
+     segCtrl (там же зажим опорных t внутрь участка: x(t) остаётся
+     однозначной). Это та же кривая, что считает axisXf, — одна правда. */
+  function segmentyOsi(axKey) {
+    var k = P[axKey], out = [];
+    for (var i = 0; i < k.length - 1; i++) {
+      var cc = segCtrl(axKey, i);
+      out.push({ a: { x: k[i][1], y: k[i][0] }, b: { x: k[i + 1][1], y: k[i + 1][0] },
+                 c1: { x: cc[0][1], y: cc[0][0] }, c2: { x: cc[1][1], y: cc[1][0] }, ia: i, ib: i + 1 });
     }
-    function applyHandle(e) {
-      // тянем ромбик: симметричный усик зеркалит второй ромбик сам;
-      // разорванный (или Alt рвёт сейчас) двигает только свою половину
-      var f = toF(e);
-      var k = P[cfg.axKey], j = sel;
-      var H = cloneH();
-      var half = [Math.round((f.fy - k[j][0]) * dragH * 200) / 200,
-                  Math.round((f.fx - k[j][1]) * dragH * 200) / 200];
-      var cur = H[j] ? H[j] : autoHandle(j);
-      if (!dragBreak && cur.length <= 2) {
-        H[j] = half;
-      } else {
-        var four = cur.length > 2 ? cur.slice() : [cur[0], cur[1], cur[0], cur[1]];
-        if (dragH === 1) { four[0] = half[0]; four[1] = half[1]; }
-        else { four[2] = half[0]; four[3] = half[1]; }
-        H[j] = four;
-      }
-      P[hKeyOf(cfg.axKey)] = H;
-      pan.save();
-    }
-    function applyBend(e) {
-      // хват за отрезок: кривая проводится через курсор, поправка
-      // раскладывается на усики обеих вершин отрезка
-      var f = toF(e);
-      var k = P[cfg.axKey];
-      var t0 = k[dragSeg][0], t1 = k[dragSeg + 1][0];
-      var v0 = k[dragSeg][1], v1 = k[dragSeg + 1][1];
-      var tp = Math.max(t0 + 0.01, Math.min(t1 - 0.01, f.fy));
-      var xp = Math.max(cfg.x0(), Math.min(cfg.x1(), f.fx));
-      var u = (tp - t0) / Math.max(1e-6, t1 - t0);
-      var mu = 1 - u;
-      var w1 = 3 * mu * mu * u, w2 = 3 * mu * u * u;
-      var den = w1 * w1 + w2 * w2;
-      if (den < 1e-4) return; // хват у самой вершины — гнуть нечем
-      var cc = segCtrl(cfg.axKey, dragSeg);
-      var bt = mu * mu * mu * t0 + 3 * mu * mu * u * cc[0][0] + 3 * mu * u * u * cc[1][0] + u * u * u * t1;
-      var bx = mu * mu * mu * v0 + 3 * mu * mu * u * cc[0][1] + 3 * mu * u * u * cc[1][1] + u * u * u * v1;
-      var dT = tp - bt, dX = xp - bx;
-      var c1 = [cc[0][0] + dT * w1 / den, cc[0][1] + dX * w1 / den];
-      var c2 = [cc[1][0] + dT * w2 / den, cc[1][1] + dX * w2 / den];
-      var H = cloneH();
-      var outA = [Math.round((c1[0] - t0) * 200) / 200,
-                  Math.round((c1[1] - v0) * 200) / 200];
-      var inB = [Math.round((t1 - c2[0]) * 200) / 200,
-                 Math.round((v1 - c2[1]) * 200) / 200];
-      var hA = H[dragSeg], hB = H[dragSeg + 1];
-      // разорванные усики держат свою нетронутую половину
-      H[dragSeg] = hA && hA.length > 2 ? [outA[0], outA[1], hA[2], hA[3]] : outA;
-      H[dragSeg + 1] = hB && hB.length > 2 ? [hB[0], hB[1], inB[0], inB[1]] : inB;
-      P[hKeyOf(cfg.axKey)] = H;
-      pan.save();
-    }
-    function nearHandle(e) {
-      // ромбики усиков ловятся только у выбранной вершины
-      var k = P[cfg.axKey];
-      if (sel < 0 || sel >= k.length) return 0;
-      var f = toF(e), h = handleOf(sel);
-      function dTo(tt, xx) {
-        var hx = f.r.left + ex(xx) / cv.width * f.r.width;
-        var hy = f.r.top + ey(tt) / cv.height * f.r.height;
-        return Math.hypot(e.clientX - hx, e.clientY - hy);
-      }
-      if (sel < k.length - 1 && dTo(k[sel][0] + h[0], k[sel][1] + h[1]) < 13) return 1;
-      if (sel > 0 && dTo(k[sel][0] - h[2], k[sel][1] - h[3]) < 13) return -1;
-      return 0;
-    }
-    cv.addEventListener('pointerdown', function (e) {
-      dragH = nearHandle(e);
-      dragBreak = !!(dragH && e.altKey);
-      if (!dragH) {
-        var kk = nearKnot(e);
-        if (kk.d < 16) {
-          if (e.altKey) {
-            // Alt-клик по вершине склеивает разорванный усик: остаётся
-            // рабочая половина (у последней вершины — входящая)
-            var H = cloneH(), ch = H[kk.i];
-            if (ch && ch.length > 2) {
-              H[kk.i] = kk.i === P[cfg.axKey].length - 1 ? [ch[2], ch[3]] : [ch[0], ch[1]];
-              P[hKeyOf(cfg.axKey)] = H;
-              pan.save();
-            }
-            sel = kk.i;
-            return;
-          }
-          drag = kk.i;
-          sel = kk.i; // выбор вершины показывает её усики
-        } else {
-          var c = nearCurve(e);
-          if (c.d < 14) {
-            // хват за сам отрезок — гнём его
-            var k2 = P[cfg.axKey];
-            dragSeg = 0;
-            while (dragSeg < k2.length - 2 && c.t > k2[dragSeg + 1][0]) dragSeg++;
-          } else {
-            sel = -1; // клик в пустоту снимает выбор
-            return;
-          }
-        }
-      }
-      cv.setPointerCapture(e.pointerId);
-      if (dragH) applyHandle(e);
-      else if (drag >= 0) applyDrag(e);
-      else applyBend(e);
-      e.preventDefault();
-    });
-    cv.addEventListener('pointermove', function (e) {
-      if (dragH) applyHandle(e);
-      else if (drag >= 0) applyDrag(e);
-      else if (dragSeg >= 0) applyBend(e);
-    });
-    cv.addEventListener('pointerup', function () { drag = -1; dragSeg = -1; dragH = 0; dragBreak = false; });
-    cv.addEventListener('pointercancel', function () { drag = -1; dragSeg = -1; dragH = 0; dragBreak = false; });
-    cv.addEventListener('dblclick', function (e) {
-      // двойной клик: по свободной вершине — удаление, по линии — новая вершина
-      var kk = nearKnot(e);
-      if (kk.d < 16) {
-        removePoint(kk.i);
-        return;
-      }
-      var c = nearCurve(e);
-      if (c.d < 14) {
-        var f = toF(e);
-        insertPointAt(Math.max(0.02, Math.min(0.98, Math.round(c.t * 200) / 200)),
-                      Math.max(cfg.x0(), Math.min(cfg.x1(), Math.round(f.fx * 200) / 200)));
-      }
-    });
-
-    return { draw: draw, insertMid: insertMid, removeBest: removeBest,
-             deselect: function () { sel = -1; } };
+    return out;
   }
 
-  function buildAxisEd(title, axKey, sharpKey, otherAxKey, otherSharpKey, colorKey) {
+  /* ── ТОЧКА САДИТСЯ НА ЛИНИЮ И НЕ МЕНЯЕТ ЕЁ ФОРМУ (Г10, правило Сергея 03.09) ──
+     Садится ПО ВЫСОТЕ t — у оси свой ньютон (uVSegmente), сегмент и параметр
+     от ядра не нужны. ПРЯМОЙ участок → точка без усиков: чистый угол есть
+     состояние, к которому проще прибавлять. ИЗОГНУТЫЙ → разрез по де
+     Кастельжо (геометрия ядра), точка получает независимые усики: «один
+     отвечает за один фрагмент, другой — за другой»; у соседей меняется
+     только половина, смотрящая в разрез. Возвращает индекс новой точки. */
+  function vstavitPoVysote(axKey, t) {
+    var k = P[axKey];
+    if (k.length >= ED_MAX) return null;
+    var at = k.length - 1;
+    for (var j = 1; j < k.length; j++) if (k[j][0] > t) { at = j; break; }
+    var i = at - 1, pts = clonePts(axKey), H = cloneH(axKey);
+    if (segmentPryamoy(axKey, i)) {
+      H.splice(at, 0, 0);
+      /* x — с квантом разреза, не хранения: полпроцента уводили точку с
+         прямой на 0.0025 экрана (находка 04.09, до неё скрытая нулями) */
+      pts.splice(at, 0, [t, okr4(axisXf(axKey, 0, t))]);     // на самой линии, а не под курсором
+    } else {
+      var g = segmentyOsi(axKey)[i], rz = StendPanel.uzly.razrezat(g, uVSegmente(axKey, i, t));
+      var A = g.a, B = g.b, N = rz.tochka, pa = polovinki(axKey, i), pb = polovinki(axKey, at);
+      // знак — здесь: исходящее — контрольная минус узел, входящее — узел минус контрольная
+      H[i]  = [okr4(rz.levyy.c1.y - A.y), okr4(rz.levyy.c1.x - A.x), okr4(pa.vh[0]), okr4(pa.vh[1])];
+      H[at] = [okr4(pb.out[0]), okr4(pb.out[1]), okr4(B.y - rz.pravyy.c2.y), okr4(B.x - rz.pravyy.c2.x)];
+      H.splice(at, 0, [okr4(rz.pravyy.c1.y - N.y), okr4(rz.pravyy.c1.x - N.x),
+                       okr4(N.y - rz.levyy.c2.y),  okr4(N.x - rz.levyy.c2.x)]);
+      pts.splice(at, 0, [okr4(N.y), okr4(N.x)]);
+    }
+    P[axKey] = pts; P[hKeyOf(axKey)] = H;
+    return at;
+  }
+
+  /* ── МОДЕЛЬ ОСИ ДЛЯ ЯДРА ──────────────────────────────────────────────
+     cfg читается при каждом обращении — экранный редактор подменяет в нём
+     ось. cfg: axKey — ключ оси; x0, x1 — границы хода по x (панель
+     ED_X0…ED_X1, экран 0…1); oblast() — рамка экрана в px холста; others() —
+     соседние оси серым; fon(g, px, py, W, H) — что под линией; halo —
+     белая подложка под кривой, чтобы читалась на ленте её же цвета. */
+  function modelOsi(cfg) {
+    function ax() { return cfg.axKey; }
+    function k() { return P[ax()]; }
+    function zapisatH(H) { P[hKeyOf(ax())] = H; }
+    function axPath(g, key, px, py) {
+      g.beginPath();
+      for (var s = 0; s <= 100; s++) {
+        var t = s / 100, x = px(axisXf(key, 0, t)), y = py(t);
+        if (s) g.lineTo(x, y); else g.moveTo(x, y);
+      }
+      g.stroke();
+    }
+    return {
+      oblast: cfg.oblast,
+      uzly: function () { return k().map(function (p) { return { x: p[1], y: p[0] }; }); },
+      segmenty: function () { return segmentyOsi(ax()); },
+      /* Плечи — из половинок усика, той же правды, по которой строится
+         кривая (ход 47: autoHandle рисовал, segCtrl строил — теперь одно).
+         У кромочных по одному: первой некуда входить, последней — выходить.
+         «Без усиков» отдаёт плечи нулевой длины — ядро покажет их на отлёте
+         вдоль хорды к соседу (Г10): есть за что взяться. Ромбик залит у
+         усика, поставленного рукой; полый — выведен законом соседей. */
+      plechi: function (i) {
+        var p = k()[i], n = k().length, h = polovinki(ax(), i);
+        return { ho: i < n - 1 ? { x: p[1] + h.out[1], y: p[0] + h.out[0] } : null,
+                 hi: i > 0     ? { x: p[1] - h.vh[1],  y: p[0] - h.vh[0] }  : null,
+                 ruchnoy: handlesOf(ax())[i] != null };
+      },
+      vid: function (i) { return rezhimVershiny(ax(), i) === 'net' ? 'ugol' : 'gladkiy'; },
+      // кромочные прибиты к t=0 и t=1 и не убираются: без них ось не дойдёт до края
+      mozhno: function (i) { var n = k().length; return { dvigat: true, ubrat: i > 0 && i < n - 1 && n > 2 }; },
+      risovat: function (g, px, py, W, H) {
+        cfg.fon(g, px, py, W, H);
+        g.strokeStyle = cfg.otherStroke; g.lineWidth = 2;           // соседние оси — серым, для контекста
+        cfg.others().forEach(function (o) { axPath(g, o, px, py); });
+        if (cfg.halo) { g.strokeStyle = 'rgba(255,255,255,.6)'; g.lineWidth = 5; axPath(g, ax(), px, py); }
+        /* ЛИНИЯ, КОТОРУЮ ПРАВЯТ, — КРАСНАЯ (правка Сергея 03.09): холст
+           правки — инструмент, а не превью; цвет оси — свойство ленты, и
+           чёрная ось на тёмном холсте пропадала. Красный из алфавита темы. */
+        g.strokeStyle = '#FF453A'; g.lineWidth = 3; axPath(g, ax(), px, py);
+      },
+      dvinut: function (i, x, y) {
+        var pts = clonePts(ax()), last = pts.length - 1;
+        pts[i][1] = Math.max(cfg.x0, Math.min(cfg.x1, okr200(x)));
+        if (i > 0 && i < last) {                                    // кромочные ходят только по горизонтали
+          var t = Math.max(0, Math.min(1, okr200(y)));
+          pts[i][0] = Math.max(pts[i - 1][0] + ZAZOR, Math.min(pts[i + 1][0] - ZAZOR, t));
+        }
+        P[ax()] = pts;
+      },
+      /* Тяга ромбика пишет свою половину «вниз по потоку»: исходящую —
+         курсор минус вершина, входящую — вершина минус курсор. Симметричный
+         усик зеркалит вторую половину сам (пара в хранении и есть симметрия);
+         врозь — или Alt — двигает только свою; у точки без усиков вторая
+         половина остаётся нулевой. */
+      tyanutPlecho: function (i, kakoe, x, y, alt) {
+        var p = k()[i], H = cloneH(ax()), bylo = H[i], znak = kakoe === 'ho' ? 1 : -1;
+        var polovina = [okr200((y - p[0]) * znak), okr200((x - p[1]) * znak)];
+        if (!alt && !(bylo && bylo.length > 2)) {
+          H[i] = polovina;
+        } else {
+          var h = polovinki(ax(), i);
+          var four = bylo && bylo.length > 2 ? bylo.slice()
+                   : bylo === 0 ? [0, 0, 0, 0] : [h.out[0], h.out[1], h.vh[0], h.vh[1]];
+          if (kakoe === 'ho') { four[0] = polovina[0]; four[1] = polovina[1]; }
+          else { four[2] = polovina[0]; four[3] = polovina[1]; }
+          H[i] = four;
+        }
+        zapisatH(H);
+      },
+      /* «ГНУТЬ» ЗА УЧАСТОК — ПО ПРИНЦИПУ ФИГМЫ (Г10; правка Сергея 04.09).
+         Точка захвата ЗАКРЕПЛЯЕТСЯ при нажатии: ядро отдаёт параметр
+         ближайшего места на линии, и дальше именно эта точка кривой идёт за
+         курсором — вбок и по высоте. Поправка раскладывается на усики
+         обеих вершин по весам Бернштейна в точке захвата, от текущей формы
+         на каждом ходе руки. Прежде параметр брался заново по высоте
+         курсора: вертикальный ход руки не гнул линию, а переносил захват
+         вдоль неё, изгиб держался «за горизонт», а у несимметричной дуги
+         первый ход давал прыжок — захват по высоте не совпадал с местом
+         на линии. Единственный предел — ось есть функция высоты: усики по
+         высоте не выходят за участок. Точке-углу гнутьё ДАЁТ усик — но
+         только с той стороны, куда гнут: вторая половина остаётся
+         нулевой, и соседний участок не шелохнётся. Разорванные усики
+         держат нетронутую половину. */
+      nachatGnut: function (seg, t) { return { seg: seg, u: t }; },
+      gnut: function (sn, x, y) {
+        var key = ax(), kk = k(), s = sn.seg;
+        var t0 = kk[s][0], t1 = kk[s + 1][0], v0 = kk[s][1], v1 = kk[s + 1][1], dlina = t1 - t0;
+        var tp = Math.max(t0 + ZAZOR / 2, Math.min(t1 - ZAZOR / 2, y));
+        var xp = Math.max(cfg.x0, Math.min(cfg.x1, x));
+        var u = sn.u, mu = 1 - u;
+        var w1 = 3 * mu * mu * u, w2 = 3 * mu * u * u, den = w1 * w1 + w2 * w2;
+        if (den < 1e-4) return;                                   // хват у самой вершины — гнуть нечем
+        var cc = segCtrl(key, s);
+        var bt = mu * mu * mu * t0 + 3 * mu * mu * u * cc[0][0] + 3 * mu * u * u * cc[1][0] + u * u * u * t1;
+        var bx = mu * mu * mu * v0 + 3 * mu * mu * u * cc[0][1] + 3 * mu * u * u * cc[1][1] + u * u * u * v1;
+        var dT = tp - bt, dX = xp - bx;
+        var c1 = [cc[0][0] + dT * w1 / den, cc[0][1] + dX * w1 / den];
+        var c2 = [cc[1][0] + dT * w2 / den, cc[1][1] + dX * w2 / den];
+        var H = cloneH(key), hA = H[s], hB = H[s + 1];
+        // по высоте усик не выходит за участок — иначе x(t) не однозначна
+        var outA = [okr200(Math.max(0, Math.min(dlina, c1[0] - t0))), okr200(c1[1] - v0)];
+        var inB  = [okr200(Math.max(0, Math.min(dlina, t1 - c2[0]))), okr200(v1 - c2[1])];
+        H[s]     = hA === 0 ? [outA[0], outA[1], 0, 0] : hA && hA.length > 2 ? [outA[0], outA[1], hA[2], hA[3]] : outA;
+        H[s + 1] = hB === 0 ? [0, 0, inB[0], inB[1]] : hB && hB.length > 2 ? [hB[0], hB[1], inB[0], inB[1]] : inB;
+        zapisatH(H);
+      },
+      // двойной клик по линии: точка по высоте, не на самой кромке
+      vstavit: function (seg, t, p) {
+        return vstavitPoVysote(ax(), Math.max(ZAZOR, Math.min(1 - ZAZOR, okr200(p.y))));
+      },
+      ubrat: function (i) {
+        var pts = clonePts(ax()), H = cloneH(ax());
+        pts.splice(i, 1); H.splice(i, 1);
+        P[ax()] = pts; zapisatH(H);
+        return null;                                              // выбор снимается
+      },
+      /* При «гнуть» точка не ездит: рука либо вытягивает из неё симметричные
+         усики (с ходом: куда ведёшь — туда исходящий), либо снимает их
+         (без хода: точка становится углом). Двигают точки вне режима —
+         там у жеста нет второго смысла. */
+      tyagaIzUzla: function (i, x, y) {
+        var p = k()[i], H = cloneH(ax());
+        H[i] = [okr200(y - p[0]), okr200(x - p[1])];
+        zapisatH(H);
+      },
+      klikUzla: function (i) { postavitRezhim(ax(), i, 'net'); },
+      izmenilos: function () { pan.save(); }
+    };
+  }
+
+  /* РЕЖИМ «ГНУТЬ» — ОДИН НА ВСЕ ОКНА (правка 03.09): привычка руки, не
+     свойство холста. Ядро держит его у каждой руки — потому руки стоят в
+     списке, и переключение идёт по всем сразу. */
+  var RUKI = [];
+  function postavitGnem(da) {
+    GNEM = !!da;
+    RUKI.forEach(function (r) { if (r.gnut() !== GNEM) r.gnut(GNEM); });
+  }
+  function akcentPaneli() { return (getComputedStyle(pan.panel).getPropertyValue('--st-accent') || '#0A84FF').trim(); }
+
+  /* Кнопка «гнуть» — одна на оба окна: панельный холст и экранная лепка.
+     В панели — чип ядра (Г9), на экране — та же капсула своим стилем (см.
+     CSS). Тумблер-глагол (принцип 9): два состояния, дело в имени. */
+  function gnutKnopka(naEkrane) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'st-chip axis-gnut' + (naEkrane ? ' na-ekrane' : '');
+    if (naEkrane) pan.temaSyuda(b);        // чип вне панели идёт за её темой
+    b.title = 'Гнуть: тяга за участок гнёт его и даёт усики обоим концам; тяга от точки вытягивает симметричные усики; клик по точке снимает их — точка становится углом. Отжат — линия держит форму, точки просто двигаются.';
+    b.setAttribute('aria-pressed', 'false');
+    var sp = document.createElement('span'); sp.textContent = 'гнуть';
+    b.appendChild(sp);
+    b.addEventListener('click', function () { postavitGnem(!GNEM); b.obnovit(); });
+    b.obnovit = function () {
+      var da = String(GNEM);
+      if (b.getAttribute('aria-pressed') !== da) b.setAttribute('aria-pressed', da);
+    };
+    return b;
+  }
+
+  function buildAxisEd(title, axKey, otherAxKey) {
     var card = null;
     var hs = pan.panel.querySelectorAll('h4');
     for (var i = 0; i < hs.length; i++) {
@@ -2667,40 +2793,102 @@
     // степпер числа вершин: минус/плюс, форма кривой сохраняется
     var row = document.createElement('div'); row.className = 'row';
     var lab = document.createElement('label'); lab.textContent = 'Точки';
-    lab.title = 'Число вершин кривой (2–12). Плюс добавляет вершину на самом длинном отрезке, минус убирает самую «лишнюю» — форма почти не меняется. Вершину можно родить и двойным кликом по линии, а убрать — двойным кликом по вершине. Хват за линию гнёт сам отрезок. Alt-тяга за ромбик разрывает усик — половины расходятся, угол становится острым; Alt-клик по вершине склеивает обратно.';
-    var box = document.createElement('div'); box.className = 'ax-pts';
+    lab.title = 'Число точек линии (2–12). Плюс ставит точку на середину самого длинного участка, минус убирает самую «лишнюю» — форма почти не меняется. Точку можно родить и двойным кликом по линии: на прямом участке она рождается без усиков, на изогнутом линия режется и форма не меняется. Убрать точку: ✕ у выбранной или минус. Гнуть линию и вытягивать усики — в режиме «гнуть» на холсте.';
+    var box = document.createElement('div'); box.className = 'st-stepper ax-pts';
     var bMinus = document.createElement('button'); bMinus.type = 'button'; bMinus.textContent = '−';
-    var cnt = document.createElement('span'); cnt.textContent = '0';
+    bMinus.title = 'убрать самую «лишнюю» вершину — форма почти не меняется';
+    var cnt = document.createElement('b'); cnt.textContent = '0';
     var bPlus = document.createElement('button'); bPlus.type = 'button'; bPlus.textContent = '+';
+    bPlus.title = 'добавить вершину на самом длинном отрезке';
     box.appendChild(bMinus); box.appendChild(cnt); box.appendChild(bPlus);
     row.appendChild(lab); row.appendChild(box);
     if (card) card.appendChild(row);
 
+    /* ── РЕЖИМ ВЫБРАННОЙ ВЕРШИНЫ (Сергей 03.09) ──────────────────────
+       «Нужно, чтобы у точки был режим с усиками и режим без усиков. В
+       режиме с усиками два варианта — независимо и симметрично». Три чипа
+       на выбранную вершину. Пока вершина не выбрана, чипы приглушены:
+       величины нет. */
+    var rezhRow = document.createElement('div'); rezhRow.className = 'row dva';
+    var rezhLab = document.createElement('label'); rezhLab.textContent = 'Усики вершины';
+    rezhLab.title = 'Что делают касательные у ВЫБРАННОЙ вершины. «Без усиков» — кривая входит прямой, угол острый; «симметрично» — половины лежат на одной прямой и одной длины; «врозь» — половины независимы, получается излом. Выбрать вершину — клик по ней на холсте.';
+    var rezhRyad = document.createElement('div'); rezhRyad.className = 'st-chipy';
+    var rezhKn = REZHIMY.map(function (r) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'st-chip';
+      var sp = document.createElement('span'); sp.textContent = r[1]; b.appendChild(sp);
+      b.addEventListener('click', function () {
+        var sel = ruka.vybran();
+        if (sel < 0) return;
+        postavitRezhim(axKey, sel, r[0]);
+        pan.save(); ruka.risovat();
+      });
+      rezhRyad.appendChild(b);
+      return [b, r[0]];
+    });
+    rezhRow.appendChild(rezhLab); rezhRow.appendChild(rezhRyad);
+    if (card) card.appendChild(rezhRow);
+
+    /* Холст — во всю ширину карточки, размер буфера и dpr ставит ядро.
+       Инструмент стоит на холсте, а не строкой выше (правка Сергея 03.09):
+       рука тянется к линии — и режим правки под той же рукой. */
     var cv = document.createElement('canvas');
     cv.className = 'axis-ed';
-    cv.width = 600; cv.height = 380;
-    if (card) card.appendChild(cv);
+    var obl = document.createElement('div'); obl.className = 'axis-obl';
+    var gnutKn = gnutKnopka(false);
+    obl.appendChild(cv);
+    obl.appendChild(gnutKn);
+    if (card) card.appendChild(obl);
 
-    var api = attachAxisEditor(cv, {
-      axKey: axKey, sharpKey: sharpKey, colorKey: colorKey,
-      others: function () { return [[otherAxKey, otherSharpKey]]; },
-      x0: function () { return ED_X0; },
-      x1: function () { return ED_X1; },
-      k: function () { return 1; },
+    var cfg = {
+      axKey: axKey, x0: ED_X0, x1: ED_X1,
+      // область — рамка экрана внутри холста шириной в полтора экрана
+      oblast: function () {
+        var W = cv.clientWidth, H = cv.clientHeight, sh = ED_X1 - ED_X0;
+        return { left: -ED_X0 / sh * W, top: 0, width: W / sh, height: H };
+      },
+      others: function () { return [otherAxKey]; },
       halo: false,
-      hstroke: 'rgba(255,255,255,.55)',
-      diaFill: '#101012',
       otherStroke: 'rgba(255,255,255,.35)',
-      drawBg: function (g, w, h, exf, eyf) {
-        g.fillStyle = '#101012'; g.fillRect(0, 0, w, h);
+      fon: function (g, px, py, W, H) {
+        g.fillStyle = '#101012'; g.fillRect(0, 0, W, H);
         // рамка-экран и его диагональ
         g.strokeStyle = 'rgba(255,255,255,.16)'; g.lineWidth = 2;
-        g.strokeRect(exf(0), 1, exf(1) - exf(0), h - 2);
-        g.beginPath(); g.moveTo(exf(0), eyf(0)); g.lineTo(exf(1), eyf(1)); g.stroke();
-      },
+        g.strokeRect(px(0), 1, px(1) - px(0), H - 2);
+        g.beginPath(); g.moveTo(px(0), py(0)); g.lineTo(px(1), py(1)); g.stroke();
+      }
+    };
+    var model = modelOsi(cfg);
+    var ruka = StendPanel.uzly(cv, model, { accent: akcentPaneli });
+    RUKI.push(ruka);
+
+    bPlus.addEventListener('click', function () {
+      var k = P[axKey];
+      if (k.length >= ED_MAX) return;
+      // вершина встаёт на середину самого длинного отрезка по высоте —
+      // на линию тем же законом, что двойной клик; форма не прыгает
+      var bi = 0, bl = -1;
+      for (var j = 0; j < k.length - 1; j++) {
+        var l = k[j + 1][0] - k[j][0];
+        if (l > bl) { bl = l; bi = j; }
+      }
+      var at = vstavitPoVysote(axKey, okr200((k[bi][0] + k[bi + 1][0]) / 2));
+      if (at != null) ruka.vybrat(at);
+      pan.save();
     });
-    bPlus.addEventListener('click', api.insertMid);
-    bMinus.addEventListener('click', api.removeBest);
+    bMinus.addEventListener('click', function () {
+      var k = P[axKey];
+      if (k.length <= 2) return;
+      // убираем вершину, чьё выпадение меньше всего меняет форму
+      var bi = 1, bd = Infinity;
+      for (var j = 1; j < k.length - 1; j++) {
+        var t0 = k[j - 1][0], t1 = k[j + 1][0];
+        var u = t1 > t0 ? (k[j][0] - t0) / (t1 - t0) : 0.5;
+        var d = Math.abs(k[j][1] - (k[j - 1][1] + (k[j + 1][1] - k[j - 1][1]) * u));
+        if (d < bd) { bd = d; bi = j; }
+      }
+      model.ubrat(bi); ruka.snyat(); pan.save();
+    });
 
     // вход в полноэкранную лепку этой оси
     var sb = document.createElement('button');
@@ -2714,83 +2902,94 @@
     function refresh() {
       var n = String(P[axKey].length);
       if (cnt.textContent !== n) cnt.textContent = n;
+      var sel = ruka.vybran(), est = sel >= 0 && sel < P[axKey].length;
+      var tek = est ? rezhimVershiny(axKey, sel) : null;
+      rezhKn.forEach(function (par) {
+        par[0].setAttribute('aria-pressed', String(est && tek === par[1]));
+        par[0].disabled = !est;                 // приглушение — у чипа ядра
+      });
+      rezhLab.textContent = est ? ('Усики вершины ' + (sel + 1)) : 'Усики вершины';
+      gnutKn.obnovit();     // режим общий: кнопка идёт за ним, а не наоборот
     }
 
-    return { draw: api.draw, refresh: refresh };
+    return { draw: ruka.risovat, refresh: refresh, ruka: ruka, holst: cv,
+             sostoyanie: function () { return { sel: ruka.vybran() }; },
+             vybrat: ruka.vybrat,
+             gnut: function (da) { if (da !== undefined) postavitGnem(da); return GNEM; },
+             // наружу для проверок: где нарисованы плечи точки — длины в px холста
+             usiki: ruka.plechi };
   }
   var drawEds = [
-    buildAxisEd('Текстовая ось', 'textPts', 'textSharp', 'numPts', 'numSharp', 'textColor'),
-    buildAxisEd('Ось номеров', 'numPts', 'numSharp', 'textPts', 'textSharp', 'numColor'),
-    buildAxisEd('Ось плашек', 'rectPts', 'rectSharp', 'textPts', 'textSharp', 'numColor'),
+    buildAxisEd('Текстовая ось', 'textPts', 'numPts'),
+    buildAxisEd('Ось номеров', 'numPts', 'textPts'),
+    buildAxisEd('Ось плашек', 'rectPts', 'textPts'),
   ];
 
   // ── режим лепки (2026-08-09, запрос Сергея: панельному холсту не
   // хватает точности): та же ось — прямо на экране, поверх живой
-  // ленты, пиксель в пиксель. Оверлей-канвас во весь экран (z 40 —
-  // над сотами, под панелью), общее ядро attachAxisEditor, соседние
-  // оси тонко серым (плашечная — только когда своя), белая подложка
-  // под кривой, чтобы читалась на ленте её же цвета. Колесо листает
-  // ленту, драг ленты и соты спят; «Готово» или Escape — выход ──
+  // ленты, пиксель в пиксель. Холст во весь экран (z 40 — над сотами,
+  // под панелью), та же модель на ядре, соседние оси тонко серым
+  // (плашечная — только когда своя), белая подложка под кривой, чтобы
+  // читалась на ленте её же цвета. Колесо листает ленту, драг ленты и
+  // соты спят; «Готово» или Escape — выход. Рука живёт, пока открыт
+  // экран: с ней приходят и уходят клавиши (Delete, Escape) ──
   if (!IS_MOBILE) (function buildScreenEd() {
     var cv = document.createElement('canvas');
     cv.id = 'axisScreen';
     cv.style.display = 'none';
     document.body.appendChild(cv);
+    /* Верхний ряд: инструмент и выход рядом, в одном углу (правка Сергея
+       04.09). Прячется и показывается целиком — одна дверь на оба. */
+    var verh = document.createElement('div');
+    verh.className = 'axis-verh';
+    verh.style.display = 'none';
+    var gnutEkr = gnutKnopka(true);
     var chip = document.createElement('button');
     chip.className = 'axis-done';
-    chip.style.display = 'none';
-    document.body.appendChild(chip);
-    var activeAx = null;
-    var DPR = Math.min(2, window.devicePixelRatio || 1);
+    verh.appendChild(gnutEkr); verh.appendChild(chip);
+    document.body.appendChild(verh);
+    var activeAx = null, ruka = null;
     var cfg = {
-      axKey: 'textPts', sharpKey: 'textSharp', colorKey: 'textColor',
+      axKey: 'textPts', x0: 0, x1: 1,
+      oblast: function () { return { left: 0, top: 0, width: cv.clientWidth, height: cv.clientHeight }; },
       others: function () {
-        var all = [['textPts', 'textSharp'], ['numPts', 'numSharp']];
-        if (P.rectAxisOwn === '1') all.push(['rectPts', 'rectSharp']);
-        return all.filter(function (o) { return o[0] !== cfg.axKey; });
+        var all = ['textPts', 'numPts'];
+        if (P.rectAxisOwn === '1') all.push('rectPts');
+        return all.filter(function (o) { return o !== cfg.axKey; });
       },
-      x0: function () { return 0; },
-      x1: function () { return 1; },
-      k: function () { return DPR; },
       halo: true,
-      hstroke: 'rgba(127,127,127,.85)',
-      diaFill: '#1c1c1e',
       otherStroke: 'rgba(127,127,127,.4)',
-      drawBg: function () {},
+      fon: function () {},
     };
-    var api = attachAxisEditor(cv, cfg);
-    function fit() {
-      cv.width = Math.round(innerWidth * DPR);
-      cv.height = Math.round(innerHeight * DPR);
-    }
+    var model = modelOsi(cfg);
     var rafOn = false;
     function loop() {
-      if (!activeAx) { rafOn = false; return; }
-      api.draw();
+      if (!activeAx || !ruka) { rafOn = false; return; }
+      ruka.risovat();
+      gnutEkr.obnovit();
       requestAnimationFrame(loop);
     }
     enterScreenEd = function (axKey, title) {
+      if (ruka) exitEd();
       cfg.axKey = axKey;
-      cfg.sharpKey = axKey === 'textPts' ? 'textSharp' : axKey === 'rectPts' ? 'rectSharp' : 'numSharp';
-      cfg.colorKey = axKey === 'textPts' ? 'textColor' : 'numColor';
       activeAx = axKey;
       chip.textContent = (title || 'Ось') + ' · готово';
-      fit();
       cv.style.display = '';
-      chip.style.display = '';
+      verh.style.display = ''; gnutEkr.obnovit();
+      ruka = StendPanel.uzly(cv, model, { klavishi: true, naEscape: exitEd, accent: akcentPaneli });
+      RUKI.push(ruka);
+      ruka.gnut(GNEM);
       if (!rafOn) { rafOn = true; requestAnimationFrame(loop); }
     };
     function exitEd() {
-      activeAx = null;
-      api.deselect();
+      if (!ruka) return;
+      ruka.zakryt();
+      RUKI.splice(RUKI.indexOf(ruka), 1);
+      ruka = null; activeAx = null;
       cv.style.display = 'none';
-      chip.style.display = 'none';
+      verh.style.display = 'none';
     }
     chip.addEventListener('click', exitEd);
-    window.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && activeAx) exitEd();
-    });
-    window.addEventListener('resize', function () { if (activeAx) fit(); });
     axisEditOn = function () { return !!activeAx; };
   })();
 
@@ -3300,6 +3499,16 @@
     touched = true;
     e.preventDefault();
   });
+  /* Кухня проверок (04.09, фаза 3 хвоста 1): ?proba отдаёт модель оси наружу —
+     пробы .razbory/proba-osi.html сверяют формы и жесты, не залезая в стенд.
+     Без ключа в адресе снаружи ничего не видно. */
+  if (/[?&]proba(?![a-z])/.test(location.search)) window.__os = {
+    P: P, DEFAULTS: DEFAULTS, VARIANTS: VARIANTS, pan: pan,
+    axisXf: axisXf, segCtrl: segCtrl, handlesOf: handlesOf, drawEds: drawEds,
+    enterScreenEd: function (k, t) { enterScreenEd(k, t); },
+    axisEditOn: function () { return axisEditOn(); }
+  };
+
 })();
 </script>
 </body>

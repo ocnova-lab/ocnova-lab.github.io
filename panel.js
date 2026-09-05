@@ -32,6 +32,388 @@
 
   // Точный ввод числа — единые клавиши для всех полей панели и органов:
   // стрелки ±1, с Shift ±10 (как в Фигме), запятая читается как точка.
+  /* ── ПИКЕР ЦВЕТА (устройство Миши Матвеева, 03.09) ────────────────
+     Квадрат насыщенность×яркость, полоса тона, пипетка, поле HEX.
+     Числа с его мастера: поле 8, ряд тона 28, зазор до пипетки 4,
+     пипетка квадратная 28. Квадрат — во всю ширину строки и такой же
+     высоты: обе оси квадрата равноправны, сплющивать нечего. */
+  function hslVCvet(h, s2, v) {          // тон 0…360, насыщенность и яркость 0…1
+    var f = function (n) {
+      var k = (n + h / 60) % 6;
+      return v - v * s2 * Math.max(0, Math.min(k, 4 - k, 1));
+    };
+    var d2 = function (x) { return ('0' + Math.round(x * 255).toString(16)).slice(-2); };
+    return '#' + d2(f(5)) + d2(f(3)) + d2(f(1));
+  }
+  function cvetVHsv(hex) {
+    var m = /^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(hex || '');
+    if (!m) return [0, 0, 1];
+    var r = parseInt(m[1], 16) / 255, g2 = parseInt(m[2], 16) / 255, b2 = parseInt(m[3], 16) / 255;
+    var mx = Math.max(r, g2, b2), mn = Math.min(r, g2, b2), dl = mx - mn;
+    var h = 0;
+    if (dl) {
+      if (mx === r) h = 60 * (((g2 - b2) / dl) % 6);
+      else if (mx === g2) h = 60 * ((b2 - r) / dl + 2);
+      else h = 60 * ((r - g2) / dl + 4);
+    }
+    if (h < 0) h += 360;
+    return [h, mx ? dl / mx : 0, mx];
+  }
+  /* Пикер отдан наружу целиком (StendPanel.piker): стенды рисовали свой
+   цвет нативным input[type=color], и тот поднимал системное окно macOS
+   поверх стенда — чужая раскладка вместо своей (диагональ, 03.09).
+   Значение читается и пишется колбэками, поэтому пикер годится и ручке
+   панели, и любому месту стенда.
+     opt = { znachenie: fn → '#rrggbb', postavit: fn(hex) }
+   Отдаёт { svotch, pole, obnovit }. */
+  function pikerCveta(opt) {
+    var chitat = opt.znachenie, pisat = opt.postavit;
+    var hsv = cvetVHsv(chitat());
+    var svotch = document.createElement('button');
+    svotch.type = 'button'; svotch.className = 'st-svotch';
+    svotch.setAttribute('aria-expanded', 'false');
+    svotch.title = 'открыть пикер';
+    var pole = document.createElement('div');
+    pole.className = 'st-cvet'; pole.hidden = true;
+
+    var kv = document.createElement('canvas');       // квадрат насыщенность×яркость
+    kv.className = 'st-cvet-kv'; kv.width = 272; kv.height = 272;
+    var kvTochka = document.createElement('i'); kvTochka.className = 'st-cvet-tochka';
+    var kvObl = document.createElement('div'); kvObl.className = 'st-cvet-obl';
+    kvObl.appendChild(kv); kvObl.appendChild(kvTochka);
+
+    var ryad = document.createElement('div'); ryad.className = 'st-cvet-ryad';
+    var ton = document.createElement('div'); ton.className = 'st-cvet-ton';
+    var tonTochka = document.createElement('i'); tonTochka.className = 'st-cvet-tt';
+    ton.appendChild(tonTochka);
+    var pipetka = document.createElement('button');
+    pipetka.type = 'button'; pipetka.className = 'st-cvet-pip';
+    pipetka.title = 'снять цвет с экрана';
+    pipetka.innerHTML = '<svg viewBox="0 0 20 20" aria-hidden="true">' +
+      '<path d="M13.5 3.2a2 2 0 0 1 2.8 2.8l-1.4 1.4-2.8-2.8 1.4-1.4z"/>' +
+      '<path d="M11.4 5.3 13.5 7.4 7 13.9l-2.8.7.7-2.8L11.4 5.3z"/></svg>';
+    // пипетка есть не везде: без неё ряд просто короче, а не сломан
+    if (!window.EyeDropper) pipetka.hidden = true;
+    ryad.appendChild(ton); ryad.appendChild(pipetka);
+
+    var niz = document.createElement('div'); niz.className = 'st-cvet-niz';
+    var hexPole = document.createElement('input');
+    hexPole.type = 'text'; hexPole.className = 'st-cvet-hex'; hexPole.spellcheck = false;
+    hexPole.setAttribute('aria-label', 'цвет шестнадцатеричным числом');
+    niz.appendChild(hexPole);
+
+    pole.appendChild(kvObl); pole.appendChild(ryad); pole.appendChild(niz);
+
+    function risovatKvadrat() {
+      var g = kv.getContext('2d'), w = kv.width, h = kv.height;
+      g.fillStyle = 'hsl(' + hsv[0] + ',100%,50%)'; g.fillRect(0, 0, w, h);
+      var gb = g.createLinearGradient(0, 0, w, 0);
+      gb.addColorStop(0, '#fff'); gb.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = gb; g.fillRect(0, 0, w, h);
+      var gc = g.createLinearGradient(0, 0, 0, h);
+      gc.addColorStop(0, 'rgba(0,0,0,0)'); gc.addColorStop(1, '#000');
+      g.fillStyle = gc; g.fillRect(0, 0, w, h);
+    }
+    function pokazat() {
+      var hex = chitat();
+      svotch.style.background = hex;
+      hexPole.value = hex.toUpperCase();
+      kvTochka.style.left = (hsv[1] * 100) + '%';
+      kvTochka.style.top = ((1 - hsv[2]) * 100) + '%';
+      kvTochka.style.background = hex;
+      tonTochka.style.left = (hsv[0] / 360 * 100) + '%';
+      risovatKvadrat();
+    }
+    function polozhit() {
+      pisat(hslVCvet(hsv[0], hsv[1], hsv[2]));
+      pokazat();
+    }
+    // тяга по квадрату и по полосе тона — одним приёмом
+    function tyaga(el, shag) {
+      function hod(e) {
+        var r = el.getBoundingClientRect();
+        shag(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)),
+             Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)));
+        polozhit();
+      }
+      el.addEventListener('pointerdown', function (e) {
+        e.preventDefault(); el.setPointerCapture(e.pointerId); hod(e);
+        function dv(e2) { if (el.hasPointerCapture(e2.pointerId)) hod(e2); }
+        el.addEventListener('pointermove', dv);
+        el.addEventListener('pointerup', function up() {
+          el.removeEventListener('pointermove', dv);
+          el.removeEventListener('pointerup', up);
+        });
+      });
+    }
+    tyaga(kvObl, function (x, y) { hsv[1] = x; hsv[2] = 1 - y; });
+    tyaga(ton, function (x) { hsv[0] = x * 360; });
+
+    /* HEX принимается и коротким: «#fff» — та же запись цвета, что и
+       «#ffffff», и рука её пишет чаще. Разворачиваем сами, а кривой ввод
+       не молчит: поле краснеет и остаётся (правка 03.09). */
+    hexPole.addEventListener('input', function () {
+      hexPole.classList.remove('oshibka'); hexPole.removeAttribute('aria-invalid');
+    });
+    hexPole.addEventListener('change', function () {
+      var v = hexPole.value.trim().replace(/^#/, '');
+      if (/^[\da-f]{3}$/i.test(v)) v = v[0] + v[0] + v[1] + v[1] + v[2] + v[2];
+      if (!/^[\da-f]{6}$/i.test(v)) {
+        hexPole.classList.add('oshibka'); hexPole.setAttribute('aria-invalid', 'true');
+        return;
+      }
+      pisat('#' + v.toLowerCase()); hsv = cvetVHsv(chitat()); pokazat();
+    });
+    pipetka.addEventListener('click', function () {
+      if (!window.EyeDropper) return;
+      new window.EyeDropper().open().then(function (r) {
+        pisat(r.sRGBHex.toLowerCase()); hsv = cvetVHsv(chitat()); pokazat();
+      }).catch(function () {});
+    });
+    svotch.addEventListener('click', function () {
+      pole.hidden = !pole.hidden;
+      svotch.setAttribute('aria-expanded', String(!pole.hidden));
+      if (!pole.hidden) risovatKvadrat();
+    });
+    function obnovit() { hsv = cvetVHsv(chitat()); pokazat(); }
+    obnovit();
+    return { svotch: svotch, pole: pole, obnovit: obnovit };
+  }
+
+
+  /* ── ПОЛЕ ВВОДА ОДНИМ БЛОКОМ (Г5, Г8, Г9) ──────────────────────────
+     Собирает плашку «подпись внутри слева, число справа». Нажатие в любое
+     место плашки — включая подпись и пустое место — ставит курсор в поле и
+     ВЫДЕЛЯЕТ число целиком: клик в середину числа ставил курсор между цифр,
+     и правка начиналась с попадания в букву (жалоба Сергея 03.09).
+     Отдаёт { box, inp }. */
+  /* ── ЧИСЛО НА ЭТАЖЕ ИМЕНИ — ОБЩИЙ БЛОК ЯДРА (Г9, ход 65) ────────────
+     Пара нитке. Нитка тянется, число вводят здесь: показатель стоит всегда
+     обычным текстом (Г3), клик поднимает плашку с полем ровно на его месте —
+     габариты одни, правый край не едет, вертикаль рифмовки цела (эталон
+     Сергея 03.09). Поле принимает выражения, стрелки шагают ШАГОМ ВЕЛИЧИНЫ
+     и правят сразу, кривой ввод по Enter краснеет, уход из поля отменяет.
+
+     Прежде это жило только в строителе строк, и у органов со своей ниткой
+     точного ввода не было — его добирали кликом по числу в пилюле. Два дела
+     на одной цели: ровно то, от чего ушли, сняв стрелки с пилюли (03.09).
+     Теперь у числа своё место, и клик по пилюле снят везде (слово Сергея
+     04.09).
+
+     Вызов:
+       var c = StendPanel.chisloBlok({
+         imya, min, max, shag,        — подпись для голоса и границы
+         znachenie: () => число,      — откуда читать
+         postavit:  (v) => {},        — куда писать (принято полем)
+         tekst:     (v) => строка,    — как показывать (не обязательно)
+         znak                         — элемент внутрь плашки слева (точка увода)
+       });
+       c.obl        — .st-imya-pole-obl, класть на этаж имени
+       c.obnovit()  — перечитать значение */
+  function chisloBlok(o) {
+    var obl = document.createElement('div');
+    obl.className = 'st-imya-pole-obl';
+    var pokaz = document.createElement('button');
+    pokaz.type = 'button'; pokaz.className = 'st-imya-chislo';
+    pokaz.setAttribute('aria-label', (o.imya || '') + ': ввести число');
+    pokaz.title = 'клик — ввести число; выражения: 700/2, +25';
+    var pole = document.createElement('input');
+    pole.type = 'text'; pole.inputMode = 'decimal';
+    pole.className = 'st-imya-pole'; pole.hidden = true;
+    pole.setAttribute('aria-label', (o.imya || '') + ': ввести число');
+
+    function chitat() { return +o.znachenie(); }
+    function tekst() { return o.tekst ? o.tekst(chitat()) : String(parseFloat(chitat().toFixed(4))); }
+    function obnovit() {
+      var t = tekst();
+      pokaz.textContent = t;
+      if (document.activeElement !== pole) pole.value = t;
+    }
+    function otkryt() {
+      if (!pole.hidden) return;
+      pokaz.hidden = true; pole.hidden = false;
+      obl.classList.add('vvod');
+      pole.value = tekst();
+      pole.focus(); pole.select();
+    }
+    function zakryt() {
+      pole.hidden = true; pokaz.hidden = false;
+      obl.classList.remove('vvod');
+      pole.classList.remove('oshibka'); pole.removeAttribute('aria-invalid');
+      obnovit();
+    }
+    function prinyat(myagko) {
+      var v = vyrazhenie(pole.value, chitat());
+      if (isNaN(v)) v = chislo(pole.value);
+      if (isNaN(v)) {
+        // кривой ввод по Enter не молчит: поле остаётся и краснеет
+        if (myagko) { pole.classList.add('oshibka'); pole.setAttribute('aria-invalid', 'true'); }
+        return false;
+      }
+      var lo = parseFloat(o.min), hi = parseFloat(o.max);
+      if (!isNaN(lo)) v = Math.max(lo, v);
+      if (!isNaN(hi)) v = Math.min(hi, v);
+      o.postavit(v);
+      obnovit();
+      return true;
+    }
+    pokaz.addEventListener('click', otkryt);
+    pole.addEventListener('input', function () {
+      pole.classList.remove('oshibka'); pole.removeAttribute('aria-invalid');
+    });
+    pole.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') { ev.preventDefault(); if (prinyat(true)) zakryt(); return; }
+      if (ev.key === 'Escape') { ev.preventDefault(); zakryt(); pokaz.focus(); return; }
+      if (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown') return;
+      /* Стрелки шагают ШАГОМ ВЕЛИЧИНЫ и правят сразу. Общий помощник
+         klavishiChisla шагал единицей и только переписывал текст: у кегля с
+         шагом 0.2 щелчок прыгал впятеро, а нитка стояла до ухода из поля
+         (правка 03.09). */
+      ev.preventDefault();
+      var krupno = (parseFloat(o.shag) || 1) * (ev.shiftKey ? 10 : 1);
+      pole.value = parseFloat((chitat() + (ev.key === 'ArrowUp' ? krupno : -krupno)).toFixed(4));
+      prinyat(true);
+    });
+    pole.addEventListener('blur', function () { prinyat(false); zakryt(); });
+    /* Г4: знак увода — ВНУТРИ плашки, раз поле есть. Снаружи он стоял бы в
+       другом месте, чем у строк с полем ввода, а два места для одного знака —
+       грязь (правка Сергея 03.09). */
+    if (o.znak) obl.appendChild(o.znak);
+    obl.appendChild(pokaz); obl.appendChild(pole);
+    obnovit();                       // число стоит сразу, а не после первой правки
+    return { obl: obl, pokaz: pokaz, pole: pole, obnovit: obnovit };
+  }
+
+  /* ── НИТКА — ОБЩИЙ БЛОК ЯДРА (Г9, ход 64) ──────────────────────────
+     Эталон Сергея 03.09: трек и заливка — свои элементы, родная шайба
+     прозрачна и равна пилюле по ширине, число едет в пилюле. Пять органов
+     рисовали свой `<input type=range>` и красили его сокращённым
+     свойством `background` — оно затирает трёхпиксельную дорожку из
+     `panel.css`, и градиент заливал всю высоту: толстая синяя полоса
+     старого образца (снимки Сергея 04.09, ход 61). Своей нитки больше нет
+     ни у кого: орган берёт блок.
+
+     Вызов:
+       var n = StendPanel.nitkaBlok({
+         min, max, shag,            — границы и шаг
+         znachenie: () => число,    — откуда читать
+         postavit:  (v) => {},      — куда писать (тяга, стрелки, колесо)
+         tekst:     (v) => строка,  — что показывать в пилюле (не обязательно)
+         umolchanie:() => число,    — дабл-клик по пилюле (не обязательно)
+         inp, val                   — готовые элементы, если они уже есть
+       });
+       n.obl        — .st-nitka, класть в строку
+       n.inp, n.val — нитка и число в пилюле
+       n.obnovit()  — перечитать значение и перекрасить
+     Заливка и ход пилюли считаются ОДНИМ законом: пилюля ходит от половины
+     своей ширины до W минус половина, и заливка кончается там же, где её
+     центр (правка 03.09 — иначе синяя то не доходит, то вылезает). */
+  function nitkaBlok(o) {
+    var obl = document.createElement('div'); obl.className = 'st-nitka';
+    var fill = document.createElement('div'); fill.className = 'st-nitka-fill';
+    var inp = o.inp || document.createElement('input');
+    inp.type = 'range';
+    if (o.min !== undefined) inp.min = o.min;
+    if (o.max !== undefined) inp.max = o.max;
+    if (o.shag !== undefined) inp.step = o.shag;
+    var val = o.val || document.createElement('span');
+    if (!val.className) val.className = 'val';
+    var pil = document.createElement('span'); pil.className = 'st-pil';
+    /* ОДНА ЦЕЛЬ — ОДНА ФУНКЦИЯ (правка Сергея 03.09, подтверждена 04.09):
+       пилюля показывает и тянется, число вводят блоком `chisloBlok` на этаже
+       имени. Клика по числу в пилюле нет ни у ядра, ни у органов — второе
+       дело на той же цели и есть то, от чего ушли, сняв с пилюли стрелки. */
+    val.style.pointerEvents = 'none'; val.tabIndex = -1;
+    val.removeAttribute('role'); val.title = '';
+    pil.appendChild(val);
+    obl.appendChild(fill); obl.appendChild(inp); obl.appendChild(pil);
+
+    function chitat() { return o.znachenie ? +o.znachenie() : parseFloat(inp.value); }
+    function pisat(v) { if (o.postavit) o.postavit(v); }
+    function pokrasit() {
+      var lo = parseFloat(inp.min), hi = parseFloat(inp.max);
+      var p = hi > lo ? (parseFloat(inp.value) - lo) / (hi - lo) * 100 : 0;
+      p = Math.max(0, Math.min(100, p));
+      var hw = (pil.offsetWidth || 39) / 2;
+      inp.style.setProperty('--st-pill', hw * 2 + 'px');
+      var hod = 'calc(' + hw + 'px + ' + (p / 100) + ' * (100% - ' + hw * 2 + 'px))';
+      pil.style.left = hod;
+      fill.style.width = hod;
+    }
+    function obnovit() {
+      var v = chitat();
+      if (!isNaN(v) && document.activeElement !== inp) inp.value = v;
+      val.textContent = o.tekst ? o.tekst(chitat()) : String(parseFloat((+inp.value).toFixed(4)));
+      pokrasit();
+    }
+    inp.addEventListener('input', function () { pisat(parseFloat(inp.value)); obnovit(); });
+    pil.addEventListener('pointerdown', function (ev) {
+      ev.preventDefault(); pil.setPointerCapture(ev.pointerId); pil.classList.add('tyanem');
+    });
+    pil.addEventListener('pointermove', function (ev) {
+      if (!pil.hasPointerCapture(ev.pointerId)) return;
+      var r = obl.getBoundingClientRect(), hw = pil.offsetWidth / 2;
+      var q = Math.max(0, Math.min(1, (ev.clientX - r.left - hw) / ((r.width - 2 * hw) || 1)));
+      var lo = parseFloat(inp.min), hi = parseFloat(inp.max), sh = parseFloat(inp.step) || 1;
+      inp.value = parseFloat((lo + Math.round(q * (hi - lo) / sh) * sh).toFixed(6));
+      inp.dispatchEvent(new Event('input'));
+    });
+    pil.addEventListener('pointerup', function () { pil.classList.remove('tyanem'); });
+    pil.addEventListener('dblclick', function () {
+      if (!o.umolchanie) return;
+      var v = o.umolchanie();
+      if (v === undefined) return;
+      inp.value = v; pisat(v); obnovit();
+    });
+    // ширина пилюли меняется с числом — ход и заливка идут за ней
+    if (window.ResizeObserver) new ResizeObserver(pokrasit).observe(pil);
+    inp.__nitka = { pokrasit: pokrasit, obnovit: obnovit };
+    /* Блок показывает величину С РОЖДЕНИЯ. Прежде первый показ был на
+       совести органа, и пружина вышла с пустыми пилюлями и без заливки
+       (поймано снимком 04.09): значение есть, а на экране его нет — ровно
+       то, что Г3 запрещает. Ширины пилюли в этот миг ещё нет — её принесёт
+       ResizeObserver, когда нитку положат в панель. */
+    obnovit();
+    return { obl: obl, inp: inp, val: val, pil: pil, obnovit: obnovit, pokrasit: pokrasit };
+  }
+
+  function poleBlok(podpis, opt) {
+    opt = opt || {};
+    var box = document.createElement('div');
+    box.className = 'st-pole-blok';
+    /* Два положения подписи, и оба законны (04.09):
+         внутри (по умолчанию, Г5) — для ряда x/y/r, где подпись есть
+           единица величины и снаружи съела бы ширину;
+         сверху ({ sverhu: true }) — для коридора и пары, где подпись
+           читается заголовком поля («от» / «до» на эталоне Сергея).
+       Наружу отдаётся одна и та же пара { box, inp }: орган не выбирает
+       разметку, он выбирает положение. */
+    if (podpis && !opt.sverhu) {
+      var i = document.createElement('i'); i.textContent = podpis; box.appendChild(i);
+    }
+    var inp = document.createElement('input');
+    inp.type = 'text'; inp.inputMode = opt.celoe ? 'numeric' : 'decimal';
+    inp.setAttribute('aria-label', opt.imya || podpis || '');
+    box.appendChild(inp);
+    // нажатие по плашке мимо поля — тот же жест, что и по полю
+    box.addEventListener('pointerdown', function (e) {
+      if (e.target === inp) return;
+      e.preventDefault(); inp.focus();
+    });
+    // выделяем всё и по мыши, и с клавиатуры: правят число целиком
+    inp.addEventListener('focus', function () { setTimeout(function () { inp.select(); }, 0); });
+    if (opt.sverhu) {
+      var stolb = document.createElement('div');
+      stolb.className = 'st-pole-stolb';
+      var nad = document.createElement(opt.dlyaPolya ? 'label' : 'span');
+      if (!opt.dlyaPolya) nad.className = 'st-pole-nad';
+      nad.textContent = podpis || '';
+      stolb.appendChild(nad); stolb.appendChild(box);
+      return { box: stolb, inp: inp, nad: nad, plashka: box };
+    }
+    return { box: box, inp: inp, plashka: box };
+  }
+
   function klavishiChisla(ked) {
     ked.addEventListener('keydown', function (ev) {
       if (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown') return;
@@ -189,16 +571,26 @@
       } catch (e) {}
     }
 
-    // ── каркас: шестерёнка, панель, подсказка ──
-    var gear = document.createElement('button');
-    gear.className = 'st-gear';
-    gear.title = 'настройки';
-    gear.innerHTML =
+    /* ── каркас: кнопка панели, панель, подсказка ──
+       КНОПКА ГОВОРИТ, ЧТО СДЕЛАЕТ (правка Сергея 03.09). Закрытая панель —
+       ручки-ползунки: «здесь настройки». Открытая — крестик: «нажми, и
+       закрою». Одна цель на оба хода, и рисунок на ней меняется вместе с
+       делом; иконка настроек поверх открытой панели обещала бы открыть то,
+       что уже открыто. */
+    var ZNAK_RUCHKI =
       '<svg viewBox="0 0 17 17" fill="none" stroke="#fff" stroke-width="1.4" stroke-linecap="round">' +
       '<line x1="1.5" y1="3.5" x2="15.5" y2="3.5"/><circle cx="11" cy="3.5" r="2.1" fill="#141416"/>' +
       '<line x1="1.5" y1="8.5" x2="15.5" y2="8.5"/><circle cx="5.5" cy="8.5" r="2.1" fill="#141416"/>' +
       '<line x1="1.5" y1="13.5" x2="15.5" y2="13.5"/><circle cx="9" cy="13.5" r="2.1" fill="#141416"/>' +
       '</svg>';
+    var ZNAK_KREST =
+      '<svg viewBox="0 0 17 17" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round">' +
+      '<line x1="4.2" y1="4.2" x2="12.8" y2="12.8"/><line x1="12.8" y1="4.2" x2="4.2" y2="12.8"/>' +
+      '</svg>';
+    var gear = document.createElement('button');
+    gear.className = 'st-gear';
+    gear.type = 'button';
+    gear.innerHTML = ZNAK_RUCHKI;
     var panel = document.createElement('div');
     panel.className = 'st-panel';
     panel.hidden = true;
@@ -233,6 +625,7 @@
       panel.style.top = ''; panel.style.left = '';
       panel.style.bottom = ''; panel.style.width = ''; panel.style.height = '';
       try { localStorage.removeItem(OKNO_KEY); } catch (e) {}
+      skrollObnovit();
     }
     (function oknoVosstanovit() {
       if (uzkiy()) return;
@@ -254,14 +647,6 @@
        иначе прибитый низ рос бы вверх из-под курсора; отпускание руки
        сохраняет (ResizeObserver дублирует, но он спит там, где не гонятся
        кадры). */
-    panel.addEventListener('pointerdown', function (e) {
-      if (uzkiy()) return;
-      var r = panel.getBoundingClientRect();
-      if (e.clientX > r.right - 22 && e.clientY > r.bottom - 22) oknoPrivyazka();
-    });
-    panel.addEventListener('pointerup', function () {
-      if (panel.style.width || panel.style.height) { oknoPrivyazka(); oknoSohranit(); }
-    });
     if (window.ResizeObserver) {
       var roT = null;
       new ResizeObserver(function () {
@@ -270,6 +655,90 @@
         clearTimeout(roT); roT = setTimeout(oknoSohranit, 300);
       }).observe(panel);
     }
+    /* ── ТЕЛО ПАНЕЛИ ──────────────────────────────────────────────────
+       Прокручивается тело, а не панель: полоса прокрутки вынесена наружу
+       (правка Сергея 03.09). Внутри она отъедала правую колонку — панель
+       садилась несимметрично, и рифмовка вертикалей ехала. */
+    var telo = document.createElement('div');
+    telo.className = 'st-telo';
+    panel.appendChild(telo);
+
+    /* Своя полоса прокрутки: справа за кромкой, от 10 сверху до 10 снизу —
+       начинается там, где кончается закругление правого верхнего угла. */
+    var skroll = document.createElement('div');
+    skroll.className = 'st-skroll';
+    var begunok = document.createElement('div');
+    begunok.className = 'st-skroll-b';
+    skroll.appendChild(begunok);
+    panel.appendChild(skroll);
+
+    function skrollObnovit() {
+      var vidno = telo.clientHeight, vsego = telo.scrollHeight;
+      if (vsego <= vidno + 1) { skroll.hidden = true; return; }
+      skroll.hidden = false;
+      var trekH = skroll.clientHeight;
+      var h = Math.max(24, trekH * vidno / vsego);
+      var hod = trekH - h;
+      var p = telo.scrollTop / (vsego - vidno);
+      begunok.style.height = h + 'px';
+      begunok.style.top = (hod * p) + 'px';
+      // у правого края экрана полосе не хватает места — уходит влево
+      var r = panel.getBoundingClientRect();
+      skroll.classList.toggle('sleva', r.right + 10 > window.innerWidth);
+    }
+    telo.addEventListener('scroll', skrollObnovit, { passive: true });
+    window.addEventListener('resize', skrollObnovit);
+    if (window.ResizeObserver) new ResizeObserver(skrollObnovit).observe(telo);
+    (function begunokTyaga() {
+      var y0 = 0, s0 = 0, tyanem = false;
+      begunok.addEventListener('pointerdown', function (e) {
+        e.preventDefault(); tyanem = true; y0 = e.clientY; s0 = telo.scrollTop;
+        begunok.classList.add('tyanem'); skroll.classList.add('zhivaya');
+      });
+      document.addEventListener('pointermove', function (e) {
+        if (!tyanem) return;
+        var trekH = skroll.clientHeight, h = begunok.offsetHeight;
+        var hod = trekH - h; if (hod <= 0) return;
+        telo.scrollTop = s0 + (e.clientY - y0) * (telo.scrollHeight - telo.clientHeight) / hod;
+      });
+      document.addEventListener('pointerup', function () {
+        if (!tyanem) return;
+        tyanem = false; begunok.classList.remove('tyanem'); skroll.classList.remove('zhivaya');
+      });
+      // клик по треку — прыжок страницей
+      skroll.addEventListener('pointerdown', function (e) {
+        if (e.target !== skroll) return;
+        var r = skroll.getBoundingClientRect();
+        telo.scrollTop += (e.clientY < r.top + begunok.offsetTop ? -1 : 1) * telo.clientHeight * .9;
+      });
+    })();
+
+    /* Кромка размера вместо системного уголка: засечку в правом нижнем углу
+       Сергей снял 03.09, а тяга окна осталась — просто стала невидимой. */
+    var tyaga = document.createElement('div');
+    tyaga.className = 'st-tyaga';
+    tyaga.title = 'потянуть размер панели';
+    panel.appendChild(tyaga);
+    (function tyagaRazmera() {
+      var x0 = 0, y0 = 0, w0 = 0, h0 = 0, tyanem = false;
+      tyaga.addEventListener('pointerdown', function (e) {
+        if (uzkiy()) return;
+        e.preventDefault(); e.stopPropagation();
+        var r = panel.getBoundingClientRect();
+        tyanem = true; x0 = e.clientX; y0 = e.clientY; w0 = r.width; h0 = r.height;
+        oknoPrivyazka();
+      });
+      document.addEventListener('pointermove', function (e) {
+        if (!tyanem) return;
+        panel.style.width = Math.max(280, w0 + e.clientX - x0) + 'px';
+        panel.style.height = Math.max(180, h0 + e.clientY - y0) + 'px';
+      });
+      document.addEventListener('pointerup', function () {
+        if (!tyanem) return;
+        tyanem = false; oknoSohranit(); skrollObnovit();
+      });
+    })();
+
     var tip = document.createElement('div');
     tip.className = 'st-tip'; tip.id = 'st-tip'; tip.setAttribute('role', 'tooltip');
     document.body.appendChild(gear);
@@ -286,9 +755,19 @@
     var tm = location.search.match(/[?&]theme=(\w+)/);
     if (tm) theme = tm[1]; // ?theme=nothing — быстрый просмотр темы
     var repaints = []; // что перекрасить при смене темы (заливки, кривые)
+    /* Тема живёт классом на панели, а не на документе: стенд не обязан
+       краснеть вместе с ней. Значит всё, что панель ставит СНАРУЖИ — слой
+       мест, слой правки, инструмент на экране, — тему получает поимённо.
+       `temaSyuda` записывает такой элемент, и он идёт за темой дальше сам. */
+    var vneshnie = [];
+    function temaSyuda(el) {
+      if (el && vneshnie.indexOf(el) < 0) vneshnie.push(el);
+      if (el) el.classList.toggle('st-theme-nothing', theme === 'nothing');
+      return el;
+    }
     function applyTheme(name) {
       theme = name;
-      [gear, panel, tip].forEach(function (el) {
+      [gear, panel, tip].concat(vneshnie).forEach(function (el) {
         el.classList.toggle('st-theme-nothing', name === 'nothing');
       });
       try { localStorage.setItem(THEME_KEY, name); } catch (e) {}
@@ -332,12 +811,22 @@
       el.addEventListener('focusout', spryatat);
     }
 
-    // ── слайдер: заливка слева от шайбы цветом акцента ──
+    /* ── слайдер: заливка идёт от блока нитки (Г9, ход 64) ──────────────
+       Прежде здесь жил и запасной путь — красить фоном самого инпута, если
+       заливки-элемента нет. Им пользовались пять органов со своей ниткой, и
+       он же давал старый толстый ползунок. Запасного пути больше нет: нет
+       блока — нечего красить. */
     function paintFill(inp) {
-      var lo = parseFloat(inp.min), hi = parseFloat(inp.max);
-      var p = (parseFloat(inp.value) - lo) / (hi - lo) * 100;
-      inp.style.backgroundImage =
-        'linear-gradient(to right, ' + accent() + ' ' + p + '%, var(--st-track) ' + p + '%)';
+      if (inp && inp.__nitka) inp.__nitka.pokrasit();
+    }
+    // ручка панели: тот же пикер, значение живёт в P
+    function stroitCvet(key) {
+      var pk = pikerCveta({
+        znachenie: function () { return P[key]; },
+        postavit: function (hex) { P[key] = hex; izmenilos(key); },
+      });
+      controls[key] = pk.obnovit;
+      return pk;
     }
 
     // ── редактор кривой: график + две рукоятки безье ──
@@ -356,16 +845,33 @@
         var ac = accent();
         g.clearRect(0, 0, w, h);
         g.fillStyle = '#101012'; g.fillRect(0, 0, w, h);
+        /* СЕТКА КВАДРАТА. Клеток по стороне — восемь: вдвое подробнее эталона
+           (правка Сергея 03.09). Сетка живёт в рабочем квадрате 0…1, а не по
+           всему полю: поле шире квадрата на выбег рукояток (CRV_LO…CRV_HI),
+           и линии за границей врали бы про доли. */
+        var KLETOK = 8;
+        g.strokeStyle = 'rgba(255,255,255,.07)'; g.lineWidth = 1.5;
+        for (var i = 1; i < KLETOK; i++) {
+          g.beginPath(); g.moveTo(X(i / KLETOK), Y(0)); g.lineTo(X(i / KLETOK), Y(1)); g.stroke();
+          g.beginPath(); g.moveTo(0, Y(i / KLETOK)); g.lineTo(w, Y(i / KLETOK)); g.stroke();
+        }
+        // границы квадрата: доли 0 и 1 — опоры, они ярче сетки
         g.strokeStyle = 'rgba(255,255,255,.12)'; g.lineWidth = 2;
         [0, 1].forEach(function (v) {
           g.beginPath(); g.moveTo(0, Y(v)); g.lineTo(w, Y(v)); g.stroke();
         });
+        // ровный ход пунктиром: с чем сравнивают кривую
+        g.save();
+        g.setLineDash([6, 6]); g.strokeStyle = 'rgba(255,255,255,.22)'; g.lineWidth = 2;
+        g.beginPath(); g.moveTo(X(0), Y(0)); g.lineTo(X(1), Y(1)); g.stroke();
+        g.restore();
         // рычаги: от опор (0,0) и (1,1) к контрольным точкам
         g.strokeStyle = custom ? ac : 'rgba(255,255,255,.28)'; g.lineWidth = 2;
         g.beginPath(); g.moveTo(X(0), Y(0)); g.lineTo(X(b[0]), Y(b[1])); g.stroke();
         g.beginPath(); g.moveTo(X(1), Y(1)); g.lineTo(X(b[2]), Y(b[3])); g.stroke();
-        // сама кривая — то, что реально исполняет анимация
-        g.strokeStyle = '#fff'; g.lineWidth = 3;
+        // сама кривая — то, что реально исполняет анимация; акцентом, как
+        // на эталоне Сергея (03.09): кривая — предмет, а не разметка
+        g.strokeStyle = ac; g.lineWidth = 3;
         g.beginPath();
         for (var x = 0; x <= w; x += 2) {
           var v = evalEase(P[easeKey], b, x / w);
@@ -375,43 +881,155 @@
         // контрольные точки с белым кольцом
         [[b[0], b[1]], [b[2], b[3]]].forEach(function (pt) {
           g.beginPath(); g.arc(X(pt[0]), Y(pt[1]), 9, 0, Math.PI * 2);
-          g.fillStyle = custom ? ac : 'rgba(255,255,255,.45)'; g.fill();
-          g.lineWidth = 2.5; g.strokeStyle = '#fff'; g.stroke();
+          // рукоятки белые: рука берётся за них, а не за кривую
+          g.fillStyle = custom ? '#fff' : 'rgba(255,255,255,.45)'; g.fill();
+          g.lineWidth = 2.5; g.strokeStyle = custom ? ac : 'rgba(255,255,255,.5)'; g.stroke();
         });
       }
-      var dragPt = -1;
-      function handleAt(e) {
-        var r = cv.getBoundingClientRect();
-        var b = P[bezKey];
-        function d2(bx, by) {
-          var hx = r.left + bx * r.width;
-          var hy = r.top + (CRV_HI - by) / (CRV_HI - CRV_LO) * r.height;
-          return (e.clientX - hx) * (e.clientX - hx) + (e.clientY - hy) * (e.clientY - hy);
-        }
-        return d2(b[0], b[1]) <= d2(b[2], b[3]) ? 0 : 1;
+      /* ── РУКА НА КРИВОЙ ──────────────────────────────────────────────
+         Раньше бралась только рукоятка, и то ближайшая из двух: клик в
+         пустое место телепортировал её к курсору. Отсюда «деревянность».
+         Теперь два жеста, разведённые целью: у рукоятки (ближе 22 px)
+         берётся рукоятка, в любом другом месте — САМА КРИВАЯ, и тяга
+         распределяется между рукоятками по их влиянию в этой точке
+         (веса Бернштейна кубического безье). Тянешь за середину — едут
+         обе; тянешь у края — едет ближняя. */
+      var CEL = 22;                      // цель захвата рукоятки, px
+      var dragPt = -1;                   // 0 или 1 — рукоятка, -1 — нет
+      var tyanemKrivuyu = false;
+      var start = null;
+
+      function vEkran(bx, by, r) {
+        return { x: r.left + bx * r.width,
+                 y: r.top + (CRV_HI - by) / (CRV_HI - CRV_LO) * r.height };
       }
-      function applyDrag(e) {
+      function blizhe(e) {                // какая рукоятка под курсором, если есть
+        var r = cv.getBoundingClientRect(), b = P[bezKey];
+        var d = [0, 1].map(function (i) {
+          var p2 = vEkran(b[i * 2], b[i * 2 + 1], r);
+          return Math.sqrt((e.clientX - p2.x) * (e.clientX - p2.x) +
+                           (e.clientY - p2.y) * (e.clientY - p2.y));
+        });
+        var i2 = d[0] <= d[1] ? 0 : 1;
+        return d[i2] <= CEL ? i2 : -1;
+      }
+      function okrugl(v, shift) {        // Shift — привязка к сетке восьмых
+        return shift ? Math.round(v * 8) / 8 : Math.round(v * 100) / 100;
+      }
+      function zapisat(b) {
+        P[bezKey] = b;
+        if (P[easeKey] !== 'bezier') { P[easeKey] = 'bezier'; sel.value = 'bezier'; }
+        redraw(); obnovitPolya(); izmenilos(easeKey);
+      }
+      function tyanutRukoyatku(e) {
         var r = cv.getBoundingClientRect();
         var tx = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
         var vy = Math.max(CRV_LO, Math.min(CRV_HI,
           CRV_HI - (e.clientY - r.top) / r.height * (CRV_HI - CRV_LO)));
         var b = P[bezKey].slice();
-        b[dragPt * 2] = Math.round(tx * 100) / 100;
-        b[dragPt * 2 + 1] = Math.round(vy * 100) / 100;
-        P[bezKey] = b;
-        if (P[easeKey] !== 'bezier') { P[easeKey] = 'bezier'; sel.value = 'bezier'; }
-        redraw(); izmenilos(easeKey);
+        b[dragPt * 2] = okrugl(tx, e.shiftKey);
+        b[dragPt * 2 + 1] = okrugl(vy, e.shiftKey);
+        zapisat(b);
       }
-      cv.addEventListener('pointerdown', function (e) {
-        dragPt = handleAt(e);
-        cv.setPointerCapture(e.pointerId);
-        applyDrag(e);
-        e.preventDefault();
+      function tyanutKrivuyu(e) {
+        var r = cv.getBoundingClientRect();
+        var dx = (e.clientX - start.x) / r.width;
+        var dy = -(e.clientY - start.y) / r.height * (CRV_HI - CRV_LO);
+        // влияние рукояток в точке захвата: чем ближе к рукоятке, тем больше
+        var t = start.t, u = 1 - t;
+        var w1 = 3 * u * u * t, w2 = 3 * u * t * t;
+        /* На самых краях (t ровно 0 или 1) оба веса Бернштейна нулевые, и
+           кривая не двигалась вовсе — мёртвая полоска по кромкам графика
+           (правка 03.09). Там влияние целиком у ближней рукоятки. */
+        if (!(w1 + w2)) { w1 = t < .5 ? 1 : 0; w2 = 1 - w1; }
+        var sum = w1 + w2;
+        var b = start.b.slice();
+        b[0] = okrugl(Math.max(0, Math.min(1, b[0] + dx * w1 / sum * 2)), e.shiftKey);
+        b[1] = okrugl(Math.max(CRV_LO, Math.min(CRV_HI, b[1] + dy * w1 / sum * 2)), e.shiftKey);
+        b[2] = okrugl(Math.max(0, Math.min(1, b[2] + dx * w2 / sum * 2)), e.shiftKey);
+        b[3] = okrugl(Math.max(CRV_LO, Math.min(CRV_HI, b[3] + dy * w2 / sum * 2)), e.shiftKey);
+        zapisat(b);
+      }
+      cv.addEventListener('pointermove', function (e) {
+        if (dragPt < 0 && !tyanemKrivuyu) { cv.style.cursor = blizhe(e) >= 0 ? 'grab' : 'crosshair'; return; }
+        if (dragPt >= 0) tyanutRukoyatku(e); else tyanutKrivuyu(e);
       });
-      cv.addEventListener('pointermove', function (e) { if (dragPt >= 0) applyDrag(e); });
-      cv.addEventListener('pointerup', function () { dragPt = -1; });
-      cv.addEventListener('pointercancel', function () { dragPt = -1; });
-      return { cv: cv, redraw: redraw };
+      cv.addEventListener('pointerdown', function (e) {
+        e.preventDefault(); cv.focus();
+        cv.setPointerCapture(e.pointerId);
+        var i2 = blizhe(e);
+        if (i2 >= 0) { dragPt = i2; tyanutRukoyatku(e); return; }
+        var r = cv.getBoundingClientRect();
+        tyanemKrivuyu = true;
+        start = { x: e.clientX, y: e.clientY, b: P[bezKey].slice(),
+                  t: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) };
+        cv.style.cursor = 'grabbing';
+      });
+      function konecTyagi() { dragPt = -1; tyanemKrivuyu = false; start = null; cv.style.cursor = 'crosshair'; }
+      cv.addEventListener('pointerup', konecTyagi);
+      cv.addEventListener('pointercancel', konecTyagi);
+      /* Дабл-клик по полю — ровный ход обратно. Возвращал [.25,.1,.25,1] —
+         это «ease», а ровный ход на графике нарисован пунктиром по диагонали:
+         слово и дело расходились (правка 03.09). */
+      cv.addEventListener('dblclick', function () { zapisat([0, 0, 1, 1]); });
+
+      /* КЛАВИАТУРА. Рукоятку берут и стрелками: шаг сотая, с Shift — восьмая.
+         Tab выбирает рукоятку, потому что мышью в неё попадают не всегда. */
+      var vybrana = 0;
+      cv.tabIndex = 0;
+      cv.setAttribute('role', 'application');
+      cv.setAttribute('aria-label', 'редактор кривой движения: стрелки двигают рукоятку, пробел меняет рукоятку');
+      cv.addEventListener('keydown', function (e) {
+        if (e.key === ' ') { vybrana = 1 - vybrana; e.preventDefault(); return; }
+        var d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] }[e.key];
+        if (!d) return;
+        e.preventDefault();
+        var shag = e.shiftKey ? 0.125 : 0.01;
+        var b = P[bezKey].slice();
+        b[vybrana * 2] = Math.max(0, Math.min(1, +(b[vybrana * 2] + d[0] * shag).toFixed(3)));
+        b[vybrana * 2 + 1] = Math.max(CRV_LO, Math.min(CRV_HI, +(b[vybrana * 2 + 1] + d[1] * shag).toFixed(3)));
+        zapisat(b);
+      });
+
+      /* ЧЕТЫРЕ ЧИСЛА ПОЛЯМИ. Кривую держат в голове числами, когда переносят
+         её в другой стенд или сверяют с чужой; на глаз это не повторить. */
+      var polya = document.createElement('div');
+      polya.className = 'st-krivaya-chisla';
+      var vvod = [];
+      ['x₁', 'y₁', 'x₂', 'y₂'].forEach(function (imya, i) {
+        var kl = document.createElement('label'); kl.className = 'st-kch';
+        var pd = document.createElement('span'); pd.textContent = imya;
+        var inp = document.createElement('input');
+        inp.type = 'text'; inp.inputMode = 'decimal';
+        klavishiChisla(inp);
+        inp.addEventListener('change', function () {
+          var v = parseFloat(inp.value.replace(',', '.'));
+          if (isNaN(v)) { obnovitPolya(); return; }
+          var b = P[bezKey].slice();
+          var lo = (i % 2 === 0) ? 0 : CRV_LO, hi = (i % 2 === 0) ? 1 : CRV_HI;
+          b[i] = Math.max(lo, Math.min(hi, v));
+          zapisat(b);
+        });
+        kl.appendChild(pd); kl.appendChild(inp);
+        polya.appendChild(kl); vvod.push(inp);
+      });
+      var zerkalo = document.createElement('button');
+      zerkalo.type = 'button'; zerkalo.className = 'st-kzerkalo';
+      zerkalo.title = 'отразить: разгон становится торможением';
+      zerkalo.textContent = '⇄';
+      zerkalo.addEventListener('click', function () {
+        var b = P[bezKey];
+        zapisat([+(1 - b[2]).toFixed(3), +(1 - b[3]).toFixed(3),
+                 +(1 - b[0]).toFixed(3), +(1 - b[1]).toFixed(3)]);
+      });
+      polya.appendChild(zerkalo);
+      function obnovitPolya() {
+        var b = P[bezKey];
+        for (var i = 0; i < 4; i++) if (document.activeElement !== vvod[i]) vvod[i].value = b[i];
+      }
+      obnovitPolya();
+
+      return { cv: cv, redraw: function () { redraw(); obnovitPolya(); }, polya: polya };
     }
 
     /* ── ЯЗЫК ПАНЕЛИ ──────────────────────────────────────────────────
@@ -428,8 +1046,9 @@
     try { if (localStorage.getItem(LANG_KEY) === 'en') lang = 'en'; } catch (e) {}
     var SVOI = {
       'Панель': 'Panel', 'Тема': 'Theme', 'Эпл': 'Apple', 'Нотхинг': 'Nothing',
-      'Скопировать параметры': 'Copy parameters', 'Скопировать правки': 'Copy edits',
+      'Ссылка на этот вид': 'Link to this view', 'Правки для кода': 'Edits for code',
       'Сбросить настройки': 'Reset', 'Вернуть': 'Restore',
+      'Считать эталоном': 'Set as reference',
       'скопировано: ': 'copied: ', ' ручек': ' knobs',
       'всё по умолчанию': 'all at defaults', 'Параметры:': 'Parameters:',
       'своя (безье)': 'custom (bezier)', 'линейный': 'linear',
@@ -465,10 +1084,103 @@
       try { localStorage.setItem(FOLD_KEY, JSON.stringify(folds)); } catch (e) {}
     }
     var sekcii = [];
-    function addSection(title) {
+    /* ПОРЯДОК КЛАСТЕРОВ — рука Сергея (03.09): кластер переставляется за
+       схват ≡ слева от имени; порядок хранится на стенд и восстанавливается
+       при сборке. Подвал «Панель» не переставляется. */
+    var PORYADOK_KEY = 'stend-panel-poryadok:' + (o.storageKey || 'p');
+    var poryadok = [];
+    try { poryadok = JSON.parse(localStorage.getItem(PORYADOK_KEY) || '[]'); } catch (e) {}
+    function zapomnitPoryadok() {
+      poryadok = sekcii.filter(function (s) { return !s.bezShvata; }).map(function (s) { return s.title; });
+      try { localStorage.setItem(PORYADOK_KEY, JSON.stringify(poryadok)); } catch (e) {}
+    }
+    function perestavit(s, kuda) {   // kuda — секция, перед которой встать (null = в конец подвижных)
+      var opora = kuda ? kuda.h : (sekcii.filter(function (x) { return x.bezShvata; })[0] || {}).h || null;
+      telo.insertBefore(s.h, opora); telo.insertBefore(s.card, opora);
+      sekcii.splice(sekcii.indexOf(s), 1);
+      var idx = kuda ? sekcii.indexOf(kuda) : sekcii.length - sekcii.filter(function (x) { return x.bezShvata; }).length;
+      sekcii.splice(idx, 0, s);
+    }
+    function vosstanovitPoryadok() {
+      if (!poryadok.length) return;
+      var podvizhnye = sekcii.filter(function (s) { return !s.bezShvata; });
+      var izvestnye = poryadok.filter(function (t) { return podvizhnye.some(function (s) { return s.title === t; }); });
+      var pervyi = podvizhnye.length ? podvizhnye[0] : null;
+      // расставляем известные по сохранённому порядку перед первым неизвестным
+      var neizvestnye = podvizhnye.filter(function (s) { return izvestnye.indexOf(s.title) < 0; });
+      var kuda = neizvestnye[0] || (sekcii.filter(function (x) { return x.bezShvata; })[0] || null);
+      izvestnye.forEach(function (t) {
+        var s = podvizhnye.filter(function (x) { return x.title === t; })[0];
+        perestavit(s, kuda);
+      });
+    }
+    function addSection(title, glazKey, opts) {
+      opts = opts || {};
       var h = document.createElement('h4');
       h.className = 'st-sec';
-      nadpis(h, 'h:' + title, title);
+      // имя — в своём span: смена языка переписывает textContent, схват и глаз должны уцелеть
+      var hspan = document.createElement('span'); hspan.className = 'st-sec-imya';
+      nadpis(hspan, 'h:' + title, title);
+      if (!opts.bezShvata) {
+        var shvat = document.createElement('button'); shvat.type = 'button'; shvat.className = 'st-shvat';
+        shvat.title = 'переставить кластер: тяни или стрелки ↑↓';
+        shvat.setAttribute('aria-label', 'переставить кластер ' + title);
+        shvat.innerHTML = '<svg viewBox="0 0 10 6" aria-hidden="true"><path d="M0 1h10M0 5h10"/></svg>';
+        shvat.addEventListener('click', function (ev) { ev.stopPropagation(); });
+        shvat.addEventListener('keydown', function (ev) {
+          if (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown') return;
+          ev.preventDefault(); ev.stopPropagation();
+          var me = sekcii.filter(function (s) { return s.h === h; })[0];
+          var podvizhnye = sekcii.filter(function (s) { return !s.bezShvata; });
+          var i = podvizhnye.indexOf(me);
+          if (ev.key === 'ArrowUp' && i > 0) perestavit(me, podvizhnye[i - 1]);
+          if (ev.key === 'ArrowDown' && i < podvizhnye.length - 1) perestavit(me, podvizhnye[i + 2] || null);
+          zapomnitPoryadok(); shvat.focus();
+        });
+        /* ТЯГА КЛАСТЕРА. Слушаем документ, а не кнопку: перестановка
+           двигает заголовок в дереве, а перемещение узла отбирает
+           pointer capture — с ним тяга обрывалась на первом же шаге и
+           перестановка «не работала» (поймано Сергеем 03.09). */
+        shvat.addEventListener('pointerdown', function (ev) {
+          if (ev.button) return;
+          ev.preventDefault(); ev.stopPropagation();
+          var me = sekcii.filter(function (s) { return s.h === h; })[0];
+          if (!me) return;
+          h.classList.add('st-tyanem');
+          panel.classList.add('st-tyanem-idyot');
+          function dvizhenie(e2) {
+            var podvizhnye = sekcii.filter(function (s) { return !s.bezShvata && s !== me && !s.h.hidden; });
+            // куда встать: перед первым кластером, чья середина ниже указателя
+            var kuda = null;
+            for (var i = 0; i < podvizhnye.length; i++) {
+              var r = podvizhnye[i].h.getBoundingClientRect();
+              if (e2.clientY < r.top + r.height / 2) { kuda = podvizhnye[i]; break; }
+            }
+            var moy = me.h.getBoundingClientRect();
+            // уже стоим там, куда целимся — не дёргаем дерево
+            if (kuda && kuda.h.getBoundingClientRect().top === moy.top) return;
+            var sled = sekcii[sekcii.indexOf(me) + 1] || null;
+            if ((kuda || null) !== (sled && !sled.bezShvata ? sled : null)) perestavit(me, kuda);
+            // тяга у нижней и верхней кромки листает содержимое
+            var pr = telo.getBoundingClientRect();
+            if (e2.clientY > pr.bottom - 28) telo.scrollTop += 12;
+            else if (e2.clientY < pr.top + 28) telo.scrollTop -= 12;
+          }
+          function konec() {
+            document.removeEventListener('pointermove', dvizhenie);
+            document.removeEventListener('pointerup', konec);
+            document.removeEventListener('pointercancel', konec);
+            h.classList.remove('st-tyanem');
+            panel.classList.remove('st-tyanem-idyot');
+            zapomnitPoryadok(); skrollObnovit();
+          }
+          document.addEventListener('pointermove', dvizhenie);
+          document.addEventListener('pointerup', konec);
+          document.addEventListener('pointercancel', konec);
+        });
+        h.appendChild(shvat);
+      }
+      h.appendChild(hspan);
       // заголовок складывает секцию — значит достижим с клавиатуры (приёмка HIG 02.09)
       h.tabIndex = 0; h.setAttribute('role', 'button');
       h.addEventListener('keydown', function (ev) {
@@ -476,8 +1188,43 @@
       });
       var card = document.createElement('div');
       card.className = 'card';
-      panel.appendChild(h);
-      panel.appendChild(card);
+      telo.appendChild(h);
+      telo.appendChild(card);
+      if (glazKey) {
+        /* ГЛАЗ СЕКЦИИ — эффект целиком включается с заголовка (снято с
+           дизайн-системы панелек Миши, 02.09): сравнить «с эффектом / без»
+           одним щелчком, не трогая ручки. Ключ — двоичный параметр стенда;
+           умолчание у нас — включено: эффект и есть предмет стенда. */
+        var glaz = document.createElement('button');
+        glaz.type = 'button'; glaz.className = 'st-glaz';
+        glaz.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true">' +
+          '<path d="M1.5 8s2.4-4.3 6.5-4.3S14.5 8 14.5 8s-2.4 4.3-6.5 4.3S1.5 8 1.5 8z"/>' +
+          '<circle cx="8" cy="8" r="2.2"/><path class="st-glaz-cherta" d="M3 13 13 3"/></svg>';
+        function glazObnovit() {
+          var on = !!P[glazKey];
+          glaz.setAttribute('aria-pressed', String(on));
+          glaz.title = on ? 'выключить эффект секции' : 'включить эффект секции';
+          glaz.classList.toggle('off', !on);
+          card.classList.toggle('st-vykl', !on);
+        }
+        glaz.addEventListener('click', function (ev) {
+          ev.stopPropagation();   // клик по глазу не складывает секцию
+          P[glazKey] = !P[glazKey]; glazObnovit(); izmenilos(glazKey);
+        });
+        glaz.addEventListener('keydown', function (ev) { ev.stopPropagation(); });
+        h.appendChild(glaz);
+        controls[glazKey] = glazObnovit;
+        glazObnovit();
+      }
+      /* Значок сворачивания — шеврон рисунком: глифы ▾ / ▸ в SF Pro
+         подменялись точкой (поймано Сергеем 03.09). Стоит самым правым,
+         после глаза: сначала что делает секция, потом её створка. */
+      var znak = document.createElement('span');
+      znak.className = 'st-sec-znak';
+      znak.setAttribute('aria-hidden', 'true');
+      znak.innerHTML = '<svg viewBox="0 0 10 6"><path d="M1 1.5 5 5 9 1.5"/></svg>';
+      h.appendChild(znak);
+
       function applyFold() {
         /* Секцию, спрятанную сужением (набор или место прячут заголовок),
            «Развернуть всё» не воскрешает: без заголовка карточка вернулась
@@ -491,7 +1238,7 @@
         applyFold(); saveFolds();
       });
       applyFold();
-      sekcii.push({ title: title, fold: applyFold, h: h, card: card });
+      sekcii.push({ title: title, fold: applyFold, h: h, card: card, bezShvata: !!opts.bezShvata });
       return card;
     }
     /* Свернуть всё разом: с десятком секций поштучное складывание — работа,
@@ -538,7 +1285,7 @@
       metkaSver();
     });
     verh.appendChild(yaz); verh.appendChild(sver);
-    panel.appendChild(verh);
+    telo.appendChild(verh);
     metkaSver();
 
     /* Перенос: рука берёт за шапку (верхняя строка и строка состояния),
@@ -557,6 +1304,10 @@
           if (!vzyal) { vzyal = true; oknoPrivyazka(); }
           panel.style.left = Math.max(0, Math.min(r0.left + dx, window.innerWidth - 60)) + 'px';
           panel.style.top = Math.max(0, Math.min(r0.top + dy, window.innerHeight - 40)) + 'px';
+          /* Сторона своей полосы — закон от положения панели на экране, а не
+             от её размера. При переносе размер не меняется, ResizeObserver
+             молчит, и полоса залипала на прежней стороне (правка 03.09). */
+          skrollObnovit();
         }
         function otpustil() {
           document.removeEventListener('pointermove', hod);
@@ -588,7 +1339,7 @@
     sostX.title = 'показать все законы (Esc)';
     sostX.hidden = true;
     sost.appendChild(sostText); sost.appendChild(sostX);
-    panel.appendChild(sost);
+    telo.appendChild(sost);
     oknoTaskat(sost);
     var obnovitSostoyanie = function () {};
     // «23 ручек» читается как машинный вывод; строка состояния — текст,
@@ -621,7 +1372,7 @@
     function rodOpory(ot) { return ROD_OPORY[ot] || ot; }
     var tipRuchki = {};
     (o.zakon || []).forEach(function (z) {
-      if (z[0] === 'h') return;
+      if (!z || !z.length || z[0] === 'h') return;   // пустая строка объявления
       var t = z[2], op = z[3] || {};
       if (t === 'пара' && op.iz) {
         op.iz.forEach(function (r) {
@@ -633,7 +1384,7 @@
     });
     (o.defs || []).forEach(function (d) {
       if (d[0] === 'h') {
-        curCard = addSection(d[1]);
+        curCard = addSection(d[1], d[2] && d[2].glaz);
         tekSek = d[1];
         return;
       }
@@ -682,14 +1433,18 @@
         return;
       }
       if (d[2] === 'color') {
-        // [key, подпись, 'color'] — параметр живёт строкой '#rrggbb'
-        var ci = document.createElement('input');
-        ci.type = 'color'; ci.className = 'st-color'; svyazat(ci);
-        ci.value = P[d[0]];
-        ci.addEventListener('input', function () { P[d[0]] = ci.value; izmenilos(d[0]); });
-        controls[d[0]] = function () { ci.value = P[d[0]]; };
-        row.appendChild(ci);
+        /* ЦВЕТ — СВОЙ ПИКЕР, НЕ СИСТЕМНЫЙ (правка Сергея 03.09).
+           Устройство снято с дизайн-системы Миши Матвеева («Panel / Color
+           Picker», 216×252): поле 8, квадрат насыщенность×яркость во всю
+           ширину, под ним ряд тона 28 — полоса и пипетка 28 через 4.
+           Нативный input[type=color] открывал системное окно macOS: чужая
+           раскладка поверх стенда, руку уводит с панели. Цвет правится
+           там же, где остальные ручки.
+           Параметр по-прежнему живёт строкой '#rrggbb'. */
+        var cvet = stroitCvet(d[0]);
+        row.appendChild(cvet.svotch);
         host.appendChild(row);
+        host.appendChild(cvet.pole);
         return;
       }
       if (d[2] === 'select') {
@@ -738,13 +1493,15 @@
         // редактор кривой — отдельный элемент рядом со строкой: прячется вместе с ней
         ed.cv.dataset.k = easeKey + ':bez';
         host.appendChild(row === ed.cv ? row : ed.cv);
+        host.appendChild(ed.polya);
         // редактор свёрнут по умолчанию: квадраты кривых — пол-панели;
-        // клик по подписи строки раскрывает и прячет
-        ed.cv.hidden = true;
+        // клик по подписи строки раскрывает и прячет — вместе с числами
+        ed.cv.hidden = true; ed.polya.hidden = true;
         lab.classList.add('st-fold');
         lab.style.cursor = 'inherit';
         lab.addEventListener('click', function () {
           ed.cv.hidden = !ed.cv.hidden;
+          ed.polya.hidden = ed.cv.hidden;
           if (!ed.cv.hidden) ed.redraw();
         });
         ed.redraw();
@@ -755,13 +1512,33 @@
       if (typeof d[2] === 'string' && TIPY[d[2]]) {
         TIPY[d[2]](row, d, P, {
           save: function () { izmenilos(d[0]); }, host: host, bindTip: bindTip,
-          accent: accent, repaints: repaints, controls: controls,
+          accent: accent, repaints: repaints, controls: controls, temaSyuda: temaSyuda,
           defaults: DEFAULTS, storageKey: o.storageKey,
           // отбор уведённых ручек — тот же, что у кнопок копирования:
           // метка момента (скраб) собирает воспроизводимый адрес кадра
           uvedennye: function () { return uvedennye(); },
           onChange: function () { if (typeof o.onChange === 'function') o.onChange(d[0], P); },
         });
+        host.appendChild(row);
+        return;
+      }
+
+      /* ОРГАН НАЗВАН, НО НЕ ПОДКЛЮЧЁН — ЭТО ПРЕТЕНЗИЯ, А НЕ НИТКА (ход 64).
+         Третий довод строки — строка: значит стенд просит орган. Если такого
+         типа нет, ядро прежде шло дальше числовой веткой: min = 'segment',
+         max = undefined, и на панель выходила нитка с NaN — пилюля «никуда»
+         (снимок Сергея 04.09, ход 61). Молчаливой подмены больше нет: строка
+         говорит, чего не хватает, и то же уходит в поток ошибок. */
+      if (typeof d[2] === 'string') {
+        var beda = 'Панель: величина «' + d[0] + '» просит орган «' + d[2] +
+                   '» — подключите /panel-lib/' + d[2] + '.js после /panel.js';
+        if (typeof console !== 'undefined') console.error(beda);
+        var lab0 = document.createElement('label');
+        lab0.textContent = d[1] || d[0];
+        var zh = document.createElement('span');
+        zh.className = 'st-net-organa'; zh.textContent = 'нет органа «' + d[2] + '»';
+        zh.title = beda;
+        row.appendChild(lab0); row.appendChild(zh);
         host.appendChild(row);
         return;
       }
@@ -787,6 +1564,9 @@
         val.textContent = fmt(P[d[0]]);
         paintFill(inp);
         uvodObnovit();   // точка загорается в момент правки, не после перезагрузки
+        // показатель на этаже имени идёт за ниткой: без этого он стоял на
+        // старом числе, пока тянешь бегунок (поймано 03.09)
+        if (typeof pokazatVvod === 'function') pokazatVvod();
         izmenilos(d[0]);
       });
       // дабл-клик по слайдеру — откат ЭТОЙ ручки к дефолту
@@ -794,46 +1574,11 @@
         P[d[0]] = DEFAULTS[d[0]];
         controls[d[0]](); izmenilos(d[0]);
       });
-      // клик по числу — точный ввод с клавиатуры (Enter/уход — принять, Esc — отмена)
-      val.addEventListener('click', function () {
-        var ked = document.createElement('input');
-        ked.type = 'text'; ked.inputMode = 'decimal'; ked.className = 'val-edit';
-        ked.value = parseFloat((P[d[0]] * mul).toFixed(4));
-        klavishiChisla(ked);
-        row.replaceChild(ked, val);
-        ked.focus(); ked.select();
-        var done = false;
-        function commit(ok, myagko) {
-          if (done) return; done = true;
-          if (ok) {
-            // поле принимает выражения: «700/2», «(3+1)*20», «+50» к текущему
-            var v = vyrazhenie(ked.value, P[d[0]] * mul);
-            if (isNaN(v)) v = chislo(ked.value);
-            if (isNaN(v) && myagko) {
-              /* Кривой ввод не молчит: по Enter поле остаётся и краснеет —
-                 «verify values as soon as people enter them» (HIG, entering
-                 data). Уход из поля (blur) по-прежнему просто отменяет. */
-              done = false; ked.classList.add('oshibka'); ked.setAttribute('aria-invalid', 'true');
-              return;
-            }
-            if (!isNaN(v)) {
-              v = Math.max(parseFloat(inp.min), Math.min(parseFloat(inp.max), v));
-              P[d[0]] = v / mul;
-              izmenilos(d[0]);
-            }
-          }
-          row.replaceChild(val, ked);
-          controls[d[0]]();
-        }
-        ked.addEventListener('keydown', function (ev) {
-          if (ev.key === 'Enter') commit(true, true);
-          else if (ev.key === 'Escape') commit(false);
-        });
-        ked.addEventListener('input', function () {
-          ked.classList.remove('oshibka'); ked.removeAttribute('aria-invalid');
-        });
-        ked.addEventListener('blur', function () { commit(true); });
-      });
+      /* Клик по числу в пилюле снят совсем (слово Сергея 04.09): точный
+         ввод живёт блоком `chisloBlok` на этаже имени, и второй двери к
+         нему нет. Здесь стоял свой обработчик на сорок строк — он умер
+         ещё тогда, когда число в пилюле перестало ловить указатель, и
+         просто лежал. */
       row.classList.add('dva');   // имя этажом выше, нитка во всю ширину
       /* Точка увода от умолчания — снято с reset-dot из раздатки Михаила
          Матвеева: видно, ЧТО уведено, клик возвращает умолчание. Отбор
@@ -850,12 +1595,89 @@
         P[d[0]] = DEFAULTS[d[0]];
         izmenilos(d[0]); controls[d[0]]();
       });
+      if (opts.pole) {
+        /* КЕГЛЬ — ЧИСЛОМ (правило Сергея 02.09, П16): вместо нитки — поле
+           ввода в правой колонке; выражения, стрелки ±шаг, Shift — вдесятеро,
+           кривой ввод краснеет по Enter, уход из поля отменяет. Тип «кегль»
+           ставит pole сам; ручная строка — { pole: true } шестым элементом. */
+        row.classList.remove('dva');
+        var pole = document.createElement('input');
+        pole.type = 'text'; pole.inputMode = 'decimal'; pole.className = 'st-pole';
+        pole.id = inp.id + '-pole'; lab.htmlFor = pole.id;
+        pole.title = 'выражения: 700/2, +25; стрелки ±шаг, Shift — вдесятеро';
+        function polePokaz() { pole.value = fmt(P[d[0]]); pole.classList.remove('oshibka'); pole.removeAttribute('aria-invalid'); }
+        function polePrinyat(syroj, myagko) {
+          var v = vyrazhenie(syroj, P[d[0]] * mul);
+          if (isNaN(v)) v = chislo(syroj);
+          if (isNaN(v)) {
+            if (myagko) { pole.classList.add('oshibka'); pole.setAttribute('aria-invalid', 'true'); } else polePokaz();
+            return;
+          }
+          v = Math.max(parseFloat(d[2]), Math.min(parseFloat(d[3]), v));
+          P[d[0]] = v / mul; izmenilos(d[0]); polePokaz(); uvodObnovit();
+        }
+        pole.addEventListener('keydown', function (ev) {
+          if (ev.key === 'Enter') { polePrinyat(pole.value, true); if (!pole.classList.contains('oshibka')) pole.blur(); return; }
+          if (ev.key === 'Escape') { polePokaz(); pole.blur(); return; }
+          if (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown') return;
+          ev.preventDefault();
+          var krupno = parseFloat(d[4] || 1) * (ev.shiftKey ? 10 : 1);
+          polePrinyat(String(P[d[0]] * mul + (ev.key === 'ArrowUp' ? krupno : -krupno)), true);
+        });
+        pole.addEventListener('input', function () { pole.classList.remove('oshibka'); pole.removeAttribute('aria-invalid'); });
+        // правят число целиком, а не букву в середине (жалоба Сергея 03.09)
+        pole.addEventListener('focus', function () { setTimeout(function () { pole.select(); }, 0); });
+        pole.addEventListener('blur', function () { polePrinyat(pole.value, false); });
+        controls[d[0]] = function () { polePokaz(); uvodObnovit(); };
+        /* Точка увода — внутри поля слева, поле — вправо до общей вертикали
+           с полями пар (предложение Сергея 02.09): правый край полей один. */
+        var obl = document.createElement('span'); obl.className = 'st-pole-obl';
+        obl.appendChild(pole); obl.appendChild(uvod);
+        row.appendChild(obl);
+        polePokaz(); uvodObnovit();
+        host.appendChild(row);
+        return;
+      }
       controls[d[0]] = function () {
         inp.value = P[d[0]] * mul; val.textContent = fmt(P[d[0]]); paintFill(inp);
-        uvodObnovit();
+        uvodObnovit(); pokazatVvod();
       };
       repaints.push(function () { paintFill(inp); });
-      row.appendChild(inp); row.appendChild(val); row.appendChild(uvod);
+      /* ЭТАЛОН СЕРГЕЯ (Figma, 03.09): имя и точка увода — первым этажом,
+         нитка вторым во всю ширину, число едет под шайбой. Правой колонки
+         чисел у слайдера больше нет; вертикали держат нитка и поля. */
+      var imya = document.createElement('div'); imya.className = 'st-imya';
+      /* ЧИСЛО СТОИТ, ПОЛЕ ПРИХОДИТ ПО КЛИКУ (правка Сергея 03.09, вторая).
+         Первый заход дал полю постоянное место, но прятал его до наведения
+         мыши — и величины не было видно вовсе (Г3 требует показатель), а на
+         тач-экране до поля было не добраться: ховера там нет. Теперь как в
+         дизайн-системе: число на этаже имени стоит всегда обычным текстом,
+         плашки не видно; клик по числу поднимает плашку с полем ровно на
+         его месте. Габариты плашки и покоя одни — правый край не едет,
+         вертикаль рифмовки цела. */
+      /* Г9: число на этаже имени — общий блок ядра, один на строку и на
+         органы со своей строкой (наследование, стенд сетки). */
+      var cb = chisloBlok({
+        imya: d[1], min: d[2], max: d[3], shag: d[4], znak: uvod,
+        znachenie: function () { return P[d[0]] * mul; },
+        postavit: function (v) { P[d[0]] = v / mul; controls[d[0]](); izmenilos(d[0]); },
+        tekst: function () { return fmt(P[d[0]]); }
+      });
+      var poleObl = cb.obl;
+      function pokazatVvod() { cb.obnovit(); }
+      imya.appendChild(lab); imya.appendChild(poleObl);
+      /* Г9: нитка — общий блок ядра, один на строку и на пять органов.
+         Строка отдаёт блоку свои элементы: число в пилюле — тот же `val`,
+         за которым ходят показатель и точный ввод. */
+      var nb = nitkaBlok({
+        inp: inp, val: val,
+        znachenie: function () { return P[d[0]] * mul; },
+        postavit: function (v) { P[d[0]] = v / mul; },
+        tekst: function () { return fmt(P[d[0]]); },
+        umolchanie: function () { return DEFAULTS[d[0]] === undefined ? undefined : DEFAULTS[d[0]] * mul; }
+      });
+      var nitka = nb.obl;
+      row.appendChild(imya); row.appendChild(nitka);
       uvodObnovit();
       host.appendChild(row);
       paintFill(inp);
@@ -964,7 +1786,7 @@
        стоял, и возврат в начало был бы наказанием за любопытство. */
     function vyhod() {
       if (!mestoTek && (!o.nabory || !tekNabor || tekNabor === polnyi)) return;
-      var mesto = panel.scrollTop;
+      var mesto = telo.scrollTop;
       if (mestoTek) {
         // набор при клике не менялся — снятое место открывает его обратно
         mestoTek = null;
@@ -973,7 +1795,7 @@
         tekNabor = polnyi; nsel.value = polnyi;
       }
       perestroitVid();
-      panel.scrollTop = mesto;
+      telo.scrollTop = mesto;
     }
     sostX.addEventListener('click', vyhod);
 
@@ -1115,12 +1937,12 @@
       if (!imya) return;
       // клик перехватывается целиком: на макете под ним могла быть ссылка
       e.preventDefault(); e.stopPropagation();
-      var mesto = panel.scrollTop;
+      var mesto = telo.scrollTop;
       mestoTek = imya;
       postavitAdres(imya);
       vyklyuchitRezhim();
       perestroitVid();
-      panel.scrollTop = mesto;
+      telo.scrollTop = mesto;
     }
     if (karta0 && karta0.mesta.length) {
       sostP = document.createElement('button');
@@ -1196,7 +2018,7 @@
     if (lang === 'en') nadpisi.forEach(function (n) { n.el.textContent = T(n.k, n.ru); });
 
     // ── подвал: тема панели + сброс ──
-    var foot = addSection('Панель');
+    var foot = addSection('Панель', null, { bezShvata: true });
 
     /* РАБОЧИЕ НАБОРЫ. Панель из тридцати ручек показывает всё сразу, а
        работа идёт над одним: над волной, над каталогом, над цветом. Набор —
@@ -1269,11 +2091,40 @@
        настроек. Якорь сохраняется — уезжает и место, и вид. */
     // Отбор уведённых ручек один на обе кнопки: URL и текст правок —
     // две формы выдачи одного сравнения DEFAULTS против P.
+    /* ── ОТСЧЁТ ОТ ДЕЙСТВУЮЩЕЙ ОСНОВЫ, А НЕ ОТ ПЕРВОНАЧАЛЬНОЙ ─────────
+       Пресет («Вариант», «Профиль», «Палитра») выставляет пачку значений
+       разом — и всё, что он выставил, отчёт считал правкой руки. На
+       диагонали это давало 18 «уведённых» ручек там, где рука тронула две:
+       четырнадцать были самим вариантом E, две — зеркалом профиля. Человек
+       читает такой отчёт и не понимает, что он, собственно, сделал; отсюда
+       и «второй день копаемся» (поймано Сергеем 03.09).
+
+       Основа = умолчания стенда, поверх которых легли выбранные пресеты.
+       Правка руки — то, что уведено ОТ НЕЁ. Пресеты берутся из объявления
+       панели, поэтому стенду не нужно ничего объявлять дополнительно. */
+    /* Служебные ключи стенда (версия схемы и подобное) — не величины:
+       в отчёт правок и в адрес они не идут. Стенд объявляет их сам,
+       угадывать нечего: `sluzhebnye: ['v']` в build. */
+    var SLUZH = {};
+    (o.sluzhebnye || []).forEach(function (k) { SLUZH[k] = true; });
+    function osnova() {
+      var baza = {};
+      Object.keys(DEFAULTS).forEach(function (k) { baza[k] = DEFAULTS[k]; });
+      (o.defs || []).forEach(function (d) {
+        if (!Array.isArray(d) || d[2] !== 'preset' || !Array.isArray(d[3])) return;
+        var vybran = d[3].filter(function (opt) { return String(opt[0]) === String(P[d[0]]); })[0];
+        if (vybran && vybran[2]) Object.assign(baza, vybran[2]);
+        // сам выбор пресета — часть основы, а не правка: он назван в шапке
+        baza[d[0]] = P[d[0]];
+      });
+      return baza;
+    }
     function uvedennye() {
-      var out = [];
+      var out = [], baza = osnova();
       Object.keys(DEFAULTS).forEach(function (k) {
-        var v = P[k], d = DEFAULTS[k];
-        var same = Array.isArray(d)
+        if (SLUZH[k]) return;
+        var v = P[k], d = baza[k];
+        var same = (d && typeof d === 'object')
           ? JSON.stringify(v) === JSON.stringify(d)
           : String(v) === String(d);
         if (!same) out.push({ k: k, bylo: d, stalo: v });
@@ -1310,7 +2161,8 @@
 
     var cp = document.createElement('button');
     cp.className = 'st-reset st-copy';
-    nadpis(cp, 'panel:copy', 'Скопировать параметры');
+    nadpis(cp, 'panel:copy', 'Ссылка на этот вид');
+    cp.title = 'Адрес этой страницы с уведёнными ручками. Открой его — стенд встанет ровно в этот вид; пошли ссылку — увидят то же самое. В код не идёт.';
     cp.addEventListener('click', function () {
       var q = [];
       uvedennye().forEach(function (u) {
@@ -1319,7 +2171,7 @@
       });
       var url = location.origin + location.pathname +
         (q.length ? '?' + q.join('&') : '') + location.hash;
-      var said = pokazatNaKnopke(cp, 'panel:copy', 'Скопировать параметры');
+      var said = pokazatNaKnopke(cp, 'panel:copy', 'Ссылка на этот вид');
       var ok = function () {
         said(q.length ? T('', 'скопировано: ') + q.length + T('', ' ручек')
                       : T('', 'всё по умолчанию'));
@@ -1328,7 +2180,7 @@
       if (navigator.clipboard) navigator.clipboard.writeText(url).then(ok, ruchkami);
       else ruchkami();
     });
-    panel.appendChild(cp);
+    telo.appendChild(cp);
 
     /* «Скопировать правки» — тот же отбор, вторая форма выдачи. URL выше
        читает машина; модели и человеку нужен текст: подпись, тип и пара
@@ -1337,10 +2189,11 @@
        следующая сессия рассуждала бы о ненастроенном стенде. */
     var cpp = document.createElement('button');
     cpp.className = 'st-reset st-copy';
-    nadpis(cpp, 'panel:copyEdits', 'Скопировать правки');
+    nadpis(cpp, 'panel:copyEdits', 'Правки для кода');
+    cpp.title = 'Список того, что ты увёл ОТ ОСНОВЫ — с именами ручек, было и стало. Это текст для кода: вписать в пресет или в умолчания стенда. Основа названа в первой строке.';
     cpp.addEventListener('click', function () {
       var uved = uvedennye();
-      var saidP = pokazatNaKnopke(cpp, 'panel:copyEdits', 'Скопировать правки');
+      var saidP = pokazatNaKnopke(cpp, 'panel:copyEdits', 'Правки для кода');
       if (!uved.length) { saidP(T('', 'всё по умолчанию')); return; }
       function znak(v) { return Array.isArray(v) ? JSON.stringify(v) : String(v); }
       // группировка по секциям в порядке появления в панели
@@ -1364,8 +2217,17 @@
       });
       function pad(t, n) { t = String(t); while (t.length < n) t += ' '; return t; }
       var imya = (location.pathname.split('/').pop() || location.pathname) || 'стенд';
+      /* Шапка называет основу: без неё непонятно, от чего считали правки,
+         и человек принимает пресет за свою работу. */
+      var podpisiPresetov = [];
+      (o.defs || []).forEach(function (d) {
+        if (!Array.isArray(d) || d[2] !== 'preset' || !Array.isArray(d[3])) return;
+        var vybran = d[3].filter(function (opt) { return String(opt[0]) === String(P[d[0]]); })[0];
+        if (vybran) podpisiPresetov.push((d[1] || d[0]) + ': ' + vybran[1]);
+      });
       var stroki = ['Стенд: ' + imya + ' \u00b7 ' + location.origin + location.pathname,
-                    'Уведено ' + ruchek(uved.length) + ' из ' + Object.keys(DEFAULTS).length + '.', ''];
+                    'Основа: ' + (podpisiPresetov.length ? podpisiPresetov.join(' \u00b7 ') : 'умолчания стенда'),
+                    'Уведено ' + ruchek(uved.length) + ' от неё.', ''];
       poSekciyam.forEach(function (sek) {
         stroki.push(sek);
         vSekcii[sek].forEach(function (r) {
@@ -1374,14 +2236,17 @@
         });
       });
       stroki.push('');
-      stroki.push('Впиши эти значения в DEFAULTS стенда как новые значения по умолчанию.');
+      stroki.push(podpisiPresetov.length
+        ? 'Это правка поверх основы. Впиши значения туда, откуда основа взята — в свой пресет (' +
+          podpisiPresetov.join(', ') + '), а в DEFAULTS только то, что к пресету не относится.'
+        : 'Впиши эти значения в DEFAULTS стенда как новые значения по умолчанию.');
       var tekst = stroki.join('\n');
       var okP = function () { saidP(T('', 'скопировано: ') + uved.length + T('', ' ручек')); };
       var rukamiP = function () { prompt(T('', 'Правки:'), tekst); };
       if (navigator.clipboard) navigator.clipboard.writeText(tekst).then(okP, rukamiP);
       else rukamiP();
     });
-    panel.appendChild(cpp);
+    telo.appendChild(cpp);
 
     /* «Считать эталоном» — только на локалке: заявка с уведёнными
        ручками падает файлом, Клод сверяет и вписывает в DEFAULTS.
@@ -1391,6 +2256,7 @@
       var et = document.createElement('button');
       et.className = 'st-reset st-copy';
       nadpis(et, 'panel:etalon', 'Считать эталоном');
+      et.title = 'Тот же список правок, но не в буфер, а заявкой Клоду — файлом в .zayavki. Он сверит и впишет в код. Работает только на локалке.';
       et.addEventListener('click', function () {
         var uved = uvedennye().map(function (u) {
           return { k: u.k, bylo: u.bylo, stalo: u.stalo,
@@ -1403,12 +2269,13 @@
                     : T('', 'локалка не отвечает'));
         });
       });
-      panel.appendChild(et);
+      telo.appendChild(et);
     }
 
     var rst = document.createElement('button');
     rst.className = 'st-reset';
     nadpis(rst, 'panel:reset', 'Сбросить настройки');
+    rst.title = 'Вернуть все ручки к умолчаниям стенда. Обратимо: шесть секунд кнопка предлагает вернуть уведённое назад.';
     /* ОБРАТИМОСТЬ ВМЕСТО ПРЕДУПРЕЖДЕНИЯ. Сброс возвращает десятки ручек
        разом; HIG велит предупреждать о необратимой потере — вместо окна
        кнопка шесть секунд предлагает «Вернуть N ручек» (приёмка 02.09). */
@@ -1440,26 +2307,67 @@
       izmenilos('__reset');   // стенд и откат узнают о сбросе, как о любой правке
       if (n) {
         vozvrat = snimok;
-        rst.textContent = T('panel:vernut', 'Вернуть') + ' ' + n + T(' ручек', ' ручек');
+        // согласование числительного — общий помощник, а не «1 ручек»
+        rst.textContent = T('panel:vernut', 'Вернуть') + ' ' + (typeof ruchek === 'function' ? ruchek(n) : n + ' ручек');
         vozvratT = setTimeout(function () {
           vozvrat = null; rst.textContent = T('panel:reset', 'Сбросить настройки');
         }, 6000);
       }
     });
-    panel.appendChild(rst);
+    telo.appendChild(rst);
 
-    gear.addEventListener('click', function () { panel.hidden = !panel.hidden; });
+    /* Показать или спрятать — ОДНОЙ дверью: и кнопка, и адрес, и Esc ходят
+       через неё, поэтому знак на кнопке не может разойтись с делом. */
+    function pokazatPanel(da) {
+      panel.hidden = !da;
+      /* Панель уходит со всем своим: слои правки на макете (узлы траектории,
+         выбор места) — её продолжение, а не часть стенда. Оставшись висеть,
+         они читаются как «панель не закрылась» и перехватывают клики по
+         работе. Органы слушают событие и убирают своё. */
+      if (!da) {
+        try { document.dispatchEvent(new CustomEvent('stend:panel-zakryta')); } catch (e) {}
+      }
+      gear.innerHTML = da ? ZNAK_KREST : ZNAK_RUCHKI;
+      gear.title = da ? 'закрыть панель' : 'настройки';
+      gear.setAttribute('aria-label', gear.title);
+      gear.setAttribute('aria-expanded', String(!!da));
+      if (da) skrollObnovit();     // тело мерится, только когда видно
+    }
+    gear.addEventListener('click', function () { pokazatPanel(panel.hidden); });
+    /* Стенд вправе открыть панель сам (rasfokus показывает её при первом
+       заходе), и делает это атрибутом. Следим за атрибутом, а не только за
+       своей кнопкой: иначе знак на ней разойдётся с делом — крестик на
+       закрытой или ручки на открытой. */
+    if (window.MutationObserver) {
+      new MutationObserver(function () {
+        var da = !panel.hidden;
+        gear.innerHTML = da ? ZNAK_KREST : ZNAK_RUCHKI;
+        gear.title = da ? 'закрыть панель' : 'настройки';
+        gear.setAttribute('aria-label', gear.title);
+        gear.setAttribute('aria-expanded', String(da));
+      }).observe(panel, { attributes: true, attributeFilter: ['hidden'] });
+    }
     /* Панель НЕ закрывается кликом по макету. Закрытие по клику вне было
        заведено, пока клик по макету ничего не значил; теперь он выбирает
        место, и панель обязана остаться на экране — иначе выбор места
        гасит то самое, ради чего он делается. Закрывает шестерёнка. */
-    if (/[?&]panel/.test(location.search)) panel.hidden = false;
+    pokazatPanel(/[?&]panel/.test(location.search));
     applyTheme(theme);
     svetlota();
+    vosstanovitPoryadok();
 
     return {
-      save: save, panel: panel, applyTheme: applyTheme,
+      save: save, panel: panel, applyTheme: applyTheme, temaSyuda: temaSyuda,
       params: P, defaults: DEFAULTS, controls: controls,
+      // что уведено рукой от действующей основы (пресеты уже учтены)
+      uvedennye: uvedennye,
+      // показать или спрятать панель: знак на кнопке идёт следом
+      pokazat: pokazatPanel,
+      /* ТЕЛО ПАНЕЛИ — куда стенд вставляет своё. С хода 31 содержимое живёт
+         в прокручиваемом .st-telo, а не прямо в панели: стенды, вставлявшие
+         свои карточки в panel, роняли insertBefore или клали их вне
+         прокрутки (поймано на приёмке 03.09). Вставлять — сюда. */
+      telo: telo,
       // перерисовать все ручки после внешней правки P (откат, пресет извне)
       obnovit: function () { for (var k in controls) controls[k](); },
       nabor: vyborNabora, // переключить рабочий набор снаружи (агент, скрипт)
@@ -1473,8 +2381,39 @@
     };
   }
 
+  /* ТОЧКА УВОДА ВНУТРИ ПОЛЯ — для органов с полями ввода (коридор полями,
+     пара, фазы): число в таких полях стоит слева, точка — справа
+     (предложение Сергея 02.09). est() — уведено ли, vernut() — вернуть
+     умолчание. Помощник оборачивает поле и отдаёт obnovit() для перерисовки. */
+  function tochkaUvoda(inp, est, vernut) {
+    var b = document.createElement('button'); b.type = 'button'; b.className = 'st-uvod';
+    b.title = 'уведено от умолчания — вернуть';
+    function obnovit() { b.classList.toggle('on', !!est()); }
+    b.addEventListener('click', function () { vernut(); obnovit(); });
+    /* Поле, собранное общим блоком, само себе обёртка: точка кладётся
+       ВНУТРЬ него, справа от числа (Г4, П16). Оборачивать такое поле ещё
+       раз значило бы плашку в плашке — с двойной рамкой и двойным полем
+       (04.09, при переводе коридора и пары на блок). */
+    var blok = inp.parentNode && inp.parentNode.classList &&
+               inp.parentNode.classList.contains('st-pole-blok') ? inp.parentNode : null;
+    if (blok) { blok.appendChild(b); return { obl: blok, obnovit: obnovit }; }
+    var obl = document.createElement('span'); obl.className = 'st-pole-obl sprava';
+    if (inp.parentNode) inp.parentNode.insertBefore(obl, inp);
+    obl.appendChild(inp); obl.appendChild(b);
+    return { obl: obl, obnovit: obnovit };
+  }
+
   window.StendPanel = {
+    // общий блок поля ввода: подпись внутри, клик выделяет число целиком
+    poleBlok: poleBlok,
+    // общий блок нитки: трек, заливка, пилюля с числом (Г9)
+    nitkaBlok: nitkaBlok,
+    // общий блок числа на этаже имени: показатель и поле по клику (Г9)
+    chisloBlok: chisloBlok,
+    // свой пикер цвета вместо системного окна: { znachenie, postavit }
+    piker: pikerCveta,
     build: build,
+    tochkaUvoda: tochkaUvoda,
     klavishi: klavishiChisla, // стрелки ±1 / Shift ±10 / запятая — для полей органов
     tip: function (imya, fn) { TIPY[imya] = fn; return this; },
     tipy: TIPY,

@@ -158,7 +158,7 @@ var PANEL = StendPanel.build({
       ['editorial', 'Editorial New'],
       ['times', 'Times New Roman'],
     ]],
-    ['size', 'Кегль, % ширины', 1.5, 12, 0.1],
+    ['size', 'Кегль, % ширины', 1.5, 12, 0.1, { pole: true }],
     ['lead', 'Интерлиньяж, % кегля', 60, 180, 1],
     ['band', 'Ширина колонки, %', 20, 100, 1],
     ['track', 'Трекинг, % кегля', -4, 20, 0.5],
@@ -207,7 +207,8 @@ var PANEL = StendPanel.build({
 });
 
 // стенд про ручки — на первом заходе панель открыта, дальше как оставил
-if (firstVisit) PANEL.panel.hidden = false;
+// через дверь панели: знак на кнопке идёт следом за делом
+if (firstVisit) (PANEL.pokazat ? PANEL.pokazat(true) : (PANEL.panel.hidden = false));
 
 /* ── холст ── */
 var cv = document.getElementById('scene');

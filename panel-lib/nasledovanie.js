@@ -129,12 +129,25 @@
     var tochka = document.createElement('button');
     tochka.className = 'st-nasl-tochka'; tochka.type = 'button';
 
-    function zalivka() {
-      if (cvet || vybor) return;
-      var p = (parseFloat(inp.value) - lo) / (hi - lo) * 100;
-      inp.style.background =
-        'linear-gradient(to right, ' + api.accent() + ' ' + p + '%, var(--st-track) ' + p + '%)';
-    }
+    /* Г9: НИТКА — БЛОК ЯДРА (ход 64). Орган рисовал свою и красил её
+       сокращённым `background`, а оно затирает трёхпиксельную дорожку из
+       panel.css: градиент заливал всю высоту — толстая полоса старого
+       образца. Двадцать таких стояло на этажном стенде (снимки Сергея
+       04.09). Точный ввод у наследования живёт на самом числе — поля на
+       этаже имени у органа нет, — и блок разводит ввод с тягой ходом руки. */
+    var nb = (cvet || vybor) ? null : StendPanel.nitkaBlok({ inp: inp, val: val });
+    /* Г9: ЧИСЛО НА ЭТАЖЕ ИМЕНИ — второй блок ядра (ход 65, слово Сергея).
+       Точный ввод жил кликом по числу в пилюле — два дела на одной цели.
+       Теперь у него своё место, как у строк ядра: показатель стоит всегда,
+       клик поднимает плашку с полем. Границы и шаг — те же, что у нитки;
+       пишем через тот же `zapisat`, что и тяга. */
+    var cb = nb ? StendPanel.chisloBlok({
+      imya: d[1], min: lo, max: hi, shag: d[5],
+      znachenie: function () { return parseFloat(inp.value); },
+      postavit: function (v) { zapisat(v / n.mul); },
+      tekst: function () { return String(parseFloat((+inp.value).toFixed(4))); }
+    }) : null;
+    function zalivka() { if (nb) nb.pokrasit(); }
 
     function narisovat() {
       var id = adres(P, n);
@@ -148,9 +161,9 @@
         inp.style.opacity = id && !est ? '.45' : '1';
       } else {
         inp.value = v * n.mul;
-        val.textContent = String(parseFloat((v * n.mul).toFixed(4)));
         val.dataset.nasleduet = id && !est ? '1' : '0';
-        zalivka();
+        if (nb) nb.obnovit();
+        if (cb) cb.obnovit();
       }
       // Точка живёт только на этаже: у самого закона наследовать не от кого.
       // Место под неё занято всегда — вертикаль чисел не рвётся (рифма).
@@ -189,41 +202,27 @@
       narisovat(); api.save();
     });
 
-    // Клик по числу — точный ввод (Enter или уход принимают, Esc отменяет).
-    if (val) val.addEventListener('click', function () {
-      var ked = document.createElement('input');
-      ked.type = 'text'; ked.inputMode = 'decimal'; ked.className = 'val-edit';
-      ked.value = parseFloat(inp.value);
-      if (StendPanel.klavishi) StendPanel.klavishi(ked); // стрелки ±1, Shift ±10, запятая
-      box.replaceChild(ked, val);
-      ked.focus(); ked.select();
-      var gotovo = false;
-      function prinyat(ok) {
-        if (gotovo) return; gotovo = true;
-        box.replaceChild(val, ked);
-        var v = StendPanel.vyrazhenie
-          ? StendPanel.vyrazhenie(ked.value, parseFloat(inp.value))
-          : parseFloat(String(ked.value).replace(',', '.'));
-        if (isNaN(v)) v = parseFloat(String(ked.value).replace(',', '.'));
-        if (ok && !isNaN(v)) zapisat(Math.max(lo, Math.min(hi, v)) / n.mul);
-        else narisovat();
-      }
-      ked.addEventListener('keydown', function (ev) {
-        if (ev.key === 'Enter') prinyat(true);
-        else if (ev.key === 'Escape') prinyat(false);
-      });
-      ked.addEventListener('blur', function () { prinyat(true); });
-    });
-
     api.controls[klyuch] = narisovat;
     api.repaints.push(zalivka);
-    box.appendChild(inp);
-    if (val) box.appendChild(val);
+    box.appendChild(nb ? nb.obl : inp);
+    if (val && !nb) box.appendChild(val);
     box.appendChild(tochka);
-    if (!cvet && !vybor) {
+    if (nb) {
       row.classList.add('dva');           // нитка наследования — вторым этажом
       box.style.marginLeft = '0'; box.style.flex = '1';
-      inp.style.width = 'auto'; inp.style.flex = '1';
+      nb.obl.style.flex = '1';
+      /* Этаж имени: подпись ядра и число одной строкой — тот же блок `.st-imya`,
+         что у строк ядра, чтобы правый край чисел стоял на общей вертикали. */
+      var lab = row.querySelector('label');
+      var imya = document.createElement('div'); imya.className = 'st-imya';
+      if (lab) { row.removeChild(lab); imya.appendChild(lab); }
+      imya.appendChild(cb.obl);
+      row.insertBefore(imya, row.firstChild);
+      // дабл-клик по пилюле — то же, что по нитке: вернуть закон
+      nb.pil.addEventListener('dblclick', function (ev) {
+        inp.dispatchEvent(new MouseEvent('dblclick', { bubbles: false }));
+        ev.stopPropagation();
+      });
     }
     row.appendChild(box);
     narisovat();

@@ -6,12 +6,14 @@
    Объявление:  ['priemy', 'Приёмы', 'nabor', [['akcent','Акцент'], ['propusk','Пропуск']]]
    Значение:    массив включённых ключей                                          */
 (function () {
-  var STIL = '.st-nabor{display:flex;flex-wrap:wrap;gap:3px;margin-top:5px;width:100%}' +
-    '.st-nabor button{all:unset;padding:3px 8px;font:11px/1 var(--st-font);' +
-    'color:var(--st-text-2);cursor:pointer;border-radius:5px;background:var(--st-card);' +
-    'border:0.5px solid var(--st-hairline);transition:background .12s,color .12s}' +
-    '.st-nabor button:hover{color:var(--st-text)}' +
-    '.st-nabor button[aria-pressed="true"]{background:var(--st-accent);color:#fff;border-color:transparent}' +
+  /* ХОДЫ — ТЕГИ, А НЕ СЕГМЕНТЕР (эталон Сергея 03.09): капсулы стоят
+     свободным рядом и переносятся, потому что ходов бывает сколько угодно
+     и они не делят одну полосу. Числа с эталона: высота 21, зазор 3,
+     поле по горизонтали 8, кегль 11. */
+  /* Г9: чип — общий блок ядра (.st-chip), ряд чипов — .st-chipy. Свой был
+     тем же по числам, но своим по рисунку: в траектории те же капсулы
+     рисовались тенью вместо рамки (правка 03.09). */
+  var STIL = '.st-nabor{margin-top:5px}' +
     '.row:has(>.st-nabor){flex-wrap:wrap}';
 
   StendPanel.tip('nabor', function (row, d, P, api) {
@@ -21,11 +23,12 @@
     }
     if (!Array.isArray(P[d[0]])) P[d[0]] = [];
     var box = document.createElement('div');
-    box.className = 'st-nabor';
+    box.className = 'st-chipy st-nabor';
     var knopki = [];
     (d[3] || []).forEach(function (opt) {
       var b = document.createElement('button');
-      b.textContent = opt[1];
+      b.type = 'button'; b.className = 'st-chip';
+      var sp = document.createElement('span'); sp.textContent = opt[1]; b.appendChild(sp);
       b.setAttribute('aria-pressed', String(P[d[0]].indexOf(opt[0]) >= 0));
       b.addEventListener('click', function () {
         var i = P[d[0]].indexOf(opt[0]);

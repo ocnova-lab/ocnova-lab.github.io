@@ -2260,9 +2260,9 @@ var PANEL = StendPanel.build({
   bezApprox: BEZ_APPROX,
   defs: [
     ['h', 'Набор'],
-    ['ttlSize', 'Титул: кегль, px', 20, 120, 1],
-    ['ttl', 'Титул: коридор кегля, px', 'koridor', 20, 140, 1],
-    ['ttlMera', 'Титул: мера, знаков', 8, 60, 1],
+    ['ttlSize', 'Титул: кегль, px', 20, 120, 1, { pole: true }],
+    ['ttl', 'Титул: коридор кегля, px', 'koridor', 20, 140, 1, { nitka: false }],
+    ['ttlMera', 'Титул: мера, знаков', 8, 60, 1, { pole: true }],
     ['', 'Титул', 'para', [
       ['ttlLead', 'строка', 80, 200, 1], ['ttlTrack', 'трекинг', -10, 5, 0.1]]],
     ['', 'Врезка', 'para', [
