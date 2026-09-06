@@ -1079,7 +1079,13 @@
     // состояние помнится на стенд (localStorage) ──
     var FOLD_KEY = 'stend-panel-folds:' + o.storageKey;
     var folds = {};
+    /* Объявленная свёрнутость — умолчание, рука перебивает. Стенд говорит,
+       что открыто на входе (обычно то, над чем идёт работа), а человек,
+       раскрыв или закрыв секцию, записывает своё решение поверх. Пока он
+       ничего не трогал, ключа в хранилище нет — и работает объявленное. */
+    var folds0 = {};
     try { folds = JSON.parse(localStorage.getItem(FOLD_KEY) || '{}'); } catch (e) {}
+    function svernuta(k) { return (k in folds) ? !!folds[k] : !!folds0[k]; }
     function saveFolds() {
       try { localStorage.setItem(FOLD_KEY, JSON.stringify(folds)); } catch (e) {}
     }
@@ -1116,6 +1122,7 @@
     }
     function addSection(title, glazKey, opts) {
       opts = opts || {};
+      if (opts.zakryt) folds0[title] = true;
       var h = document.createElement('h4');
       h.className = 'st-sec';
       // имя — в своём span: смена языка переписывает textContent, схват и глаз должны уцелеть
@@ -1229,12 +1236,12 @@
         /* Секцию, спрятанную сужением (набор или место прячут заголовок),
            «Развернуть всё» не воскрешает: без заголовка карточка вернулась
            бы безымянной. Найдено ревизией 2026-09-01, жило с хода 5. */
-        card.hidden = !!folds[title] || h.hidden;
-        h.classList.toggle('st-closed', !!folds[title]);
-        h.setAttribute('aria-expanded', String(!folds[title]));
+        card.hidden = svernuta(title) || h.hidden;
+        h.classList.toggle('st-closed', svernuta(title));
+        h.setAttribute('aria-expanded', String(!svernuta(title)));
       }
       h.addEventListener('click', function () {
-        folds[title] = !folds[title];
+        folds[title] = !svernuta(title);
         applyFold(); saveFolds();
       });
       applyFold();
@@ -1358,6 +1365,7 @@
     // ── сборка строк по defs ──
     var controls = {};
     var curCard = null;
+    var curGrp = null;                 // текущая подгруппа внутри кластера
     /* Сведения о ручке для экспорта правок: подпись и секция берутся из
        defs по ходу сборки, тип — из объявления, если стенд на нём. */
     var opisRuchek = {}, tekSek = '';
@@ -1382,17 +1390,51 @@
       }
       if (z[0]) tipRuchki[z[0]] = t + (op.ot ? ' от ' + rodOpory(op.ot) : '');
     });
+    /* ПОДГРУППА — второй уровень внутри кластера. Заводится там, где одного
+       уровня перестало хватать: у стенда с двумя десятками ручек на один
+       предмет они делятся не по важности, а по ЧАСТЯМ предмета (точка, дуга,
+       усы), и без деления строка теряется среди однофамильцев.
+       Не орган: орган живёт в своей строке и не может обернуть следующие.
+       Свёрнутость помнится тем же ключом, что у секций, с приставкой 'g:'. */
+    function addGroup(card, title, sek, zakryt) {
+      if (!card) return null;
+      var klyuch = 'g:' + sek + '/' + title;
+      if (zakryt) folds0[klyuch] = true;
+      var g = document.createElement('div'); g.className = 'st-grp';
+      var sh = document.createElement('button');
+      sh.type = 'button'; sh.className = 'st-grp-sh';
+      var imya = document.createElement('span'); imya.className = 'st-grp-imya';
+      nadpis(imya, 'g:' + title, title);
+      var schet = document.createElement('i'); schet.className = 'st-grp-schet';
+      var ch = document.createElement('span'); ch.className = 'st-grp-ch';
+      ch.innerHTML = '<svg viewBox="0 0 6 10" aria-hidden="true"><path d="M1 1l4 4-4 4"/></svg>';
+      sh.appendChild(imya); sh.appendChild(schet); sh.appendChild(ch);
+      var telo = document.createElement('div'); telo.className = 'st-grp-telo';
+      g.appendChild(sh); g.appendChild(telo); card.appendChild(g);
+      function pokazat() {
+        var zakryta = svernuta(klyuch);
+        telo.hidden = zakryta;
+        g.classList.toggle('st-grp-zakryta', zakryta);
+        sh.setAttribute('aria-expanded', String(!zakryta));
+        schet.textContent = telo.querySelectorAll(':scope > .row').length || '';
+      }
+      sh.addEventListener('click', function () { folds[klyuch] = !svernuta(klyuch); pokazat(); saveFolds(); });
+      g.__pokazat = pokazat; gruppy.push(g);
+      return telo;
+    }
+    var gruppy = [];
     (o.defs || []).forEach(function (d) {
       if (d[0] === 'h') {
-        curCard = addSection(d[1], d[2] && d[2].glaz);
-        tekSek = d[1];
+        curCard = addSection(d[1], d[2] && d[2].glaz, { zakryt: d[2] && d[2].zakryt });
+        tekSek = d[1]; curGrp = null;
         return;
       }
+      if (d[0] === 'g') { curGrp = addGroup(curCard, d[1], tekSek, d[2] && d[2].zakryt); return; }
       if (d[2] === 'para' && Array.isArray(d[3])) {
         d[3].forEach(function (r) { zapomni(r[0], d[1] + ' · ' + r[1]); });
       }
       zapomni(d[0], d[1]);
-      var host = curCard || panel;
+      var host = curGrp || curCard || panel;
       var row = document.createElement('div'); row.className = 'row';
       /* Ключ на самой строке: стенду бывает нужно показать одни ручки и
          спрятать другие — переключателем, а не отдельной панелью. Искать
@@ -1682,6 +1724,7 @@
       host.appendChild(row);
       paintFill(inp);
     });
+    gruppy.forEach(function (g) { g.__pokazat(); });   // счётчики и свёрнутость — когда строки уже внутри
 
     /* ── СУЖЕНИЕ ПАНЕЛИ ────────────────────────────────────────────────
        Показать не все ручки просят два разных повода. Рабочий набор режет
@@ -1758,7 +1801,7 @@
         // пустой заголовок читается как поломка
         var skrytSekciyu = vneNabora || (svoi && !vidno);
         s.h.hidden = !!skrytSekciyu;
-        s.card.hidden = !!skrytSekciyu || !!folds[s.title];
+        s.card.hidden = !!skrytSekciyu || svernuta(s.title);
       });
       obnovitSostoyanie();
     }

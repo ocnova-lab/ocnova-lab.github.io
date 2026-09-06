@@ -22,7 +22,8 @@
      defs: StendPanel.izObyavleniya(ZAKON)
 
    Строка объявления:
-     ['h', 'Секция']
+     ['h', 'Секция']       — кластер
+     ['g', 'Часть']        — подгруппа внутри кластера, второй уровень
      [ключ, 'Подпись', 'тип', { опции }]
 
    Опции: ot — опора доли (ширина|кегль|высота|экран|строка|колонка|лента|знак);
@@ -267,6 +268,10 @@
         pretenzii.push('строка объявления № ' + (nomer + 1) + ' пуста — лишняя запятая или значение, которого нет');
         return;
       }
+      /* Подгруппа: второй уровень внутри секции. Величиной не является,
+         в разбор не идёт — только делит строки. Кончается следующей
+         подгруппой или следующей секцией. */
+      if (s[0] === 'g') return;
       if (s[0] === 'h') {
         sekcii.push(tek); tek = { imya: s[1], tipy: {} };
         gdeSekcii = s[2] && s[2].gde !== undefined ? s[2].gde : null;
@@ -315,7 +320,14 @@
     // Второй проход: сборка строк панели.
     (zakon || []).forEach(function (s) {
       if (!s || !s.length) return;   // о дырке уже сказано первым проходом
-      if (s[0] === 'h') { defs.push(s[2] && s[2].glaz ? ['h', s[1], { glaz: s[2].glaz }] : ['h', s[1]]); return; }
+      if (s[0] === 'g') { defs.push(s[2] && s[2].zakryt ? ['g', s[1], { zakryt: true }] : ['g', s[1]]); return; }
+      if (s[0] === 'h') {
+        var oh = {};
+        if (s[2] && s[2].glaz) oh.glaz = s[2].glaz;
+        if (s[2] && s[2].zakryt) oh.zakryt = true;
+        defs.push(Object.keys(oh).length ? ['h', s[1], oh] : ['h', s[1]]);
+        return;
+      }
       var klyuch = s[0], imya = s[1], tip = s[2], o = s[3] || {};
       var baza = TABLICA[tip];
       if (!baza && tip !== 'доля') {

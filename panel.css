@@ -692,6 +692,32 @@ body.st-vybor .st-panel, body.st-vybor .st-panel * { cursor: default !important;
   box-shadow: inset 0 0 0 1px var(--st-track);
 }
 .st-panel .st-svotch:hover { box-shadow: inset 0 0 0 1px var(--st-text-2); }
+/* ПОДГРУППА — второй уровень внутри кластера. Строка-шапка со стрелкой и
+   счётчиком, тело с отступом. Отличается от секции нарочно: секция кричит
+   капителью и разрядкой, подгруппа говорит обычным набором — иначе два
+   уровня спорят за внимание и ни один не читается старшим. */
+.st-panel .st-grp { border-top: 0.5px solid var(--st-hairline); }
+.st-panel .st-grp:first-child { border-top: 0; }
+.st-panel .st-grp-sh {
+  all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: 9px 11px; cursor: pointer;
+  font: 500 12px/1 var(--st-font); color: var(--st-text);
+}
+.st-panel .st-grp-sh:hover { background: rgba(255, 255, 255, .03); }
+.st-panel .st-grp-sh:focus-visible { outline: 2px solid var(--st-accent); outline-offset: -2px; }
+.st-panel .st-grp-imya { flex: 1; }
+.st-panel .st-grp-schet {
+  font-style: normal; font-size: 11px; color: var(--st-text-3);
+  font-variant-numeric: tabular-nums; min-width: 2ch; text-align: right;
+}
+.st-panel .st-grp-ch { flex: none; display: inline-flex; color: var(--st-text-3);
+  transition: transform .16s ease; transform: rotate(90deg); }
+.st-panel .st-grp-ch svg { width: 6px; height: 10px; fill: none;
+  stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.st-panel .st-grp-zakryta .st-grp-ch { transform: rotate(0deg); }
+.st-panel .st-grp-telo > .row { padding-left: 22px; }
+.st-panel .st-grp-telo > .row:first-child { border-top: 0.5px solid var(--st-hairline); }
+
 .st-panel .st-cvet {
   margin: 0 12px 10px; padding: 8px;
   background: var(--st-card); border-radius: var(--st-radius-card);
