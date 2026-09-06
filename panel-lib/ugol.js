@@ -33,7 +33,13 @@
     var ot = typeof d[3] === 'number' ? d[3] : 0;
     var do_ = typeof d[4] === 'number' ? d[4] : 360;
     var o = (typeof d[4] === 'object' ? d[4] : d[5]) || {};
-    var shag = o.shag || 1, R = o.razmer || 56; // служебная геометрия панели
+    /* Размеры сняты с макета «Панель стендов — тема Эпл», заготовка
+       «Завал оси» (узел 89:5338): кольцо 90, ручка 7, волосяные в 1 px.
+       Полотно берётся на ручку шире кольца — иначе ручка, сидящая НА
+       окружности, срезается краем канваса на четырёх углах круга. */
+    var shag = o.shag || 1, R = o.razmer || 90;   // диаметр кольца, макет // без ручки
+    var RUCHKA = 7, POLOTNO = R + RUCHKA;         // ручка и полотно, макет // без ручки
+    var SETKA = '#3A3A3E';                        // направляющие внутри кольца, макет // без ручки
 
     var box = document.createElement('div'); box.className = 'st-ugol';
     var cv = document.createElement('canvas');
@@ -44,21 +50,23 @@
 
     function risovat() {
       var dpr = window.devicePixelRatio || 1;
-      cv.width = R * dpr; cv.height = R * dpr;
-      cv.style.width = R + 'px'; cv.style.height = R + 'px';
+      cv.width = POLOTNO * dpr; cv.height = POLOTNO * dpr;
+      cv.style.width = POLOTNO + 'px'; cv.style.height = POLOTNO + 'px';
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      var c = R / 2, r = R / 2 - 5, a = P[d[0]] * Math.PI / 180;
-      ctx.clearRect(0, 0, R, R);
-      // полный круг — бледной волосяной линией, чтобы форма читалась всегда
-      ctx.strokeStyle = 'rgba(255,255,255,.1)'; ctx.lineWidth = 1;
+      var c = POLOTNO / 2, r = R / 2 - 0.5, a = P[d[0]] * Math.PI / 180;
+      ctx.clearRect(0, 0, POLOTNO, POLOTNO);
+      var tok = getComputedStyle(document.documentElement);
+      var volos = (tok.getPropertyValue('--st-hairline') || '').trim() || 'rgba(84,84,88,.6)';
+      // кольцо — волосяная линия разделителя, тот же токен, что у макета
+      ctx.strokeStyle = volos; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.arc(c, c, r, 0, 6.284); ctx.stroke();
-      /* Перекрестье осей — из заготовки дизайн-системы: горизонталь сплошной
-         волосяной, вертикаль пунктиром. Ноль, прямой угол и развёрнутый
-         читаются без счёта, а не примеряются к пустому кругу. */
-      ctx.strokeStyle = 'rgba(255,255,255,.16)';
-      ctx.beginPath(); ctx.moveTo(c - r, c); ctx.lineTo(c + r, c); ctx.stroke();
-      ctx.setLineDash([2, 3]);
-      ctx.beginPath(); ctx.moveTo(c, c - r); ctx.lineTo(c, c + r); ctx.stroke();
+      /* Направляющие по макету: горизонталь сплошная, вертикаль пунктиром
+         1 через 4. Обе идут во весь поперечник кольца, отступая по пикселю
+         от края. Ноль, прямой угол и развёрнутый читаются без счёта. */
+      ctx.strokeStyle = SETKA;
+      ctx.beginPath(); ctx.moveTo(c - r + 0.5, c); ctx.lineTo(c + r - 0.5, c); ctx.stroke();
+      ctx.setLineDash([1, 4]);
+      ctx.beginPath(); ctx.moveTo(c, c - r + 0.5); ctx.lineTo(c, c + r - 0.5); ctx.stroke();
       ctx.setLineDash([]);
       // сектор допустимого: видно, куда угол ходить не может
       if (do_ - ot < 360) {
@@ -67,13 +75,14 @@
         ctx.arc(c, c, r, -do_ * Math.PI / 180, -ot * Math.PI / 180);
         ctx.stroke();
       }
-      // радиус от центра к рукоятке — сам угол
+      /* Луч идёт ОТ ЦЕНТРА к ручке и заканчивается ею — так в макете.
+         Точки в центре нет: центр держат направляющие, а не заливка. */
       var hx = c + Math.cos(-a) * r, hy = c + Math.sin(-a) * r;
-      ctx.strokeStyle = api.accent(); ctx.lineWidth = 2;
+      ctx.strokeStyle = api.accent(); ctx.lineWidth = 1; ctx.lineCap = 'round';
       ctx.beginPath(); ctx.moveTo(c, c); ctx.lineTo(hx, hy); ctx.stroke();
+      ctx.lineCap = 'butt';
       ctx.fillStyle = api.accent();
-      ctx.beginPath(); ctx.arc(c, c, 2.2, 0, 6.284); ctx.fill();       // ось
-      ctx.beginPath(); ctx.arc(hx, hy, 5, 0, 6.284); ctx.fill();      // рукоятка
+      ctx.beginPath(); ctx.arc(hx, hy, RUCHKA / 2, 0, 6.284); ctx.fill();   // ручка на самой окружности
       val.textContent = parseFloat(P[d[0]].toFixed(2));
     }
     function ugol_kursora(e) { // сырой угол указателя, 0…360

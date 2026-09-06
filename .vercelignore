@@ -7,3 +7,6 @@ dokumentaciya.md
 publish.sh
 .zayavki
 .razbory
+
+# сборочные данные съёмок: в стенд они уже вшиты base64
+galereya-*-data.js

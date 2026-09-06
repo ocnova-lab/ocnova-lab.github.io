@@ -129,6 +129,10 @@
     'этажи':    { organ: 'inspektor', edinica: '' },
     'пара':     { organ: 'para', edinica: '' }, // две родственные величины в строке
     'откат':    { organ: 'otkat', edinica: '' },
+    // Пружина: период и затухание одним органом. Тип завёлся позже самого
+    // органа — pruzhina.js жил, а объявление о нём не знало, и стенд ронял
+    // строку в претензию. Первое употребление — догон курсора в галерее M7.
+    'пружина':  { organ: 'pruzhina', edinica: '' },
     // Время в руку: скраб фазы + пуск + временная лупа. Фазу считает
     // стенд (контракт faza/pusk/zamedli в opcii) — как попадание у
     // канвасных мест. Первый орган, показывающий время как время.
@@ -425,8 +429,11 @@
         defs.push([klyuch, nadpis, 'nasledovanie', 'vybor', o.iz || 'garnitura']);
         return;
       }
+      /* Органы, у которых значение не число: они уходят наружу как есть,
+         без границ и шага. Пружина сюда не входила — её значение это пара
+         [период, затухание], и строка собиралась слайдером с NaN. */
       if (['color', 'ease', 'toggle', 'otkat', 'palitra', 'datchik', 'inspektor',
-           'garnitura', 'gradient', 'skrab'].indexOf(baza.organ) >= 0) {
+           'garnitura', 'gradient', 'skrab', 'pruzhina'].indexOf(baza.organ) >= 0) {
         defs.push([klyuch, nadpis, o.organ || baza.organ, o.iz || o.podpisi, o.opcii]);
         return;
       }
