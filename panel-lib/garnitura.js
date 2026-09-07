@@ -21,7 +21,9 @@
     ['Even Mono', 'моно'],
     ['JetBrains Mono', 'моно'],
     ['Pragmatica Next VF', 'переменный гротеск'],
-    ['Times New Roman', 'системная антиква']
+    ['Times New Roman', 'системная антиква'],
+    ['Apple II Screen Typeface', 'пиксельная'],
+    ['Syne Mono', 'моно, макет каталога']
   ];
 
   var STIL = '.st-garn{width:100%;display:grid;gap:2px;margin-top:5px;' +
