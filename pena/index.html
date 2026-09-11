@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Пена</title>
+<link rel="stylesheet" href="/panel.css" />
+<style>
+  @font-face {
+    font-family: 'JetBrains Mono';
+    src: url('/fonts/JetBrainsMono-Regular.woff2') format('woff2');
+    font-weight: 400; font-style: normal; font-display: swap;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--list, #f2f2f0);
+    color: #111;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 15px;
+    line-height: 1.35;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    padding: 24px;
+    overscroll-behavior: none;
+  }
+
+  header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    padding: 1rem;
+    font-size: 13px;
+    color: #555;
+    z-index: 6;
+    pointer-events: none;
+  }
+  header a { color: inherit; pointer-events: auto; }
+
+  /* Полотно — две половины в ряд: слева маска, справа исходник.
+     Ширина половины задаётся отношением сторон ролика, чтобы клетка
+     оставалась квадратной на любом экране. */
+  #scena {
+    display: flex;
+    gap: 0;
+    box-shadow: 0 1px 30px rgba(0,0,0,.07);
+    max-width: 100%;
+  }
+  #scena > * { display: block; }
+  #maska { background: #c9cfd6; }
+  #ishodnik { background: #1b2026; object-fit: cover; }
+  body.bez-video #ishodnik { display: none; }
+
+  /* Подпись снята с исходного ролика: тип, синтез, время. Время здесь
+     не шутка про полтора часа, а настоящая стоимость кадра. */
+  figcaption {
+    font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #222;
+    align-self: flex-start;
+    margin-left: max(0px, calc((100% - var(--shirina, 660px)) / 2));
+    white-space: pre;
+  }
+  figcaption b { font-weight: 400; color: #8a8f96; }
+  figcaption .ves { color: #8a8f96; }
+
+  /* Приглашение принести своё видео — поверх полотна, гаснет после первого раза */
+  #brosok {
+    position: fixed; inset: 0;
+    display: none;
+    align-items: center; justify-content: center;
+    background: rgba(240,242,245,.86);
+    font-size: 16px; color: #333;
+    z-index: 20;
+  }
+  body.tashchat #brosok { display: flex; }
+
+  @media (max-width: 720px) {
+    body { gap: 12px; padding: 12px; }
+    figcaption { font-size: 11px; }
+  }
+</style>
+</head>
+<body>
+  <header>Сергей Гуров — пена · кадр видео сжимается до грубой сетки, клетка ярче порога зажигается · <a href="/">стенды</a></header>
+
+  <figure id="scena-obertka" style="display:contents">
+    <div id="scena">
+      <canvas id="maska"></canvas>
+      <video id="ishodnik" muted playsinline loop preload="auto" src="/pena-volny.mp4"></video>
+    </div>
+    <figcaption id="podpis"></figcaption>
+  </figure>
+
+  <div id="brosok">отпустите видео — стенд разберёт его</div>
+
+<script src="/panel.js"></script>
+<script src="/panel-lib/segment.js"></script>
+<script src="/panel-lib/toggle.js"></script>
+<script src="/pena-dannye.js"></script>
+<script>
+'use strict';
+/* ============================================================
+   Стенд «Пена».
+
+   ЧТО ЭТО. Слева бегут клетки, справа — волны, и клетки
+   повторяют волну. Выглядит как тяжёлый расчёт («TIME : 1 hour
+   35 min» в исходном ролике), а внутри — одно действие на кадр:
+
+     кадр → обесцветить → сжать до сетки 25×36 → клетка ярче
+     порога = пена.
+
+   Никакой симуляции воды нет. Пена на съёмке — самое яркое,
+   что есть в кадре, поэтому порог по яркости и вырезает ровно
+   её. Сверка с исходным роликом по кадрам: сетка 25×36 и
+   фиксированный порог 150 из 255 дают 91.8 % совпадения клеток.
+   Остаток — покадровое залипание и неточность обрезки.
+
+   ДВА ПУТИ, ОБА ЗДЕСЬ.
+
+   «Живьём» — считать в браузере каждый кадр. Стоимость видна в
+   подписи под полотном: доли миллисекунды. Дорого не считать —
+   дорого держать на странице видео (600 КБ и декодер).
+
+   «Запечённое» — посчитать заранее и увезти биты. Клетка = бит,
+   кадр = 113 байт, все 333 кадра = 54 КБ (10 КБ в gzip) против
+   584 КБ видео. Видео странице больше не нужно вовсе: маска
+   играет сама. Это и есть путь для сайта.
+
+   Кнопка «Запечь» в панели делает это прямо здесь: прогоняет
+   ролик с текущими ручками и отдаёт готовый pena-dannye.js.
+   То же самое офлайн — python3 pena-sobrat.py.
+
+   Своё видео — перетащить на страницу.
+   ============================================================ */
+
+var ZAPECHENO = window.PENA || null;
+
+var DEFAULTS = {
+  istochnik: 'zapech',  // zapech | zhivyom — откуда берётся маска
+  setka: 25,            // клеток по ширине
+  porog: 150,           // яркость пены, 0…255
+  zalip: 10,            // залипание порога: зажечься труднее, чем удержаться
+  risunok: 'porog',     // porog | polutoni — клетка или ступень серого
+  stupeni: 4,           // сколько ступеней в полутонах
+  zazor: 0,             // зазор между клетками, % клетки
+  skrug: 0,             // скругление клетки, % половины клетки
+  fon: '#c9cfd6',
+  klet: '#46535f',
+  palitra: 'more',
+  hod: 100,             // скорость хода, %
+  videoVidno: true,
+  setkaVidna: false,
+};
+
+var P = {};
+for (var k in DEFAULTS) P[k] = DEFAULTS[k];
+
+var maska = document.getElementById('maska');
+var mctx = maska.getContext('2d', { alpha: false });
+var video = document.getElementById('ishodnik');
+var podpis = document.getElementById('podpis');
+var scena = document.getElementById('scena');
+
+/* Промежуточный холст: видео сжимается в два шага. В один шаг
+   браузер на таком сокращении (330 → 25) прореживает, а не
+   усредняет — тонкая пена проваливается между отсчётами и сетка
+   шипит. Шаг через четверть размера даёт честное среднее. */
+var pr = document.createElement('canvas');
+var prctx = pr.getContext('2d', { alpha: false, willReadFrequently: true });
+var mal = document.createElement('canvas');
+var malctx = mal.getContext('2d', { alpha: false, willReadFrequently: true });
+malctx.imageSmoothingEnabled = true;
+malctx.imageSmoothingQuality = 'high';
+
+var NX = 25, NY = 36;              // текущая сетка
+var otn = 330 / 476;               // отношение сторон половины (ш/в)
+var yach = null;                   // Uint8Array яркостей клеток, 0…255
+var gorit = null;                  // Uint8Array: горит ли клетка (для залипания)
+var urovni = null;                 // Float32Array 0…1 для полутонов
+
+/* ── Запечённая маска ───────────────────────────────────────
+   Биты распаковываются один раз в Uint8Array по кадрам: игра
+   не должна трогать base64. */
+var ZAP = null;
+function razvernut(d) {
+  if (!d) return null;
+  var bin = atob(d.bity);
+  var nx = d.setka[0], ny = d.setka[1], n = d.kadrov;
+  var naKadr = (nx * ny + 7) >> 3;
+  var out = new Uint8Array(n * nx * ny);
+  for (var f = 0; f < n; f++) {
+    var baza = f * naKadr, cel = f * nx * ny;
+    for (var i = 0, ln = nx * ny; i < ln; i++) {
+      var bajt = bin.charCodeAt(baza + (i >> 3));
+      out[cel + i] = (bajt >> (7 - (i & 7))) & 1;
+    }
+  }
+  return { setka: [nx, ny], kadrov: n, chastota: d.chastota || 24, kletki: out };
+}
+
+/* ── Размер полотна ─────────────────────────────────────────
+   Половина полотна держит отношение сторон ролика. Клетка
+   квадратная: по ширине их NX, по высоте — сколько влезет. */
+function razmer() {
+  var dpr = Math.min(2, window.devicePixelRatio || 1);
+  var dve = P.videoVidno ? 2 : 1;
+  var maxW = Math.min(window.innerWidth - 48, 980);
+  var maxH = window.innerHeight - 190;
+  /* Половину не тянем сильно шире исходника: ролик всего 330 пикселов,
+     на весь экран он расплывается, и сравнивать становится не с чем.
+     Полтора натуральных размера — предел, за которым мыло видно. */
+  var predel = video.videoWidth ? video.videoWidth * 1.5 : 495;
+  var w = Math.min(maxW / dve, maxH * otn, predel);
+  w = Math.max(180, Math.floor(w));
+  var h = Math.round(w / otn);
+
+  maska.style.width = w + 'px';  maska.style.height = h + 'px';
+  video.style.width = w + 'px';  video.style.height = h + 'px';
+  maska.width = Math.round(w * dpr);
+  maska.height = Math.round(h * dpr);
+  document.body.style.setProperty('--shirina', (w * dve) + 'px');
+  narisovat();
+}
+
+/* Сетка: по ширине столько клеток, сколько просит ручка (или
+   сколько запечено), по высоте — ровно столько, чтобы клетка
+   осталась квадратной. */
+function perestroit() {
+  if (P.istochnik === 'zapech' && ZAP) {
+    NX = ZAP.setka[0]; NY = ZAP.setka[1];
+  } else {
+    NX = Math.max(4, Math.round(P.setka));
+    NY = Math.max(4, Math.round(NX / otn));
+  }
+  zamerN = 0;
+  yach = new Uint8Array(NX * NY);
+  gorit = new Uint8Array(NX * NY);
+  urovni = new Float32Array(NX * NY);
+  mal.width = NX; mal.height = NY;
+  pr.width = Math.max(NX, Math.round(NX * 4));
+  pr.height = Math.max(NY, Math.round(NY * 4));
+  prctx.imageSmoothingEnabled = true;
+  prctx.imageSmoothingQuality = 'high';
+}
+
+/* ── Съём яркостей с живого видео ───────────────────────────
+   Rec. 601 — та же формула, что у cv2.COLOR_BGR2GRAY в
+   запекалке: иначе живая маска и запечённая расходятся. */
+/* Стоимость кадра — медиана последних шестидесяти, не среднее. Среднее
+   здесь врёт: одна заминка компоновщика в тридцать миллисекунд тянет его
+   вверх ещё полсекунды, и подпись показывает беду там, где её нет. */
+var zamery = new Float32Array(60), zamerN = 0;
+var pechyot = false;    // идёт запекание — подпись занята прогрессом
+function zameril(ms) { zamery[zamerN++ % zamery.length] = ms; }
+// Считается не каждый кадр, а когда подпись обновляется: шестьдесят чисел
+// сортировать по шестьдесят раз в секунду — дороже самого разбора
+function cenaKadra() {
+  var n = Math.min(zamerN, zamery.length);
+  if (!n) return 0;
+  var s = Array.prototype.slice.call(zamery.subarray(0, n));
+  s.sort(function (a, b) { return a - b; });
+  return s[n >> 1];
+}
+function snyat() {
+  if (video.readyState < 2) return false;
+  var t0 = performance.now();
+  prctx.drawImage(video, 0, 0, pr.width, pr.height);
+  malctx.drawImage(pr, 0, 0, NX, NY);
+  var d = malctx.getImageData(0, 0, NX, NY).data;
+  for (var i = 0, p = 0, n = NX * NY; i < n; i++, p += 4) {
+    yach[i] = (d[p] * 77 + d[p + 1] * 150 + d[p + 2] * 29) >> 8;
+  }
+  // Залипание: порог на зажжение выше, на удержание — ниже.
+  var z = P.zalip;
+  for (var j = 0; j < n; j++) {
+    gorit[j] = yach[j] > (gorit[j] ? P.porog - z : P.porog + z) ? 1 : 0;
+    urovni[j] = Math.min(1, Math.max(0, (yach[j] - (P.porog - 45)) / 90));
+  }
+  zameril(performance.now() - t0);
+  return true;
+}
+
+/* ── Съём с запечённой маски ────────────────────────────────
+   Ход свой, от часов страницы: видео здесь не нужно вовсе —
+   в этом весь смысл запекания. Но если видео на экране, маска
+   идёт по его времени: иначе половины разъедутся и сравнить
+   их будет нечем. */
+var zapKadr = 0;
+function snyatZapech(dt) {
+  if (!ZAP) return false;
+  var t0 = performance.now();
+  if (P.videoVidno && video.readyState >= 2 && !video.paused && video.src.indexOf('blob:') < 0) {
+    zapKadr = (video.currentTime * ZAP.chastota) % ZAP.kadrov;
+  } else {
+    zapKadr = (zapKadr + dt * ZAP.chastota * (P.hod / 100)) % ZAP.kadrov;
+  }
+  var f = Math.floor(zapKadr) * NX * NY;
+  var kl = ZAP.kletki;
+  for (var i = 0, n = NX * NY; i < n; i++) {
+    gorit[i] = kl[f + i];
+    urovni[i] = kl[f + i];
+  }
+  zameril(performance.now() - t0);
+  return true;
+}
+
+/* ── Рисунок ────────────────────────────────────────────────
+   Клетки — прямоугольники, не картинка: зазор, скругление и
+   полутон живут здесь, а не в данных. */
+function narisovat() {
+  var W = maska.width, H = maska.height;
+  mctx.fillStyle = P.fon;
+  mctx.fillRect(0, 0, W, H);
+  if (!gorit) return;
+
+  var sx = W / NX, sy = H / NY;
+  var zaz = (P.zazor / 100);
+  var r = (P.skrug / 100) * Math.min(sx, sy) / 2;
+  mctx.fillStyle = P.klet;
+
+  for (var y = 0; y < NY; y++) {
+    for (var x = 0; x < NX; x++) {
+      var i = y * NX + x;
+      var dolya;                        // сколько клетки залито, 0…1
+      if (P.risunok === 'polutoni') {
+        var st = Math.max(2, Math.round(P.stupeni));
+        dolya = Math.round(urovni[i] * st) / st;
+      } else {
+        dolya = gorit[i] ? 1 : 0;
+      }
+      if (dolya <= 0) continue;
+      var k = Math.sqrt(dolya) * (1 - zaz);     // площадь ∝ доле, отсюда корень
+      var w = sx * k, h = sy * k;
+      var px = x * sx + (sx - w) / 2, py = y * sy + (sy - h) / 2;
+      if (r > 0.5 && mctx.roundRect) {
+        mctx.beginPath();
+        mctx.roundRect(px, py, w, h, Math.min(r, w / 2, h / 2));
+        mctx.fill();
+      } else {
+        mctx.fillRect(px, py, w, h);
+      }
+    }
+  }
+
+  if (P.setkaVidna) {
+    mctx.strokeStyle = 'rgba(0,0,0,.12)';
+    mctx.lineWidth = 1;
+    mctx.beginPath();
+    for (var gx = 1; gx < NX; gx++) { mctx.moveTo(gx * sx, 0); mctx.lineTo(gx * sx, H); }
+    for (var gy = 1; gy < NY; gy++) { mctx.moveTo(0, gy * sy); mctx.lineTo(W, gy * sy); }
+    mctx.stroke();
+  }
+}
+
+/* ── Подпись ────────────────────────────────────────────────
+   Тот же набор строк, что в исходном ролике, но TIME говорит
+   правду: сколько миллисекунд стоит кадр и сколько весит то,
+   из чего он взялся. */
+var VES_VIDEO = 584;   // КБ, pena-volny.mp4
+// Вес самих битов, а не файла: base64 раздувает их на треть, gzip забирает
+// это обратно и ещё больше (54 КБ файла → 10 КБ по проводу).
+var vesZapech = ZAPECHENO ? Math.round(ZAPECHENO.bity.length * 0.75 / 1024) : 0;
+function podpisat() {
+  if (pechyot) return;                 // во время запекания подпись занята прогрессом
+  var zhivyom = P.istochnik === 'zhivyom';
+  var ves = zhivyom
+    ? VES_VIDEO + ' КБ видео'
+    : vesZapech + ' КБ битами, видео не нужно';
+  var c = cenaKadra();
+  podpis.innerHTML =
+    '<b>TYPE  :</b> волны, ' + NX + '×' + NY + ' клеток\n' +
+    '<b>SYNTH :</b> ' + (zhivyom ? 'порог по яркости, живьём' : 'запечённая маска') + '\n' +
+    '<b>TIME  :</b> ' + (c < 0.01 ? '< 0.01' : c.toFixed(2)) + ' мс на кадр  <span class="ves">· ' + ves + '</span>\n' +
+    '<b>NOTE  :</b> ' + (zhivyom ? 'перетащите на страницу своё видео'
+                                 : 'посчитано заранее, страница только играет');
+}
+
+/* Видео крутится, пока оно кому-то нужно: живому разбору — как
+   источник, запечённому — как половина для сравнения. Спрятанное
+   в запечённом режиме останавливаем: декодер задаром не работает. */
+function hodVideo() {
+  if (P.istochnik === 'zhivyom' || P.videoVidno) {
+    video.play().catch(function () {});
+  } else {
+    video.pause();
+  }
+}
+
+/* ── Ход ────────────────────────────────────────────────────*/
+var bylo = performance.now(), schyot = 0;
+function kadr(t) {
+  var dt = Math.min(0.1, (t - bylo) / 1000);
+  bylo = t;
+  var est = P.istochnik === 'zhivyom' ? snyat() : snyatZapech(dt);
+  if (est) narisovat();
+  if ((schyot++ & 15) === 0) podpisat();
+  requestAnimationFrame(kadr);
+}
+
+/* ── Своё видео ─────────────────────────────────────────────
+   Файл не уезжает никуда: blob-ссылка живёт в этой вкладке. */
+['dragenter', 'dragover'].forEach(function (e) {
+  window.addEventListener(e, function (ev) {
+    ev.preventDefault(); document.body.classList.add('tashchat');
+  });
+});
+['dragleave', 'drop'].forEach(function (e) {
+  window.addEventListener(e, function (ev) {
+    ev.preventDefault();
+    if (e === 'dragleave' && ev.relatedTarget) return;
+    document.body.classList.remove('tashchat');
+  });
+});
+window.addEventListener('drop', function (ev) {
+  var f = ev.dataTransfer && ev.dataTransfer.files[0];
+  if (!f || !/^video\//.test(f.type)) return;
+  video.src = URL.createObjectURL(f);
+  P.istochnik = 'zhivyom';
+  P.videoVidno = true;
+  document.body.classList.remove('bez-video');
+  hodVideo();
+  video.addEventListener('loadedmetadata', function () {
+    otn = video.videoWidth / video.videoHeight;
+    perestroit(); razmer();
+  }, { once: true });
+  if (window.PANEL && PANEL.obnovit) PANEL.obnovit();
+});
+
+/* ── Запекание прямо здесь ──────────────────────────────────
+   Ролик прогоняется покадровым перемоткой (seek), каждый кадр
+   снимается текущими ручками и складывается в биты. Отдаётся
+   готовый pena-dannye.js — тот же формат, что у запекалки. */
+function zapech() {
+  if (pechyot) return;
+  if (!video.duration || !isFinite(video.duration)) { alert('видео ещё не готово'); return; }
+  pechyot = true;
+  var byloIst = P.istochnik;
+  P.istochnik = 'zhivyom';
+  perestroit();
+  var fps = 24, n = Math.floor(video.duration * fps);
+  var naKadr = (NX * NY + 7) >> 3;
+  var out = new Uint8Array(n * naKadr);
+  var i = 0;
+  video.pause();
+  gorit.fill(0);
+
+  function shag() {
+    video.currentTime = Math.min(video.duration - 0.001, i / fps);
+  }
+  function snyalsya() {
+    snyat();
+    var baza = i * naKadr;
+    for (var c = 0, ln = NX * NY; c < ln; c++) {
+      if (gorit[c]) out[baza + (c >> 3)] |= 128 >> (c & 7);
+    }
+    narisovat();
+    podpis.textContent = 'запекаю… ' + Math.round(i / n * 100) + ' %';
+    if (++i < n) { shag(); return; }
+    video.removeEventListener('seeked', snyalsya);
+    otdat(out, n, fps);
+    pechyot = false;
+    P.istochnik = byloIst;
+    perestroit();
+    hodVideo();
+  }
+  video.addEventListener('seeked', snyalsya);
+  shag();
+}
+
+function otdat(bajty, n, fps) {
+  var s = '';
+  for (var i = 0; i < bajty.length; i += 4096) {
+    s += String.fromCharCode.apply(null, bajty.subarray(i, i + 4096));
+  }
+  var b64 = btoa(s);
+  var stroki = [];
+  for (var j = 0; j < b64.length; j += 96) stroki.push("    '" + b64.slice(j, j + 96) + "',");
+  var js = '// Маска стенда «Пена» — запечена в браузере кнопкой «Запечь».\n' +
+    '// Клетка — бит: 1 = пена. Строка за строкой сверху вниз, старший бит\n' +
+    '// первым, каждый кадр выровнен по байту (' + ((NX * NY + 7) >> 3) + ' Б).\n' +
+    'window.PENA = {\n' +
+    '  setka: [' + NX + ', ' + NY + '],\n' +
+    '  kadrov: ' + n + ',\n' +
+    '  chastota: ' + fps.toFixed(3) + ',\n' +
+    '  porog: ' + P.porog + ', zalip: ' + P.zalip + ',\n' +
+    '  bity: [\n' + stroki.join('\n') + '\n  ].join(\'\'),\n};\n';
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([js], { type: 'text/javascript' }));
+  a.download = 'pena-dannye.js';
+  a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+}
+
+/* ── Панель ─────────────────────────────────────────────────*/
+var PANEL = StendPanel.build({
+  storageKey: 'pena-params',
+  params: P,
+  defaults: DEFAULTS,
+  defs: [
+    ['h', 'Источник'],
+    ['istochnik', 'Откуда маска', 'segment', [
+      ['zapech', 'Запечённая'],
+      ['zhivyom', 'Живьём'],
+    ]],
+    ['hod', 'Ход, %', 0, 300, 5],
+
+    ['h', 'Разбор'],
+    ['setka', 'Клеток по ширине', 6, 80, 1, { pole: true }],
+    ['porog', 'Порог яркости', 0, 255, 1, { pole: true }],
+    ['zalip', 'Залипание', 0, 60, 1],
+
+    ['h', 'Рисунок'],
+    ['risunok', 'Клетка', 'segment', [
+      ['porog', 'Есть / нет'],
+      ['polutoni', 'Полутон'],
+    ]],
+    ['stupeni', 'Ступеней полутона', 2, 12, 1],
+    ['zazor', 'Зазор, % клетки', 0, 60, 1],
+    ['skrug', 'Скругление, %', 0, 100, 1],
+
+    ['h', 'Цвет'],
+    ['palitra', 'Палитра', 'preset', [
+      ['more', 'Море', { fon: '#c9cfd6', klet: '#46535f' }],
+      ['bumaga', 'Бумага', { fon: '#f2f0ea', klet: '#141414' }],
+      ['noch', 'Ночь', { fon: '#101014', klet: '#e8e8ea' }],
+      ['svoi', 'Свои цвета', {}],
+    ]],
+    ['fon', 'Фон', 'color'],
+    ['klet', 'Клетка', 'color'],
+
+    ['h', 'Вид'],
+    ['videoVidno', '', 'toggle', ['Показать видео', 'Скрыть видео']],
+    ['setkaVidna', '', 'toggle', ['Показать сетку', 'Скрыть сетку']],
+  ],
+  desc: {
+    istochnik: 'Запечённая — маска играет из файла в 54 КБ, видео странице не нужно. ' +
+               'Живьём — каждый кадр разбирается в браузере (видно в строке TIME под полотном).',
+    setka: 'Сколько клеток по ширине. По высоте столько, чтобы клетка осталась квадратной. ' +
+           'В запечённой маске сетка зашита при сборке — эта ручка работает на живом видео.',
+    porog: 'Клетка ярче этого числа считается пеной. Пена — самое яркое в кадре, ' +
+           'поэтому один порог по яркости и вырезает ровно её. У исходного ролика он равен 150.',
+    zalip: 'Зажечься труднее, чем удержаться: порог на зажжение выше на это число, на гашение — ниже. ' +
+           'Без залипания клетки на самом пороге дребезжат покадрово.',
+    risunok: 'Есть / нет — клетка залита целиком или пуста. Полутон — площадь клетки растёт со ступенью яркости.',
+    zazor: 'Отступ клетки от границы своей ячейки. Ноль — блоки смыкаются, как в исходном ролике.',
+    hod: 'Скорость запечённой маски. На живом видео ход задаёт само видео.',
+  },
+  onChange: function (key) {
+    if (key === 'setka' || key === 'istochnik') { perestroit(); razmer(); }
+    if (key === 'videoVidno') {
+      document.body.classList.toggle('bez-video', !P.videoVidno);
+      razmer();
+    }
+    if (key === 'videoVidno' || key === 'istochnik') hodVideo();
+    podpisat();
+  },
+});
+
+/* Кнопка запекания — отдельной строкой в подвале панели: это не ручка,
+   а действие, и держать его среди величин нечестно. */
+(function () {
+  var b = document.createElement('button');
+  b.type = 'button';
+  b.textContent = 'Запечь текущие ручки в файл';
+  b.style.cssText = 'all:unset;display:block;width:calc(100% - 20px);margin:8px 10px;padding:7px 9px;' +
+    'box-sizing:border-box;font:12px/1.2 var(--st-font,-apple-system,sans-serif);text-align:center;' +
+    'cursor:pointer;border:0.5px solid var(--st-hairline,#ccc);border-radius:7px;background:var(--st-card,#fff)';
+  b.addEventListener('click', zapech);
+  // вставлять — в PANEL.telo: там прокрутка панели (панель, ход 31)
+  if (PANEL && PANEL.telo) PANEL.telo.appendChild(b);
+})();
+
+/* ── Пуск ───────────────────────────────────────────────────*/
+ZAP = razvernut(ZAPECHENO);
+if (!ZAP && P.istochnik === 'zapech') P.istochnik = 'zhivyom';
+document.body.classList.toggle('bez-video', !P.videoVidno);
+perestroit();
+razmer();
+window.addEventListener('resize', razmer);
+
+video.addEventListener('loadedmetadata', function () {
+  otn = video.videoWidth / video.videoHeight;
+  perestroit(); razmer();
+});
+// Автоплей без звука разрешён везде, но Сафари может отложить его до жеста
+hodVideo();
+window.addEventListener('pointerdown', function () { hodVideo(); }, { once: true });
+
+podpisat();
+requestAnimationFrame(kadr);
+</script>
+</body>
+</html>
