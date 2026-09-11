@@ -299,7 +299,8 @@
          znachenie: () => число,    — откуда читать
          postavit:  (v) => {},      — куда писать (тяга, стрелки, колесо)
          tekst:     (v) => строка,  — что показывать в пилюле (не обязательно)
-         umolchanie:() => число,    — дабл-клик по пилюле (не обязательно)
+         umolchanie:() => число,    — дабл-клик по пилюле, насечка на дорожке
+                                      и магнит к ней (не обязательно)
          inp, val                   — готовые элементы, если они уже есть
        });
        n.obl        — .st-nitka, класть в строку
@@ -326,6 +327,15 @@
     val.style.pointerEvents = 'none'; val.tabIndex = -1;
     val.removeAttribute('role'); val.title = '';
     pil.appendChild(val);
+    /* НАСЕЧКА УМОЛЧАНИЯ (11.09, снято с панели Миши: «трек рисует насечку на
+       дефолте и магнитится к ней»). Точка увода говорит, ЧТО ручка уведена;
+       насечка говорит, ОТКУДА. Пока значение стоит на умолчании, её нет —
+       показывать место, на котором и так стоишь, незачем. */
+    var zarubka = null;
+    if (o.umolchanie) {
+      zarubka = document.createElement('i'); zarubka.className = 'st-zarubka';
+      zarubka.hidden = true; obl.appendChild(zarubka);
+    }
     obl.appendChild(fill); obl.appendChild(inp); obl.appendChild(pil);
 
     function chitat() { return o.znachenie ? +o.znachenie() : parseFloat(inp.value); }
@@ -339,6 +349,18 @@
       var hod = 'calc(' + hw + 'px + ' + (p / 100) + ' * (100% - ' + hw * 2 + 'px))';
       pil.style.left = hod;
       fill.style.width = hod;
+      /* Насечка идёт тем же законом, что пилюля и заливка: одна формула хода
+         на все три, иначе метка разъезжается с тем, что метит. */
+      if (zarubka) {
+        var u = o.umolchanie();
+        if (u === undefined || !(hi > lo)) zarubka.hidden = true;
+        else {
+          var pu = Math.max(0, Math.min(1, (u - lo) / (hi - lo)));
+          zarubka.style.left = 'calc(' + hw + 'px + ' + pu + ' * (100% - ' + hw * 2 + 'px))';
+          var sh0 = parseFloat(inp.step) || 1;
+          zarubka.hidden = Math.abs(parseFloat(inp.value) - u) < sh0 / 2;
+        }
+      }
     }
     function obnovit() {
       var v = chitat();
@@ -355,7 +377,19 @@
       var r = obl.getBoundingClientRect(), hw = pil.offsetWidth / 2;
       var q = Math.max(0, Math.min(1, (ev.clientX - r.left - hw) / ((r.width - 2 * hw) || 1)));
       var lo = parseFloat(inp.min), hi = parseFloat(inp.max), sh = parseFloat(inp.step) || 1;
-      inp.value = parseFloat((lo + Math.round(q * (hi - lo) / sh) * sh).toFixed(6));
+      var v = lo + Math.round(q * (hi - lo) / sh) * sh;
+      /* МАГНИТ К УМОЛЧАНИЮ. Радиус берётся В ПИКСЕЛЯХ ДОРОЖКИ, а не долей
+         величины: рука метит в место на экране, и на ручке с вилкой до трёх
+         тысяч доля дала бы притяжение во весь экран. Alt снимает магнит —
+         иначе значение рядом с умолчанием стало бы недостижимым. */
+      if (o.umolchanie && !ev.altKey && hi > lo) {
+        var uz = o.umolchanie();
+        if (uz !== undefined) {
+          var shirPx = (r.width - 2 * hw) || 1;
+          if (Math.abs((v - uz) / (hi - lo) * shirPx) <= 5) v = uz;
+        }
+      }
+      inp.value = parseFloat(v.toFixed(6));
       inp.dispatchEvent(new Event('input'));
     });
     pil.addEventListener('pointerup', function () { pil.classList.remove('tyanem'); });
@@ -553,6 +587,16 @@
     var fazaKesh = {};   // последние виденные значения хозяев
     function izmenilos(key) {
       save();
+      /* ОТРАЖЕНИЯ: одну величину можно показать в нескольких кластерах, и
+         правка любого показа обязана тянуть остальные. Обновлялка ключа
+         склеена из всех показов (svyazatControl), поэтому достаточно её
+         позвать; тот показ, который правят руками, уже стоит верно, и
+         повтор ему безвреден — значение то же. Флаг против рекурсии:
+         обновлялка не шлёт событий правки, но пусть будет явно. */
+      if (!vOtrazhenii && key && controls[key]) {
+        vOtrazhenii = true;
+        try { controls[key](); } finally { vOtrazhenii = false; }
+      }
       /* Фаза: повернулся хозяин — часть ручек умерла или ожила. Сверяются
          ВСЕ хозяева, не только key: пресет меняет пачку параметров разом,
          а izmenilos приходит с ключом самого пресета. Хозяев единицы —
@@ -659,9 +703,175 @@
        Прокручивается тело, а не панель: полоса прокрутки вынесена наружу
        (правка Сергея 03.09). Внутри она отъедала правую колонку — панель
        садилась несимметрично, и рифмовка вертикалей ехала. */
+    /* ПОИСК ПО РУЧКАМ. Панель растёт вместе со стендом, и на полутора сотнях
+       величин в двух десятках подгрупп человек перестаёт понимать, ГДЕ искать
+       нужную (Сергей 10.09: «открываю панели и просто не понимаю, где какая
+       ручка»). Свёрнутость и порядок кластеров про привычку руки, а поиск —
+       про вопрос «где то, что я ищу»: это разные задачи, и вторая до сих пор
+       не была решена ничем.
+       ПРЯЧЕМ СВОИМ КЛАССОМ, А НЕ hidden. Атрибутом пользуется сам стенд, а
+       классом `st-vne` — перестроение вида; три механизма на одном атрибуте
+       дрались бы, и первый же клик по панели стирал бы отбор (Сергей 10.09:
+       «кликнул на панельку — всё исчезло»). Прячет тот, кто сказал прятать,
+       остальные складываются.
+       Ищем по трём слоям сразу: имя ручки на экране, её ключ в коде и текст
+       подсказки. Подсказка тут не роскошь — человек помнит не имя ручки, а
+       что она делает: «орбита», «моргает», «за оборот». */
+    /* ПОИСК ПЕРЕЖИВАЕТ ПЕРЕЗАГРУЗКУ (Сергей 10.09: «нашёл панельку, перезагрузил
+       — и ищи заново»). Отбор — это тоже привычка руки, как свёрнутость: если
+       человек работает над орбитой, он работает над ней и после F5. Живёт
+       рядом со свёрнутостью, своим ключом и не мешает значениям.
+       ИСТОРИЯ — тот же список, только показанный: последние запросы отдаются
+       нативным списком подсказок, он открывается и по клику, и при наборе.
+       Своего выпадающего меню не пишем: браузер уже умеет это лучше. */
+    var POISK_KEY = 'stend-panel-poisk:' + o.storageKey;
+    var poiskPamyat = { q: '', ist: [] };
+    try { poiskPamyat = JSON.parse(localStorage.getItem(POISK_KEY)) || poiskPamyat; } catch (e) {}
+    /* Пустые в историю не пускаем ни на входе, ни на чтении: они попадали
+       туда из прежних редакций и занимали места живых запросов. */
+    poiskPamyat.ist = (poiskPamyat.ist || []).filter(function (q) { return q && q.trim(); });
+    var poisk = document.createElement('input');
+    poisk.type = 'search'; poisk.className = 'st-poisk';
+    poisk.setAttribute('aria-label', 'найти ручку');
+    poisk.placeholder = 'Поиск';
+    /* СПИСОК СВОЙ, А НЕ НАТИВНЫЙ. У <datalist> подсказки открываются кликом по
+       стрелке или набором — а нужно по НАВЕДЕНИЮ (Сергей 10.09: «наводим, и
+       внизу появляется история; не надо кликать»). Своим списком это делается
+       прямо, чужим — никак: браузер не отдаёт его показ наружу. */
+    var spisok = document.createElement('div');
+    spisok.className = 'st-poisk-ist'; spisok.hidden = true;
+    function narisovatIstoriyu() {
+      spisok.innerHTML = '';
+      poiskPamyat.ist.forEach(function (q) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.className = 'st-poisk-ist-q'; b.textContent = q;
+        b.addEventListener('click', function () {
+          poisk.value = q; filtrPoiska(q); zapomnitPoisk(q, true); skryt();
+        });
+        spisok.appendChild(b);
+      });
+      /* Перерисовка не показывает список: он открывается ТОЛЬКО наведением.
+         Прежде здесь стояло `hidden = !длина`, и при непустой истории список
+         висел раскрытым с самой загрузки. */
+      if (!poiskPamyat.ist.length) spisok.hidden = true;
+    }
+    /* ДЕРЖИТСЯ, ПОКА КУРСОР НА ПОЛЕ ИЛИ НА САМОМ СПИСКЕ: иначе из поля до
+       подсказки не дойти — она исчезнет по дороге. Уход проверяется не сразу,
+       а через кадр: переход между двумя соседями идёт через миг, когда
+       курсор формально не на обоих. */
+    var nadPolem = false, nadSpiskom = false, tProverki = 0;
+    function pokazat() { if (poiskPamyat.ist.length) spisok.hidden = false; }
+    function skryt() { spisok.hidden = true; }
+    function proverit() {
+      clearTimeout(tProverki);
+      tProverki = setTimeout(function () {
+        if (nadPolem || nadSpiskom) pokazat(); else skryt();
+      }, 80);
+    }
+    poisk.addEventListener('pointerenter', function () { nadPolem = true; proverit(); });
+    poisk.addEventListener('pointerleave', function () { nadPolem = false; proverit(); });
+    poisk.addEventListener('focus', function () { nadPolem = true; proverit(); });
+    spisok.addEventListener('pointerenter', function () { nadSpiskom = true; proverit(); });
+    spisok.addEventListener('pointerleave', function () { nadSpiskom = false; proverit(); });
+    function zapomnitPoisk(q, vIstoriyu) {
+      poiskPamyat.q = q;
+      if (vIstoriyu && q && q.trim()) {
+        poiskPamyat.ist = [q].concat(poiskPamyat.ist.filter(function (x) { return x !== q; })).slice(0, 4);
+        narisovatIstoriyu();
+      }
+      try { localStorage.setItem(POISK_KEY, JSON.stringify(poiskPamyat)); } catch (e) {}
+    }
+    narisovatIstoriyu(); spisok.hidden = true;
+    /* Поле и список — в одной обёртке: список ложится ПОД полем вплотную,
+       и переход курсора с одного на другой не рвётся зазором. */
+    var poiskObl = document.createElement('div'); poiskObl.className = 'st-poisk-obl';
+    poiskObl.appendChild(poisk); poiskObl.appendChild(spisok);
+    panel.appendChild(poiskObl);
     var telo = document.createElement('div');
     telo.className = 'st-telo';
     panel.appendChild(telo);
+    /* Свёрнутость до поиска запоминается и возвращается на пустой строке:
+       поиск — гость, он не должен переставлять привычки руки. */
+    var svyorntostDoPoiska = null, grpDoPoiska = null;
+    function filtrPoiska(q) {
+      q = (q || '').trim().toLowerCase();
+      var kartochki = telo.querySelectorAll('.card');
+      var gruppy = telo.querySelectorAll('.st-grp');
+      if (!q) {
+        for (var i = 0; i < kartochki.length; i++) {
+          var c = kartochki[i], hh = c.previousElementSibling;
+          c.classList.remove('st-naydeno');
+          if (hh) hh.classList.remove('st-ne-nayden');
+          var rr = c.querySelectorAll('.row');
+          for (var j = 0; j < rr.length; j++) rr[j].classList.remove('st-ne-nayden');
+          c.classList.remove('st-ne-nayden');
+          if (svyorntostDoPoiska) c.hidden = !!svyorntostDoPoiska[i];
+        }
+        /* Подгруппы возвращаются к своей свёрнутости: она про привычку руки,
+           и поиск, уходя, обязан её отдать в том же виде, в каком взял. */
+        for (var g0 = 0; g0 < gruppy.length; g0++) {
+          gruppy[g0].classList.remove('st-ne-nayden');
+          if (grpDoPoiska) gruppy[g0].classList.toggle('st-grp-zakryta', !!grpDoPoiska[g0]);
+        }
+        svyorntostDoPoiska = null; grpDoPoiska = null;
+        return;
+      }
+      if (!grpDoPoiska) {
+        grpDoPoiska = [];
+        for (var g1 = 0; g1 < gruppy.length; g1++)
+          grpDoPoiska.push(gruppy[g1].classList.contains('st-grp-zakryta'));
+      }
+      if (!svyorntostDoPoiska) {
+        svyorntostDoPoiska = [];
+        for (var k = 0; k < kartochki.length; k++) svyorntostDoPoiska.push(kartochki[k].hidden);
+      }
+      for (var n = 0; n < kartochki.length; n++) {
+        var card = kartochki[n], h = card.previousElementSibling;
+        var imyaSek = ((h && h.textContent) || '').toLowerCase();
+        var rows = card.querySelectorAll('.row'), naydeno = 0;
+        for (var m = 0; m < rows.length; m++) {
+          var row = rows[m];
+          var klyuch = (row.getAttribute('data-k') || '').toLowerCase();
+          var vidno = (row.textContent || '').toLowerCase();
+          var podsk = '';
+          var el = row.querySelector('[title]'); if (el) podsk = (el.getAttribute('title') || '').toLowerCase();
+          if (!podsk && row.title) podsk = row.title.toLowerCase();
+          var est = klyuch.indexOf(q) >= 0 || vidno.indexOf(q) >= 0 ||
+                    podsk.indexOf(q) >= 0 || imyaSek.indexOf(q) >= 0;
+          row.classList.toggle('st-ne-nayden', !est); if (est) naydeno++;
+        }
+        /* ПОДГРУППЫ РАСКРЫВАЮТСЯ ВМЕСТЕ С НАЙДЕННЫМ. Панель двухуровневая:
+           скрыть строку мало, если подгруппа над ней свёрнута — человек
+           по-прежнему не видит того, что нашлось. Пустые подгруппы уходят
+           целиком: в отобранном списке им места нет. */
+        var grp = card.querySelectorAll('.st-grp');
+        for (var gi = 0; gi < grp.length; gi++) {
+          var gr = grp[gi], grows = gr.querySelectorAll('.row'), gest = 0;
+          for (var gj = 0; gj < grows.length; gj++) if (!grows[gj].classList.contains('st-ne-nayden')) gest++;
+          gr.classList.toggle('st-ne-nayden', !gest);
+          if (gest) gr.classList.remove('st-grp-zakryta');
+        }
+        card.classList.toggle('st-ne-nayden', !naydeno);
+        if (naydeno) card.hidden = false;       // найденное раскрываем, свёрнутость вернём на выходе
+        card.classList.toggle('st-naydeno', !!naydeno);
+        if (h) h.classList.toggle('st-ne-nayden', !naydeno);
+      }
+    }
+    /* В историю запрос идёт по ЗАВЕРШЁННОМУ вводу, а не на каждый знак:
+       иначе «о», «ор», «орб» съели бы весь список из четырёх мест. */
+    poisk.addEventListener('input', function () { filtrPoiska(poisk.value); zapomnitPoisk(poisk.value, false); });
+    poisk.addEventListener('change', function () { zapomnitPoisk(poisk.value, true); });
+    poisk.addEventListener('blur', function () { zapomnitPoisk(poisk.value, true); });
+    poisk.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { zapomnitPoisk(poisk.value, true); poisk.blur(); }
+      if (e.key === 'Escape') { poisk.value = ''; filtrPoiska(''); zapomnitPoisk('', false); poisk.blur(); }
+    });
+    /* Отбор возвращается ПОСЛЕ сборки секций: до неё фильтровать нечего. */
+    function vernutPoisk() {
+      if (!poiskPamyat.q) return;
+      poisk.value = poiskPamyat.q;
+      filtrPoiska(poiskPamyat.q);
+    }
 
     /* Своя полоса прокрутки: справа за кромкой, от 10 сверху до 10 снизу —
        начинается там, где кончается закругление правого верхнего угла. */
@@ -825,7 +1035,7 @@
         znachenie: function () { return P[key]; },
         postavit: function (hex) { P[key] = hex; izmenilos(key); },
       });
-      controls[key] = pk.obnovit;
+      svyazatControl(key, pk.obnovit);
       return pk;
     }
 
@@ -1220,7 +1430,7 @@
         });
         glaz.addEventListener('keydown', function (ev) { ev.stopPropagation(); });
         h.appendChild(glaz);
-        controls[glazKey] = glazObnovit;
+        svyazatControl(glazKey, glazObnovit);
         glazObnovit();
       }
       /* Значок сворачивания — шеврон рисунком: глифы ▾ / ▸ в SF Pro
@@ -1362,8 +1572,18 @@
       return n + (n % 10 === 1 && n % 100 !== 11 ? ' ручки' : ' ручек');
     }
 
-    // ── сборка строк по defs ──
+    /* ── ОТРАЖЕНИЕ РУЧКИ (Сергей, 08.09). Одну величину можно показать в
+       нескольких кластерах: дом там, где живёт её закон, отражения — там,
+       где её ищут. Ключ один, значение одно, правка любого показа тянет
+       остальные: обновлялки склеиваются по ключу, а не затирают друг друга.
+       Иначе вторая копия жила бы своей жизнью — две правды об одном. ── */
     var controls = {};
+    var vOtrazhenii = false;   // идёт обновление показов одной величины // служебное
+    function svyazatControl(key, fn) {
+      var bylo = controls[key];
+      controls[key] = bylo ? function () { bylo(); fn(); } : fn;
+    }
+
     var curCard = null;
     var curGrp = null;                 // текущая подгруппа внутри кластера
     /* Сведения о ручке для экспорта правок: подпись и секция берутся из
@@ -1469,7 +1689,7 @@
           izmenilos(d[0]);
           for (var ck in controls) controls[ck]();
         });
-        controls[d[0]] = function () { prSel.value = P[d[0]]; };
+        svyazatControl(d[0], function () { prSel.value = P[d[0]]; });
         row.appendChild(prSel);
         host.appendChild(row);
         return;
@@ -1499,7 +1719,7 @@
         });
         sSel.value = P[d[0]];
         sSel.addEventListener('input', function () { P[d[0]] = sSel.value; izmenilos(d[0]); });
-        controls[d[0]] = function () { sSel.value = P[d[0]]; };
+        svyazatControl(d[0], function () { sSel.value = P[d[0]]; });
         row.appendChild(sSel);
         host.appendChild(row);
         return;
@@ -1528,7 +1748,7 @@
           }
           ed.redraw(); izmenilos(easeKey);
         });
-        controls[easeKey] = function () { sel.value = P[easeKey]; ed.redraw(); };
+        svyazatControl(easeKey, function () { sel.value = P[easeKey]; ed.redraw(); });
         repaints.push(ed.redraw);
         row.appendChild(sel);
         host.appendChild(row);
@@ -1670,7 +1890,7 @@
         // правят число целиком, а не букву в середине (жалоба Сергея 03.09)
         pole.addEventListener('focus', function () { setTimeout(function () { pole.select(); }, 0); });
         pole.addEventListener('blur', function () { polePrinyat(pole.value, false); });
-        controls[d[0]] = function () { polePokaz(); uvodObnovit(); };
+        svyazatControl(d[0], function () { polePokaz(); uvodObnovit(); });
         /* Точка увода — внутри поля слева, поле — вправо до общей вертикали
            с полями пар (предложение Сергея 02.09): правый край полей один. */
         var obl = document.createElement('span'); obl.className = 'st-pole-obl';
@@ -1680,10 +1900,10 @@
         host.appendChild(row);
         return;
       }
-      controls[d[0]] = function () {
+      svyazatControl(d[0], function () {
         inp.value = P[d[0]] * mul; val.textContent = fmt(P[d[0]]); paintFill(inp);
         uvodObnovit(); pokazatVvod();
-      };
+      });
       repaints.push(function () { paintFill(inp); });
       /* ЭТАЛОН СЕРГЕЯ (Figma, 03.09): имя и точка увода — первым этажом,
          нитка вторым во всю ширину, число едет под шайбой. Правой колонки
@@ -1974,12 +2194,27 @@
         if (pod) stavitPodpis(pod);
       }
     }
+    /* ПОКА УКАЗКА ВКЛЮЧЕНА, МАКЕТ НЕ КЛИКАБЕЛЕН (Сергей 10.09: «элемент сам
+       кликабельный, клик по нему уводит в другой режим — указка не работает»).
+       Перехватывать один `click` мало: стенд слушает pointerdown и pointerup,
+       а они приходят РАНЬШЕ клика — к моменту перехвата он уже успел
+       переключить режим. Гасим пойнтерные события в фазе перехвата, до стенда;
+       сам `click` не трогаем — им живёт выбор места.
+       Гасим ВСЕГДА, а не только над опознанным местом: попал мимо — значит
+       промахнулся, а не передумал и решил поработать с макетом. */
+    function glushitel(e) {
+      if (!rezhim) return;
+      if (panel.contains(e.target)) return;          // по самой панели жать можно
+      e.preventDefault(); e.stopPropagation();
+      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+    }
     function vybor(e) {
       if (!rezhim) return;
+      if (panel.contains(e.target)) return;
       var imya = mestoPod(e.clientX, e.clientY);
-      if (!imya) return;
       // клик перехватывается целиком: на макете под ним могла быть ссылка
       e.preventDefault(); e.stopPropagation();
+      if (!imya) return;                              // мимо места — но макет всё равно не трогаем
       var mesto = telo.scrollTop;
       mestoTek = imya;
       postavitAdres(imya);
@@ -2002,6 +2237,8 @@
       });
       document.addEventListener('pointermove', navedenie);
       document.addEventListener('click', vybor, true);
+      ['pointerdown','pointerup','pointercancel','mousedown','mouseup','wheel','touchstart','touchend']
+        .forEach(function (t) { document.addEventListener(t, glushitel, true); });
       // маркеры прибиты к экрану: под ними едет макет
       ['scroll', 'resize'].forEach(function (s) {
         window.addEventListener(s, function () {
@@ -2394,6 +2631,7 @@
        заведено, пока клик по макету ничего не значил; теперь он выбирает
        место, и панель обязана остаться на экране — иначе выбор места
        гасит то самое, ради чего он делается. Закрывает шестерёнка. */
+    vernutPoisk();                              // отбор пережил перезагрузку — возвращаем его на место
     pokazatPanel(/[?&]panel/.test(location.search));
     applyTheme(theme);
     svetlota();

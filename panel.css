@@ -331,6 +331,12 @@
   height: 3px; margin-top: -1.5px; border-radius: 1.5px; background: var(--st-track); }
 .st-panel .st-nitka-fill { position: absolute; left: 0; top: 50%; height: 3px; margin-top: -1.5px;
   border-radius: 1.5px; background: var(--st-accent); pointer-events: none; }
+/* Насечка умолчания: откуда ручку увели. Выше дорожки и тоньше пилюли —
+   метка места, а не орган; руке не мешает (pointer-events выключены). */
+.st-panel .st-zarubka { position: absolute; top: 50%; width: 2px; height: 11px;
+  margin: -5.5px 0 0 -1px; border-radius: 1px; background: var(--st-text-2);
+  opacity: .45; pointer-events: none; z-index: 1; }
+.st-panel .st-zarubka[hidden] { display: none; }
 .st-panel .st-nitka input[type=range] {
   -webkit-appearance: none; appearance: none;   /* было в запасном стиле — теперь у нитки */
   position: relative; display: block; width: 100%; height: 22px;
@@ -853,3 +859,41 @@ body.st-vybor .st-panel, body.st-vybor .st-panel * { cursor: default !important;
 @media (forced-colors: active) {
   .st-panel, .st-panel .card, .st-gear { border: 1px solid CanvasText; }
 }
+
+/* ПОИСК ПО РУЧКАМ. Панель растёт вместе со стендом, и на полутора сотнях
+   величин человек перестаёт понимать, где искать нужную. Поле стоит первым в
+   панели — выше языка и кластеров: вопрос «где то, что я ищу» задают до всего
+   остального. Края круглые целиком, набор светлый: поле читается как строка
+   ввода, а не как ещё один ярлык среди ручек. */
+/* Поля по краям те же, что у остального в панели: без них строка упиралась
+   в края вкладки и читалась чужой (Сергей 10.09). Список внутри обёртки
+   тянется по ней, значит и он встаёт по этим же полям. */
+.st-panel .st-poisk-obl{ position:relative; margin:10px 12px 8px }
+.st-panel .st-poisk{
+  display:block; width:100%; padding:8px 14px; box-sizing:border-box;
+  font:inherit; font-size:12px; line-height:18px;
+  color:#f2f2f2; background:rgba(255,255,255,.10);
+  border:1px solid rgba(255,255,255,.18); border-radius:999px;
+  -webkit-appearance:none; appearance:none; outline:none;
+}
+.st-panel .st-poisk:focus{ border-color:rgba(255,255,255,.5); background:rgba(255,255,255,.14) }
+.st-panel .st-poisk::placeholder{ color:#f2f2f2; opacity:.55 }
+.st-panel .st-poisk::-webkit-search-cancel-button{ filter:invert(1); opacity:.6 }
+/* История — своим списком, а не нативным: он открывается по наведению.
+   Лежит ПОД полем вплотную, чтобы курсор дошёл до неё, не разорвав наведение. */
+.st-panel .st-poisk-ist{
+  position:absolute; left:0; right:0; top:100%; z-index:5;
+  padding:4px; border-radius:14px;
+  background:#2b2b2b; border:1px solid rgba(255,255,255,.14);
+  box-shadow:0 6px 18px rgba(0,0,0,.35);
+}
+.st-panel .st-poisk-ist-q{
+  display:block; width:100%; text-align:left; padding:5px 10px;
+  font:inherit; font-size:12px; line-height:16px; color:#f2f2f2;
+  background:none; border:0; border-radius:10px; cursor:pointer;
+}
+.st-panel .st-poisk-ist-q:hover{ background:rgba(255,255,255,.10) }
+.st-panel .st-ne-nayden{ display:none !important }
+/* Пометки найденной секции нет: волосяная линия слева читалась не как
+   признак отбора, а как артефакт на краю панели (Сергей 10.09). Что список
+   отобран, и так видно — в нём осталось одно нужное. */

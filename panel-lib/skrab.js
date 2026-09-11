@@ -31,6 +31,42 @@
    срез показывается и НА ЭКРАНЕ — бейджем поверх макета: глазам не надо
    бегать между движением и панелью. Клик по бейджу копирует момент.
 
+   ДОРОЖКИ ФАЗ (10.09, порт плеера Миши «Player + Phases»). Срез говорит
+   словами, какая фаза идёт, — но соотношение фаз словами не показать:
+   какая начинается раньше, какая длиннее, где они кроются друг на друга.
+   Дорожка на фазу и общее время под ними это показывают глазом. Наши фазы
+   не пакуются подряд, как у него: переход стенда идёт ПАРАЛЛЕЛЬНО, у каждой
+   нитки свой старт и своя длительность, оттого старт объявляется отдельно.
+   Плеер и полоса времени — одно: плейхед идёт поверх дорожек, и видно не
+   «сколько прошло», а «что сейчас движется».
+
+     dorozhki: [{ ms: 'ключ', imya: 'наводка', ot: 'ключ' | число },   // своё время
+                { ot: 'ключ', do: 'ключ', imya: 'ярлыки' },           // от … до, % хода
+                { skonca: 'ключ', imya: 'фото' },                     // последние N % хода
+                { seredina: 'ключ', dlina: 'ключ', imya: 'подмена' }, // серединой и длиной
+                { seredina: 'ключ', dlina: 'ключ', nazad: true }]     // то же, зеркально
+     vsego:    ключ или число общего времени; без него — самый дальний конец
+
+   Фаза живёт своим временем или долей общего хода (П2). Своё время — `ms` в
+   миллисекундах; доля — в процентах хода, и тут ФАЗА ЧИТАЕТСЯ ТАК, КАК ОНА
+   ОБЪЯВЛЕНА, а не так, как удобно дорожке. Каждый способ задать окно есть
+   решение о законе: `ot`…`do` — когда важно начало («ярлыки приходят с 45 %
+   хода»); `skonca` — когда важен конец («фото открыто к концу»: правка доли
+   двигает начало, конец стоит); `seredina`+`dlina` — когда фаза стоит вокруг
+   своей точки («подмена на 50 % хода длиной 20»). Свести всё к от-до можно, но
+   тогда дорожка перестанет показывать закон: тянешь край — едет не тот конец,
+   который объявлен.
+
+   `nazad` зеркалит окно — та же фаза в шкале обратного хода. Уход считает свои
+   доли от единицы минус доля («ярлыки ушли к 60 % ухода»), но часть фаз у него
+   общая со входом и объявлена в шкале входа; их и зеркалим.
+
+   Тяга за правый край клипа правит ручку длительности прямо на дорожке:
+   время правится там, где оно видно. Двойной клик прогоняет ОТРЕЗОК этой
+   фазы — от её начала до конца, остальное стоит своим чередом (стенд
+   считает весь переход из одной доли q, чужую нитку заморозить нельзя, и
+   врать про заморозку не будем: у нас это прогон окна, а не соло).
+
    МЕТКА МОМЕНТА (⚑). Переход составной, но время у него одно — потому
    адрес момента живёт на переходе, а нитки-движения соотносятся срезом,
    вычислением, не записью. Кнопка кладёт в буфер воспроизводимый адрес:
@@ -60,7 +96,26 @@
     'border:0.5px solid var(--st-border, rgba(255,255,255,.2));border-radius:8px;' +
     'padding:6px 12px;font:11px/1.4 var(--st-font, monospace);' +
     'font-variant-numeric:tabular-nums;white-space:nowrap}' +
-    '.st-moment-hud[hidden]{display:none!important}';
+    '.st-moment-hud[hidden]{display:none!important}' +
+    '.st-dor{position:relative;width:100%;margin-top:6px}' +
+    '.st-dor-r{position:relative;height:22px;margin-bottom:2px;border-radius:4px;' +
+    'border:0.5px solid var(--st-hairline);background:var(--st-track)}' +
+    '.st-dor-r:hover{border-color:var(--st-border)}' +
+    '.st-dor-k{position:absolute;top:2px;bottom:2px;border-radius:3px;background:var(--st-accent);' +
+    'opacity:.55;min-width:2px}' +
+    '.st-dor-r:hover .st-dor-k{opacity:.8}' +
+    '.st-dor-p{position:absolute;left:6px;top:0;height:22px;line-height:22px;pointer-events:none;' +
+    'font:10px/22px var(--st-font);color:var(--st-text);white-space:nowrap;' +
+    'font-variant-numeric:tabular-nums;text-transform:uppercase;letter-spacing:.04em}' +
+    '.st-dor-p b{font-weight:400;color:var(--st-text-2);margin-left:8px;text-transform:none;letter-spacing:0}' +
+    '.st-dor-kr{position:absolute;top:0;bottom:0;width:10px;margin-left:-5px;cursor:ew-resize}' +
+    '.st-dor-kr::after{content:"";position:absolute;left:4px;top:4px;bottom:4px;width:2px;' +
+    'border-radius:1px;background:#fff;opacity:0}' +
+    '.st-dor-r:hover .st-dor-kr::after{opacity:.7}' +
+    '.st-dor-golova{position:absolute;top:0;bottom:2px;width:2px;margin-left:-1px;background:#fff;' +
+    'box-shadow:0 0 0 .5px rgba(0,0,0,.35);pointer-events:none;z-index:2}' +
+    '.st-dor-r.otrezok{border-color:var(--st-accent)}' +
+    '.st-dor-r.otrezok .st-dor-k{opacity:1}';
 
   StendPanel.tip('skrab', function (row, d, P, api) {
     if (!document.getElementById('st-skrab-css')) {
@@ -91,6 +146,80 @@
       if (vnutri && srez) hud.textContent = imya + ' \u00b7 ' + q.toFixed(2) + '  \u2014  ' + srez(q);
     }
 
+    /* ── ДОРОЖКИ ФАЗ ────────────────────────────────────────────────
+       Фаза = ручка длительности плюс старт (ручка или число). Общее время
+       либо объявлено, либо это самый дальний конец: переход длится столько,
+       сколько живёт последняя нитка. */
+    var dorozhki = (o.dorozhki || []).map(function (r) {
+      var dolya = (r.do != null) || r.skonca != null || r.seredina != null;
+      return { ms: r.ms, dolya: dolya, ot: r.ot || 0, konec: r.do,
+               skonca: r.skonca, seredina: r.seredina, dlina: r.dlina, nazad: !!r.nazad,
+               imya: r.imya || r.ms || r.do || r.skonca || r.seredina,
+               shag: r.shag || (dolya ? 1 : 10), hi: r.hi || (dolya ? 100 : 0) };
+    });
+    var dor = null, golova = null, ryady = [];
+    function chislo(v) { return typeof v === 'number' ? v : Math.max(0, Number(P[v]) || 0); }
+    /* Общее время объявлено или это самый дальний конец. Доли считать от него
+       же нельзя рекурсией: долевая дорожка в подсчёт потолка не идёт — её
+       конец и так внутри хода. */
+    function vsegoMs() {
+      if (o.vsego != null) return Math.max(1, chislo(o.vsego));
+      var mx = 0;
+      dorozhki.forEach(function (d) {
+        if (!d.dolya) mx = Math.max(mx, chislo(d.ot) + Math.max(0, Number(P[d.ms]) || 0));
+      });
+      return Math.max(1, mx);
+    }
+    /* Окно фазы в долях хода: [0…1]. Дальше оно умножается на время, но
+       считается в долях — в них фаза и объявлена. */
+    function okno(d) {
+      var a, b;
+      if (d.seredina != null) {
+        var dl = Math.max(0, chislo(d.dlina)) / 100, se = chislo(d.seredina) / 100;
+        a = se - dl / 2; b = se + dl / 2;
+      } else if (d.skonca != null) {
+        a = 1 - Math.max(0, chislo(d.skonca)) / 100; b = 1;
+      } else {
+        a = chislo(d.ot) / 100; b = chislo(d.konec) / 100;
+      }
+      if (d.nazad) { var c = a; a = 1 - b; b = 1 - c; }
+      a = Math.max(0, Math.min(1, a)); b = Math.max(a, Math.min(1, b));
+      return [a, b];
+    }
+    function nachMs(d, t) { return d.dolya ? okno(d)[0] * t : chislo(d.ot); }
+    function konMs(d, t) {
+      return d.dolya ? okno(d)[1] * t
+                     : chislo(d.ot) + Math.max(0, Number(P[d.ms]) || 0);
+    }
+    /* Показ ключа склеивается, а не затирается: ту же ручку может держать
+       своя строка панели или отражение в другом кластере. */
+    function podpisatsya(key, fn) {
+      var bylo = api.controls[key];
+      api.controls[key] = bylo ? function () { bylo(); fn(); } : fn;
+    }
+    function narisovatDor() {
+      if (!dor) return;
+      var t = vsegoMs();
+      ryady.forEach(function (r, i) {
+        var d = dorozhki[i], a0 = nachMs(d, t), a1 = konMs(d, t);
+        r.klip.style.left = (a0 / t * 100) + '%';
+        r.klip.style.width = Math.max(0.4, (a1 - a0) / t * 100) + '%';
+        r.pod.innerHTML = '';
+        r.pod.appendChild(document.createTextNode(d.imya));
+        var b = document.createElement('b');
+        /* Долевая фаза подписана и долей, и временем: доля — закон, время —
+           то, что видит глаз. */
+        if (d.dolya) {
+          var w = okno(d);
+          b.textContent = Math.round(w[0] * 100) + '–' + Math.round(w[1] * 100) + ' %  ' +
+            Math.round(a1 - a0) + ' мс';
+        } else b.textContent = Math.round(a1 - a0) + ' мс';
+        r.pod.appendChild(b);
+      });
+    }
+    function vestiGolovu(q) {
+      if (golova) golova.style.left = (Math.max(0, Math.min(1, q)) * 100) + '%';
+    }
     var box = document.createElement('div'); box.className = 'st-skrab';
     // срез момента: общая доля + фазы всех движений — соотнесение ниток;
     // клик по строке — та же метка, что ⚑: копирует момент целиком
@@ -101,7 +230,7 @@
       pod.title = 'скопировать момент: имя, срез и адрес этого кадра';
     }
     function pokazatSrez(q) {
-      obnovitHud(q);
+      obnovitHud(q); vestiGolovu(q);
       if (!pod) return;
       pod.textContent = imya + ' \u00b7 ' + q.toFixed(2) + '  \u2014  ' + srez(q);
     }
@@ -142,6 +271,94 @@
     });
     box.appendChild(nb.obl);
 
+    /* Построение дорожек. Ряд — окно времени, клип внутри — сама фаза:
+       видно и когда она начинается, и сколько длится, и как ложится на
+       соседей. */
+    var rafOkno = null, mnozh = 1;
+    function progonOkna(i) {
+      var d = dorozhki[i], t = vsegoMs();
+      var a0 = nachMs(d, t), a1 = konMs(d, t);
+      if (a1 <= a0) return;
+      if (rafOkno) cancelAnimationFrame(rafOkno);
+      ryady.forEach(function (r, j) { r.obl.classList.toggle('otrezok', j === i); });
+      /* Окно прогоняется с той же лупой, что и весь переход: замедлитель —
+         вид, а не настройка одного прогона. */
+      var nach = performance.now(), dlit = (a1 - a0) * mnozh;
+      ruka = true;                       // кадр держим руками: отражение молчит
+      var shag = function (now) {
+        var u = dlit > 0 ? Math.min(1, (now - nach) / dlit) : 1;
+        var q = (a0 + (a1 - a0) * u) / t;
+        inp.value = q; nb.obnovit();
+        faza(q); pokazatSrez(q);
+        if (u < 1) rafOkno = requestAnimationFrame(shag);
+        else rafOkno = null;             // дошло — стоп-кадр на конце фазы
+      };
+      rafOkno = requestAnimationFrame(shag);
+    }
+    function snyatOkno() {
+      if (rafOkno) { cancelAnimationFrame(rafOkno); rafOkno = null; }
+      if (!ryady.length) return;
+      ryady.forEach(function (r) { r.obl.classList.remove('otrezok'); });
+      ruka = false; faza(null);
+    }
+    if (dorozhki.length) {
+      dor = document.createElement('div'); dor.className = 'st-dor';
+      dorozhki.forEach(function (d, i) {
+        var r = document.createElement('div'); r.className = 'st-dor-r';
+        var klip = document.createElement('div'); klip.className = 'st-dor-k';
+        var kr = document.createElement('div'); kr.className = 'st-dor-kr'; kr.style.left = '100%';
+        var pod = document.createElement('div'); pod.className = 'st-dor-p';
+        klip.appendChild(kr); r.appendChild(klip); r.appendChild(pod);
+        r.title = 'двойной клик — прогнать эту фазу; тяга за правый край — длительность';
+        dor.appendChild(r);
+        ryady.push({ obl: r, klip: klip, pod: pod });
+        [d.ms, d.ot, d.konec, d.skonca, d.seredina, d.dlina, o.vsego].forEach(function (k) {
+          if (typeof k === 'string') podpisatsya(k, narisovatDor);
+        });
+
+        /* ТЯГА ЗА КРАЙ правит длительность там, где она видна. Общее время
+           берётся на начало тяги: пока тянут самую дальнюю нитку, потолок
+           ехал бы вместе с рукой — клип стоял бы на месте, а число росло. */
+        kr.addEventListener('pointerdown', function (e) {
+          e.preventDefault(); e.stopPropagation();
+          /* Тянем тот ключ, которым объявлен правый край. У фазы «от конца»
+             правого края своего нет — он всегда в единице, и тяга за него
+             двигала бы начало: такую дорожку не тянем, чтобы рука не правила
+             не то, за что взялась. Серединой заданную правим длиной. */
+          var klyuch = d.dolya ? (d.seredina != null ? d.dlina : (d.skonca != null ? null : d.konec)) : d.ms;
+          if (typeof klyuch !== 'string') return;      // край не ручка — тянуть нечего
+          var vdvoe = d.dolya && d.seredina != null;   // длина растёт в обе стороны от середины
+          var zerkalo = d.dolya && d.nazad;            // зеркальная фаза едет навстречу руке
+          var x0 = e.clientX, t0 = vsegoMs(), shir = r.offsetWidth || 1;
+          var v0 = Math.max(0, Number(P[klyuch]) || 0);
+          var dvig = function (ev) {
+            /* Ход руки — в долях ряда; в чём измерена фаза, в том и правим:
+               долевую — процентами хода, свою — миллисекундами. */
+            var dolyaRuki = (ev.clientX - x0) / shir;
+            if (zerkalo) dolyaRuki = -dolyaRuki;
+            if (vdvoe) dolyaRuki *= 2;
+            var v = v0 + dolyaRuki * (d.dolya ? 100 : t0);
+            v = Math.max(0, Math.round(v / d.shag) * d.shag);
+            if (d.hi) v = Math.min(d.hi, v);
+            if (v !== P[klyuch]) { P[klyuch] = v; narisovatDor(); }
+          };
+          var vsyo = function () {
+            window.removeEventListener('pointermove', dvig);
+            window.removeEventListener('pointerup', vsyo);
+            api.save();
+          };
+          window.addEventListener('pointermove', dvig);
+          window.addEventListener('pointerup', vsyo);
+        });
+        r.addEventListener('dblclick', function () { progonOkna(i); });
+      });
+      golova = document.createElement('div'); golova.className = 'st-dor-golova';
+      dor.appendChild(golova);
+      narisovatDor();
+      /* Esc снимает прогон окна — той же клавишей, что и прочие режимы. */
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') snyatOkno(); });
+    }
+
     /* Отражение: бегунок показывает правду стенда, когда рука не держит.
        Опрос таймером, не rAF: чтение одно, а таймеры живут и там, где
        кадры не гонятся (headless-пробы). 10 раз в секунду глазу хватает. */
@@ -156,6 +373,7 @@
           nb.obnovit();          // пилюля и заливка идут за правдой стенда
           pokazatSrez(q);
         }
+        narisovatDor();          // длительности могли поехать из другого места
       }, 100);
     }
 
@@ -185,6 +403,7 @@
         b.setAttribute('aria-checked', String(m === 1));
         b.title = m === 1 ? 'обычная скорость' : 'в ' + m + ' раз медленнее';
         b.addEventListener('click', function () {
+          mnozh = m;                     // окно фазы идёт под той же лупой
           zamedli(m);
           knopki.forEach(function (x) { x[0].setAttribute('aria-checked', String(x[1] === m)); });
         });
@@ -225,6 +444,7 @@
       lupa.appendChild(kinoKn);
     }
     row.appendChild(box);
+    if (dor) row.appendChild(dor);
     if (lupa) row.appendChild(lupa);
     if (pod) row.appendChild(pod);
 
