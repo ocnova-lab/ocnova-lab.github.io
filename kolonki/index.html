@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<!-- Двенадцать колонок — демонстрационный стенд деления формата.
+     Смотрит: на окно (ширина и высота формата).
+     Реагирует: плавно, ни одного перелома.
+     Закон 3 «Доли и Коридор» — поля доли формата, полоса делится на
+     N равных долей; ширина колонки не задана нигде, она следствие.
+     Плюс закон 10 «Догон» на курсорном слое.
+     Приём: «Зональная интерпретация — зона наведения».
+     Полная запись закона — в шапке скрипта ниже. -->
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Двенадцать колонок</title>
+<link rel="stylesheet" href="/panel.css" />
+<style>
+  @font-face { font-family: "Editorial New"; font-weight: 400; font-style: normal;
+    src: url("/fonts/EditorialNew-Regular.woff") format("woff"); font-display: swap; }
+  @font-face { font-family: "Even Mono"; font-weight: 400; font-style: normal;
+    src: url("/fonts/EvenMono-Regular.woff2") format("woff2"),
+         url("/fonts/EvenMono-Regular.woff") format("woff"); font-display: swap; }
+  @font-face { font-family: "JetBrains Mono"; font-weight: 400; font-style: normal;
+    src: url("/fonts/JetBrainsMono-Regular.woff2") format("woff2"); font-display: swap; }
+  @font-face { font-family: "Pragmatica Next VF"; font-weight: 100 900; font-style: normal;
+    src: url("/fonts/PragmaticaNextVF.woff") format("woff"); font-display: swap; }
+  @font-face { font-family: "Trigonon"; font-weight: 400; font-style: normal;
+    src: url("/fonts/Trigonon-Regular.woff2") format("woff2"); font-display: swap; }
+  @font-face { font-family: "Dentegra Display"; font-weight: 400; font-style: normal;
+    src: url("/fonts/DentDisplay-Regular.woff2") format("woff2"); font-display: swap; }
+  @font-face { font-family: "Syne Mono"; font-weight: 400; font-style: normal;
+    src: url("/fonts/SyneMono-Regular.woff2") format("woff2"); font-display: swap; }
+  @font-face { font-family: "Apple II Screen Typeface"; font-weight: 400; font-style: normal;
+    src: url("/fonts/AppleIIScreenTypeface.woff2") format("woff2"); font-display: swap; }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bumaga);
+    color: var(--figura);
+    font-family: var(--garn), "Even Mono", monospace;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  /* ПОЛЯ — рамкой, а не отступом: толщина рамки и есть поле, объявленное
+     долей формата. Боковое меряется от ширины (vw), верхнее и нижнее —
+     от высоты (vh); одна доля на два измерения врала бы на любом экране,
+     кроме квадратного. */
+  #pole {
+    position: fixed;
+    inset: 0;
+    border-style: solid;
+    border-width: calc(var(--poleV) * 1vh) calc(var(--poleB) * 1vw);
+    border-color: color-mix(in srgb, var(--sluzhba) calc(var(--alfa) * 1%), transparent);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* ПОЛОСА — то, что осталось от формата после полей. Координаты те же
+     доли, что у рамки выше: inset и border-width считают одно и то же
+     место с двух сторон, потому расхождения между ними быть не может. */
+  #lenta {
+    position: fixed;
+    inset: calc(var(--poleV) * 1vh) calc(var(--poleB) * 1vw);
+    display: grid;                  /* колонки ставит JS: repeat(N, 1fr) */
+    z-index: 2;
+  }
+  #lenta.ramka { outline: 1px solid color-mix(in srgb, var(--sluzhba) 55%, transparent); }
+
+  /* КОЛОНКА — доля полосы, ширина ей не назначается ни разу. Она же зона
+     наведения: активна вся высота, а не сам прямоугольник. */
+  .col {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    transition: background-color var(--ms) var(--bez);
+  }
+  .col.pod { background: color-mix(in srgb, var(--sluzhba) calc(var(--alfa) * 1%), transparent); }
+  /* ГРАНЬ — левый край своей колонки. Отдельным слоем, а не border:
+     бордер съел бы пиксель внутренней ширины, и «фигура во всю колонку»
+     перестала бы быть правдой. */
+  .gran {
+    /* координаты: левый край своей колонки, во всю высоту полосы */
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 1px;
+    background: color-mix(in srgb, var(--sluzhba) 55%, transparent);
+    pointer-events: none;
+  }
+  .col:first-child > .gran { display: none; }   /* первую грань держит рамка полосы */
+  .col.on  { background: color-mix(in srgb, var(--sluzhba) calc(var(--alfa) * 2%), transparent); }
+
+  /* ФИГУРА — единственное фиксированное число стенда: высота в пикселях.
+     Ширина — доля колонки, то есть доля доли: течёт вместе с форматом. */
+  .fig {
+    height: calc(var(--vys) * 1px);
+    width: calc(var(--shir) * 1%);
+    background: var(--figura);
+    transition: transform var(--ms) var(--bez), background-color var(--ms) var(--bez);
+  }
+  .col.on > .fig {
+    transform: scaleY(calc(1 + var(--rost) / 100));
+    background: color-mix(in srgb, var(--figura), var(--sluzhba) calc(var(--podsvet) * 1%));
+  }
+
+  /* НОМЕР колонки. Координаты: верх колонки, левый край колонки —
+     служебная метка стоит в начале своей доли, собственного места
+     в потоке ей не дают, чтобы она не двигала фигуру. */
+  .nom {
+    /* координаты: верх и левый край своей колонки — начало доли */
+    position: absolute;
+    top: 0; left: 0;
+    padding-left: .45em;          /* отбивка от грани колонки — доля кегля метки */
+    font-size: calc(var(--kegl) * 1px);
+    line-height: 1.6;
+    color: var(--sluzhba);
+    opacity: .5;
+    font-style: normal;
+    transition: opacity var(--ms) var(--bez);
+    pointer-events: none;
+  }
+  .col.on > .nom { opacity: 1; }
+
+  header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    padding: .8rem 1rem;
+    display: flex;
+    gap: 1.2em;
+    flex-wrap: wrap;
+    align-items: baseline;
+    font-size: calc(var(--kegl) * 1px);
+    line-height: 1.6;
+    color: var(--figura);
+    z-index: 5;
+    pointer-events: none;
+  }
+  header a { color: inherit; pointer-events: auto; }
+  header .back { opacity: .5; text-decoration: none; }
+  header .back:hover { opacity: 1; }
+  header #svodka { opacity: .65; }
+  header #svodka b { font-weight: 400; color: var(--sluzhba); }
+</style>
+</head>
+<body>
+  <div id="pole"></div>
+  <div id="lenta"></div>
+  <header>
+    <a class="back" href="/">← стенды</a>
+    <span>Двенадцать колонок</span>
+    <span id="svodka"></span>
+  </header>
+
+<script src="/panel.js"></script>
+<script src="/panel-lib/obyavlenie.js"></script>
+<script src="/panel-lib/palitra.js"></script>
+<script src="/panel-lib/garnitura.js"></script>
+<script src="/panel-lib/segment.js"></script>
+<script src="/panel-lib/toggle.js"></script>
+<script src="/panel-lib/vyvod.js"></script>
+<script>
+'use strict';
+/* ─────────────────────────────────────────────────────────────────────
+   Двенадцать колонок — демонстрационный стенд разделения формата.
+   Формат делится на N равных колонок, в каждой стоит прямоугольник
+   фиксированной высоты во всю ширину своей колонки.
+
+   Смотрит: на окно — ширину и высоту формата.
+   Реагирует: плавно, ни одного перелома (@media нет вовсе).
+   Закон 3 «Доли и Коридор»: поля — доли формата (боковое от ширины,
+   вертикальное от высоты), полоса делится на N равных долей
+   repeat(N, 1fr). Ширина колонки числом не задана нигде: она следствие,
+   и панель показывает её строкой вывода, а не ручкой.
+   Второй закон — 10 «Догон» (курсорная строка): непрерывное положение
+   курсора квантуется сеткой, под курсором всегда ровно одна колонка.
+   Индекс считается арифметикой из долей, а не замером элементов (П3).
+
+   Приём со склада: «Зональная интерпретация — зона наведения».
+   Активна колонка во всю высоту полосы, а не сам прямоугольник: 40 px
+   по высоте — дорогая цель по Фиттсу. Зоны нарезаны без мёртвых
+   промежутков — шов и поля отходят к ближайшей колонке.
+
+   Что стенд показывает. Фиксированное число здесь одно — высота фигуры.
+   Всё остальное течёт. На узком экране колонка становится уже этой
+   высоты, и прямоугольник из горизонтальной полосы превращается в
+   вертикальную: сводка называет этот момент вслух. Теснота приходит не
+   от точки перелома, а от встречи единственного жёсткого числа
+   с текущим форматом.
+
+   Параметры адреса: ?reset=1, ?theme=nothing, ?mesto=Имя, ?nabor=имя.
+   ───────────────────────────────────────────────────────────────────── */
+
+var EASES = {
+  'линейный':   function (t) { return t; },
+  'разгон':     function (t) { return t * t * t; },
+  'торможение': function (t) { return 1 - Math.pow(1 - t, 3); },
+  'плавный':    function (t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; },
+  'выброс':     function (t) { var c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); },
+};
+var BEZ_APPROX = {
+  'линейный':   [0.25, 0.25, 0.75, 0.75], 'разгон': [0.32, 0, 0.67, 0],
+  'торможение': [0.33, 1, 0.68, 1], 'плавный': [0.65, 0, 0.35, 1],
+  'выброс':     [0.34, 1.56, 0.64, 1],
+};
+function cubicBezierY(b, t) {
+  var x1 = b[0], y1 = b[1], x2 = b[2], y2 = b[3], s = t;
+  for (var i = 0; i < 8; i++) {
+    var x = 3 * (1 - s) * (1 - s) * s * x1 + 3 * (1 - s) * s * s * x2 + s * s * s;
+    var dx = 3 * (1 - s) * (1 - s) * x1 + 6 * (1 - s) * s * (x2 - x1) + 3 * s * s * (1 - x2);
+    if (Math.abs(dx) < 1e-6) break;
+    s -= (x - t) / dx; if (s < 0) s = 0; if (s > 1) s = 1;
+  }
+  return 3 * (1 - s) * (1 - s) * s * y1 + 3 * (1 - s) * s * s * y2 + s * s * s;
+}
+function evalEase(name, bez, t) {
+  if (name === 'bezier') return cubicBezierY(bez, t);
+  return (EASES[name] || EASES['торможение'])(t);
+}
+function bezCss(name, bez) {
+  var b = name === 'bezier' ? bez : (BEZ_APPROX[name] || BEZ_APPROX['торможение']);
+  return 'cubic-bezier(' + b.join(',') + ')';
+}
+
+/* ── ЗНАЧЕНИЯ ──────────────────────────────────────────────────────── */
+var DEFAULTS = {
+  kolonok: 12,        // на сколько равных долей делится полоса
+  shov: 0,            // межколонник: 0 — двенадцать долей встык
+  poleB: 5,           // боковое поле, % ширины формата
+  poleV: 10,          // верхнее и нижнее поле, % высоты формата
+  vys: 40,            // высота фигуры, px — единственное жёсткое число
+  shir: 100,          // ширина фигуры, % колонки
+  stoyka: 'middle',   // где фигура стоит по высоте колонки
+  stoykaX: 'center',  // куда прижата, когда уже колонки
+  rost: 18,           // подсветка: насколько фигура подрастает под курсором
+  podsvet: 40,        // подсветка: сколько служебного цвета примешано
+  otklikMs: 260,      // ход подсветки
+  otklikEase: 'торможение',
+  otklikBez: [0.33, 1, 0.68, 1],
+  podlozhka: true,    // видна ли заливка колонок и рамка полосы
+  nomera: true,       // видны ли номера колонок
+  alfa: 8,            // плотность служебного слоя, % от служебного цвета
+  garn: 'Even Mono',  // гарнитура служебных меток
+  kegl: 11,           // кегль служебных меток
+  figura: '#111111',
+  sluzhba: '#c2361f',
+  bumaga: '#eeede8',
+  palitra: 'bumaga',
+};
+var P = Object.assign({}, DEFAULTS);
+try {
+  var sohr = JSON.parse(localStorage.getItem('kolonki-params') || '{}');
+  if (sohr) Object.assign(P, sohr);
+} catch (e) {}
+
+var lenta = document.getElementById('lenta');
+var svodka = document.getElementById('svodka');
+var VYKL = { top: 'flex-start', middle: 'center', bottom: 'flex-end' };
+var VYKLX = { left: 'flex-start', center: 'center', right: 'flex-end' };
+
+/* ── ГЕОМЕТРИЯ ─────────────────────────────────────────────────────────
+   Всё, что стенду нужно знать о раскладке, выводится из формата и долей
+   ДО отрисовки (П3): ширина колонки не замеряется у готового элемента,
+   а считается — тем же выражением, которым её потом посчитает грид. */
+function geom() {
+  var W = window.innerWidth, H = window.innerHeight;
+  var pb = W * P.poleB / 100, pv = H * P.poleV / 100;
+  var n = Math.max(1, Math.round(P.kolonok));
+  var polosa = Math.max(0, W - 2 * pb);
+  var kol = (polosa - (n - 1) * P.shov) / n;
+  return { W: W, H: H, pb: pb, pv: pv, n: n, polosa: polosa,
+           kol: kol, lenta: Math.max(0, H - 2 * pv) };
+}
+
+/* ── КОЛОНКИ ─────────────────────────────────────────────────────────
+   Пересборка только при смене числа колонок: остальное держат
+   переменные. repeat() ставится из JS — var() внутри счётчика repeat
+   браузер не читает, и грид молча схлопывается в одну колонку. */
+var postroeno = 0;
+function postroit() {
+  var n = Math.max(1, Math.round(P.kolonok));
+  lenta.style.gridTemplateColumns = 'repeat(' + n + ', 1fr)';
+  if (n === postroeno) { odezhda(); return; }
+  lenta.textContent = '';
+  for (var i = 0; i < n; i++) {
+    var c = document.createElement('div');
+    c.className = 'col';
+    var nom = document.createElement('i');
+    nom.className = 'nom';
+    nom.textContent = String(i + 1);
+    var g = document.createElement('i');
+    g.className = 'gran';
+    var f = document.createElement('div');
+    f.className = 'fig';
+    c.appendChild(g); c.appendChild(nom); c.appendChild(f);
+    lenta.appendChild(c);
+  }
+  postroeno = n;
+  pod = -1;
+  odezhda();
+}
+
+/* Одежда колонок: что показано, а что погашено ручками. */
+function odezhda() {
+  var cols = lenta.children;
+  for (var i = 0; i < cols.length; i++) {
+    cols[i].classList.toggle('pod', !!P.podlozhka);
+    cols[i].querySelector('.gran').style.display = P.podlozhka ? '' : 'none';
+    cols[i].querySelector('.nom').style.display = P.nomera ? '' : 'none';
+  }
+  lenta.classList.toggle('ramka', !!P.podlozhka);
+}
+
+/* ── ПРИМЕНЕНИЕ ──────────────────────────────────────────────────── */
+function primenit() {
+  var s = document.documentElement.style;
+  s.setProperty('--poleB', P.poleB);
+  s.setProperty('--poleV', P.poleV);
+  s.setProperty('--vys', P.vys);
+  s.setProperty('--shir', P.shir);
+  s.setProperty('--rost', P.rost);
+  s.setProperty('--podsvet', P.podsvet);
+  s.setProperty('--alfa', P.alfa);
+  s.setProperty('--kegl', P.kegl);
+  s.setProperty('--garn', '"' + P.garn + '"');
+  s.setProperty('--figura', P.figura);
+  s.setProperty('--sluzhba', P.sluzhba);
+  s.setProperty('--bumaga', P.bumaga);
+  s.setProperty('--ms', P.otklikMs + 'ms');
+  s.setProperty('--bez', bezCss(P.otklikEase, P.otklikBez));
+  lenta.style.columnGap = P.shov + 'px';
+  lenta.style.alignItems = VYKL[P.stoyka] || 'center';
+  lenta.style.justifyItems = 'stretch';
+  var cols = lenta.children;
+  for (var i = 0; i < cols.length; i++) {
+    cols[i].style.alignItems = VYKL[P.stoyka] || 'center';
+    cols[i].style.justifyContent = VYKLX[P.stoykaX] || 'center';
+  }
+  skazat();
+}
+
+/* Сводка: живые числа раскладки и названный вслух момент тесноты. */
+function skazat() {
+  var g = geom();
+  var tesno = g.kol < P.vys;
+  svodka.innerHTML = g.n + ' × <b>' + g.kol.toFixed(1) + '</b> px' +
+    ' · полоса ' + Math.round(g.polosa) + ' × ' + Math.round(g.lenta) + ' px' +
+    ' · поля ' + P.poleB + ' % / ' + P.poleV + ' %' +
+    ' · ' + (tesno ? 'фигура выше колонки' : 'колонка шире фигуры');
+}
+
+/* ── КУРСОР: зона наведения ───────────────────────────────────────────
+   Приём «Зональная интерпретация»: попадание считается арифметикой по
+   тем же долям, что строят сетку, поэтому мёртвых промежутков нет —
+   шов отходит к ближайшей колонке, а боковые поля к крайним. Замера у
+   элементов не спрашиваем: их координаты уже известны из geom(). */
+var pod = -1;
+function navesti(x) {
+  var g = geom();
+  var i = Math.floor((x - g.pb + P.shov / 2) / (g.kol + P.shov));
+  if (i < 0) i = 0; if (i > g.n - 1) i = g.n - 1;
+  if (i === pod) return;
+  if (pod >= 0 && lenta.children[pod]) lenta.children[pod].classList.remove('on');
+  pod = i;
+  if (lenta.children[pod]) lenta.children[pod].classList.add('on');
+}
+function snyat() {
+  if (pod >= 0 && lenta.children[pod]) lenta.children[pod].classList.remove('on');
+  pod = -1;
+}
+addEventListener('pointermove', function (e) { navesti(e.clientX); });
+addEventListener('pointerleave', snyat);
+addEventListener('pointerdown', function (e) { navesti(e.clientX); });
+
+/* ── ПАНЕЛЬ ───────────────────────────────────────────────────────── */
+var MESTA = {
+  'Полоса':  '#lenta',
+  'Поле':    '#pole',
+  'Колонка': '.col',
+  'Фигура':  '.fig',
+  'Метка':   ['.nom', '#svodka'],
+};
+
+var PANEL = StendPanel.build({
+  storageKey: 'kolonki-params',
+  params: P,
+  defaults: DEFAULTS,
+  mesta: MESTA,
+  eases: EASES,
+  evalEase: evalEase,
+  bezApprox: BEZ_APPROX,
+  /* Ширина колонки в объявлении есть — но выводом, не ручкой: крутить
+     её нельзя по закону стенда, а видеть надо. */
+  zakon: [
+    ['h', 'Деление', { gde: 'Полоса' }],
+    ['kolonok', 'Колонок', 'счёт', { ot0: 1, do: 24 }],
+    ['shov', 'Шов между колонками', 'зазор', { do: 120, gde: 'Колонка' }],
+    ['', 'Ширина колонки', 'вывод', { opcii: {
+      ot: ['kolonok', 'shov', 'poleB'], ed: 'px', tochnost: 1,
+      schitat: function () { return geom().kol; },
+      raschyot: function (p) {
+        var g = geom();
+        return '(' + Math.round(g.polosa) + ' − ' + (g.n - 1) + ' × ' + p.shov + ') ÷ ' + g.n;
+      } } }],
+
+    ['h', 'Поля', { gde: 'Поле' }],
+    ['poleB', 'Поле по бокам', 'доля', { ot: 'ширина', ot0: 0, do: 40, shag: 0.5 }],
+    ['poleV', 'Поле сверху и снизу', 'доля', { ot: 'высота', ot0: 0, do: 40, shag: 0.5 }],
+
+    ['h', 'Фигура', { gde: 'Фигура' }],
+    ['vys', 'Высота фигуры', 'размер', { ot0: 0, do: 200 }],
+    ['shir', 'Ширина фигуры', 'доля', { ot: 'колонка', ot0: 0, do: 100 }],
+    ['stoyka', 'По высоте колонки', 'вертикаль'],
+    ['stoykaX', 'Поперёк колонки', 'горизонталь'],
+    ['figura', 'Цвет фигуры', 'цвет'],
+
+    ['h', 'Курсор', { gde: 'Колонка' }],
+    ['podsvet', 'Подсветка колонки', 'сила'],
+    ['rost', 'Рост фигуры', 'сила'],
+    ['otklikMs', 'Ход подсветки', 'время', { do: 1200 }],
+    ['otklikEase', 'Кривая подсветки', 'кривая'],
+
+    ['h', 'Служебный слой', { gde: 'Метка' }],
+    ['podlozhka', '', 'двоичное', { iz: ['Показать сетку', 'Скрыть сетку'], gde: 'Полоса' }],
+    ['nomera', '', 'двоичное', { iz: ['Показать номера', 'Скрыть номера'] }],
+    ['alfa', 'Плотность слоя', 'доля', { ot: 'своё', ot0: 0, do: 60, edinica: '% краски', gde: 'Полоса' }],
+    ['garn', 'Гарнитура меток', 'гарнитура'],
+    ['kegl', 'Кегль меток', 'кегль'],
+    ['sluzhba', 'Цвет служебного', 'цвет'],
+
+    ['h', 'Палитра'],
+    ['palitra', 'Профиль', 'палитра', { iz: [
+      ['bumaga', 'Бумага',          { bumaga: '#eeede8', figura: '#111111', sluzhba: '#c2361f' }],
+      ['belaya', 'Чёрное на белом', { bumaga: '#ffffff', figura: '#000000', sluzhba: '#1b2db3' }],
+      ['noch',   'Ночь',            { bumaga: '#101014', figura: '#f0f0f2', sluzhba: '#4d8dff' }],
+    ] }],
+    ['bumaga', 'Бумага', 'цвет'],
+  ],
+  desc: {
+    kolonok: 'На сколько равных долей делится полоса. Ширина доли не задаётся — она получается.',
+    shov: 'Межколонник. Ноль — колонки встык, и двенадцать долей читаются как двенадцать равных отрезков формата.',
+    poleB: 'Боковое поле, доля ШИРИНЫ формата. Рисуется рамкой: толщина рамки и есть поле.',
+    poleV: 'Поле сверху и снизу, доля ВЫСОТЫ формата. Опора другая, чем у бокового: одна доля на оба измерения врала бы на любом экране, кроме квадратного.',
+    vys: 'Высота прямоугольника в пикселях — единственное жёсткое число стенда. Всё остальное течёт от формата.',
+    shir: 'Ширина прямоугольника в долях своей колонки. 100 — во всю колонку.',
+    stoyka: 'Где прямоугольник стоит по высоте колонки.',
+    stoykaX: 'Куда прямоугольник прижат, когда он уже колонки.',
+    podsvet: 'Сколько служебного цвета примешивается к фигуре под курсором.',
+    rost: 'Насколько фигура подрастает под курсором. Рост идёт трансформацией, раскладку не двигает.',
+    otklikMs: 'За сколько подсветка доходит до конца.',
+    otklikEase: 'Кривая, по которой идёт подсветка.',
+    podlozhka: 'Заливка колонок и рамка полосы — служебный слой, по которому видно само деление.',
+    nomera: 'Номер колонки в начале каждой доли.',
+    alfa: 'Насколько густо положен служебный слой. Под курсором колонка берёт вдвое.',
+    garn: 'Гарнитура служебных меток. Набора на стенде нет — только техслой.',
+    kegl: 'Кегль служебных меток.',
+    sluzhba: 'Цвет служебного слоя: поля, границы колонок, номера, подсветка.',
+    palitra: 'Готовый профиль: бумага, краска фигуры и служебный цвет одним нажатием.',
+    bumaga: 'Цвет фона.',
+  },
+  onChange: function (key) {
+    if (key === 'kolonok' || key === 'podlozhka' || key === 'nomera') postroit();
+    primenit();
+  },
+});
+
+postroit();
+primenit();
+
+/* Ресайз: раскладку двигает сам грид, стенду остаётся пересказать числа.
+   Замер один — окно; позиции колонок из него выводятся, а не снимаются. */
+var rT;
+addEventListener('resize', function () {
+  clearTimeout(rT);
+  rT = setTimeout(function () { skazat(); if (PANEL && PANEL.obnovit) PANEL.obnovit(); }, 120);
+});
+</script>
+</body>
+</html>
