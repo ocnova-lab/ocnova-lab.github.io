@@ -156,6 +156,7 @@
 <script src="/panel-lib/palitra.js"></script>
 <script src="/panel-lib/garnitura.js"></script>
 <script src="/panel-lib/segment.js"></script>
+<script src="/panel-lib/schyot.js"></script>
 <script src="/panel-lib/toggle.js"></script>
 <script src="/panel-lib/vyvod.js"></script>
 <script>
@@ -422,7 +423,7 @@ var PANEL = StendPanel.build({
     ['h', 'Служебный слой', { gde: 'Метка' }],
     ['podlozhka', '', 'двоичное', { iz: ['Показать сетку', 'Скрыть сетку'], gde: 'Полоса' }],
     ['nomera', '', 'двоичное', { iz: ['Показать номера', 'Скрыть номера'] }],
-    ['alfa', 'Плотность слоя', 'доля', { ot: 'своё', ot0: 0, do: 60, edinica: '% краски', gde: 'Полоса' }],
+    ['alfa', 'Плотность слоя', 'сила', { do: 60, gde: 'Полоса' }],
     ['garn', 'Гарнитура меток', 'гарнитура'],
     ['kegl', 'Кегль меток', 'кегль'],
     ['sluzhba', 'Цвет служебного', 'цвет'],
@@ -462,6 +463,18 @@ var PANEL = StendPanel.build({
     primenit();
   },
 });
+
+/* Панель открыта сразу: стенд про ручки, и закон здесь показывает не
+   картинка, а то, как она перестраивается от правки величины. Дальше —
+   как человек оставил: закрыл однажды, и стенд это помнит. // без ручки */
+var pamyatPaneli = null;
+try { pamyatPaneli = localStorage.getItem('kolonki-panel'); } catch (e) {}
+if (pamyatPaneli !== 'zakryta' && PANEL && PANEL.pokazat) PANEL.pokazat(true);
+if (window.MutationObserver && PANEL && PANEL.panel) {
+  new MutationObserver(function () {
+    try { localStorage.setItem('kolonki-panel', PANEL.panel.hidden ? 'zakryta' : 'otkryta'); } catch (e) {}
+  }).observe(PANEL.panel, { attributes: true, attributeFilter: ['hidden'] });
+}
 
 postroit();
 primenit();
