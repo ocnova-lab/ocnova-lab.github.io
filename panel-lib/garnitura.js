@@ -18,6 +18,7 @@
   var ALFAVIT = [
     ['Editorial New', 'антиква набора'],
     ['Dentegra Display', 'антиква титулов'],
+    ['Trigonon', 'антиква титулов и врезок'],
     ['Even Mono', 'моно'],
     ['JetBrains Mono', 'моно'],
     ['Pragmatica Next VF', 'переменный гротеск'],

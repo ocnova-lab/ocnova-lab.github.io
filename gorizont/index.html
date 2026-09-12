@@ -270,6 +270,15 @@
   @font-face { font-family: "Dent Display"; font-weight: 400; font-style: normal;
     src: url("/fonts/DentDisplay-Regular.woff2") format("woff2"),
          url("/fonts/DentDisplay-Regular.woff") format("woff"); font-display: swap; }
+  /* Trigonon той же студии, два начертания одного семейства: медиум держит
+     титул, регуляр — врезку. Разница весов взята из макета, поэтому синтез
+     веса запрещён ниже: браузер, дорисовав медиум сам, стёр бы её. */
+  @font-face { font-family: "Trigonon"; font-weight: 400; font-style: normal;
+    src: url("/fonts/Trigonon-Regular.woff2") format("woff2"),
+         url("/fonts/Trigonon-Regular.woff") format("woff"); font-display: swap; }
+  @font-face { font-family: "Trigonon"; font-weight: 500; font-style: normal;
+    src: url("/fonts/Trigonon-Medium.woff2") format("woff2"),
+         url("/fonts/Trigonon-Medium.woff") format("woff"); font-display: swap; }
 
   /* ── единицы макета ───────────────────────────────────────────────
      --col  базовая колонка (340)      --gut  межколонник (30)
@@ -342,7 +351,8 @@
   .idx.sub { color: var(--ink); margin-bottom: calc(18px * var(--u)); }
   .main { font-size: calc(var(--main-fs) * var(--u)); line-height: var(--main-lh);
           letter-spacing: var(--main-tr); white-space: pre-line; }
-  .lead { font-family: "Dent Display", "Even Mono", ui-monospace, monospace;
+  .lead { font-family: var(--lead-garn, "Trigonon"), "Even Mono", ui-monospace, monospace;
+          font-weight: 400; font-synthesis-weight: none;
           font-size: calc(var(--lead-fs) * var(--u)); line-height: var(--lead-lh);
           letter-spacing: var(--lead-tr); }
   /* ссылка: цвета не заводит, отличает её подчёркивание */
@@ -369,6 +379,12 @@
   /* открывающая раздел колонка: индекс на левом флаге */
   .col.open > .idx { text-align: left; }
 
+  /* Колонка врезки набрана по левому флагу целиком, и служебный слой в ней
+     подчиняется тому же флагу: индекс сверху и строка автора снизу встают
+     от левого края колонки, а не по её центру. Правило колонки, а не стиля:
+     те же .idx и .by в других колонках выключку не меняют. */
+  .col.lead-col > .idx, .col.lead-col .by { text-align: left; }
+
 
   /* ── титул ── */
   /* Титул занимает экран целиком, поэтому боковые поля даёт он сам:
@@ -382,7 +398,8 @@
   /* мера титула: длину строки держит текст, а не соседи по ленте */
   .col.title h1 { max-width: calc(var(--ttl-mera, 26) * 1ch); margin: 0 auto; }
   .col.title h1 {
-    font-family: "Dent Display", "Even Mono", ui-monospace, monospace; font-weight: 400;
+    font-family: var(--ttl-garn, "Trigonon"), "Even Mono", ui-monospace, monospace;
+    font-weight: 500; font-synthesis-weight: none;
     letter-spacing: var(--ttl-tr); line-height: var(--ttl-lh);
     font-size: var(--ttl, 60px); white-space: pre-line;
   }
@@ -455,8 +472,9 @@
   #probe .bl { display: inline-block; width: 0; height: 0; vertical-align: baseline; }
   /* строка титула в щупе: тот же набор, что у титула, — иначе базовая линия
      померилась бы у запасного кегля и поправка вышла бы нулевой (П8) */
-  #probe h1.ttl { font-family: "Dent Display", "Even Mono", ui-monospace, monospace;
-                  font-weight: 400; font-size: var(--ttl-pr, 60px);
+  #probe h1.ttl { font-family: var(--ttl-garn, "Trigonon"), "Even Mono", ui-monospace, monospace;
+                  font-weight: 500; font-synthesis-weight: none;
+                  font-size: var(--ttl-pr, 60px);
                   line-height: var(--ttl-lh-pr, 70px); letter-spacing: var(--ttl-tr); }
   #rail { position: fixed; left: 0; right: 0; bottom: 0; height: 1px; background: var(--hair); }
   #rail i { display: block; height: 100%; width: 0; background: var(--ink); }
@@ -625,6 +643,7 @@
 <script src="/panel-lib/otkat.js"></script>
 <script src="/panel-lib/datchik.js"></script>
 <script src="/panel-lib/maska.js"></script>
+<script src="/panel-lib/garnitura.js"></script>
 <script>
 /* Закон стенда — в шапке файла (комментарий над <html>).
    Ниже — параметры, раскладка и ход. */
@@ -717,11 +736,13 @@ var DEFAULTS = {
   ttlSize: 60,     // кегль титула при базовой колонке, px
   ttl: [46, 96],   // коридор кегля титула в настоящих пикселах
   ttlMera: 26,     // мера титула, знаков — ею и держится длина строки
-  ttlLead: 117,    // интерлиньяж титула, % кегля
-  ttlTrack: -1.5,  // трекинг титула, % кегля
-  leadSize: 25.5,  // врезка и заголовок раздела
-  leadLead: 130,
-  leadTrack: 2.1,
+  ttlGarn: 'Trigonon',   // гарнитура титула: медиум берётся весом, не отдельным именем
+  leadGarn: 'Trigonon',  // гарнитура врезки и заголовка раздела: регуляр того же семейства
+  ttlLead: 117,    // интерлиньяж титула, % кегля (стиль макета TTL Main 60/70)
+  ttlTrack: -2,    // трекинг титула, % кегля (стиль макета: −2 %)
+  leadSize: 25.5,  // врезка и заголовок раздела; кегль подобран под колонку стенда
+  leadLead: 150,   // стиль макета TXT Lead 20/30 — интерлиньяж 150 % кегля
+  leadTrack: -1,   // стиль макета: −1 % (плюсовой трекинг был подобран под Dentegra)
   mainSize: 15,    // основной текст
   mainLead: 160,
   mainTrack: 1,
@@ -1274,6 +1295,10 @@ function layout() {
   root.style.setProperty('--ttl-otbivka', Math.round(43 * u) + 'px');
   root.style.setProperty('--pad', PAD + 'px');
   root.style.setProperty('--ttl-mera', P.ttlMera);
+  // гарнитура — орган, а не литерал в стилях: ход «замени шрифт» приходит
+  // первым, потому что гарнитуру видно первой (свод, алфавит)
+  root.style.setProperty('--ttl-garn', '"' + String(P.ttlGarn).replace(/"/g, '') + '"');
+  root.style.setProperty('--lead-garn', '"' + String(P.leadGarn).replace(/"/g, '') + '"');
   root.style.setProperty('--var-sila', (P.varSila / 100).toFixed(3));
   root.style.setProperty('--var-ms', P.varMs + 'ms');
   root.style.setProperty('--vybeg',
@@ -2260,6 +2285,8 @@ var PANEL = StendPanel.build({
   bezApprox: BEZ_APPROX,
   defs: [
     ['h', 'Набор'],
+    ['ttlGarn', 'Титул: гарнитура', 'garnitura'],
+    ['leadGarn', 'Врезка: гарнитура', 'garnitura'],
     ['ttlSize', 'Титул: кегль, px', 20, 120, 1, { pole: true }],
     ['ttl', 'Титул: коридор кегля, px', 'koridor', 20, 140, 1, { nitka: false }],
     ['ttlMera', 'Титул: мера, знаков', 8, 60, 1, { pole: true }],
