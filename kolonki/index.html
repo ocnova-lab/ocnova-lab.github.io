@@ -151,6 +151,14 @@
     <span id="svodka"></span>
   </header>
 
+<script>
+/* Витринный гейт (panel.js) гасит панель на публичных адресах: наружу
+   уходит результат, ручки живут на локалке. Здесь исключение по той же
+   причине, что у каталога органов, — панель И ЕСТЬ содержание стенда:
+   закон показывает не картинка, а то, как она перестраивается от правки
+   величины. // без ручки */
+window.STEND_PANEL_VSEGDA = true;
+</script>
 <script src="/panel.js"></script>
 <script src="/panel-lib/obyavlenie.js"></script>
 <script src="/panel-lib/palitra.js"></script>
