@@ -96,10 +96,13 @@
     height: calc(var(--vys) * 1px);
     width: calc(var(--shir) * 1%);
     background: var(--figura);
-    transition: transform var(--ms) var(--bez), background-color var(--ms) var(--bez);
+    /* Подъём за курсором и рост ведёт кадр (transform ставится из JS),
+       переходом идёт только цвет: два механизма на одном свойстве
+       дрались бы за него, и догон дребезжал бы. */
+    transition: background-color var(--ms) var(--bez);
+    will-change: transform;
   }
   .col.on > .fig {
-    transform: scaleY(calc(1 + var(--rost) / 100));
     background: color-mix(in srgb, var(--figura), var(--sluzhba) calc(var(--podsvet) * 1%));
   }
 
@@ -180,9 +183,17 @@ window.STEND_PANEL_VSEGDA = true;
    вертикальное от высоты), полоса делится на N равных долей
    repeat(N, 1fr). Ширина колонки числом не задана нигде: она следствие,
    и панель показывает её строкой вывода, а не ручкой.
-   Второй закон — 10 «Догон» (курсорная строка): непрерывное положение
-   курсора квантуется сеткой, под курсором всегда ровно одна колонка.
-   Индекс считается арифметикой из долей, а не замером элементов (П3).
+   Курсорный слой держат два закона сразу, каждый на своей оси.
+   По горизонтали — 10 «Догон»: непрерывное положение курсора квантуется
+   сеткой, под курсором всегда ровно одна колонка; индекс считается
+   арифметикой из долей, а не замером элементов (П3).
+   По вертикали — 12 «Магнит» ◌: сегмент активной колонки плавно тянется
+   за курсором внутри коридора — от своего дома у нижней границы до
+   верхней. Закон помечен кандидатом, стенд ему первый прецедент.
+   Коридор здесь и есть ограничитель (П7): подъём нигде не выводится из
+   соседа и не копится, он всякий раз доля свободного хода колонки.
+   Возврат домой идёт своим ходом и своей кривой, а не теми же, что
+   подъём (П9: вход и выход — разные параметры).
 
    Приём со склада: «Зональная интерпретация — зона наведения».
    Активна колонка во всю высоту полосы, а не сам прямоугольник: 40 px
@@ -196,7 +207,10 @@ window.STEND_PANEL_VSEGDA = true;
    от точки перелома, а от встречи единственного жёсткого числа
    с текущим форматом.
 
-   Параметры адреса: ?reset=1, ?theme=nothing, ?mesto=Имя, ?nabor=имя.
+   Параметры адреса: ?stop=мс — стоп-кадр (курсор ставится на середину
+   полосы над средней колонкой, физика прогоняется на названный момент,
+   цикл не запускается), ?stolb=N — какая колонка под курсором в
+   стоп-кадре, ?reset=1, ?theme=nothing, ?mesto=Имя, ?nabor=имя.
    ───────────────────────────────────────────────────────────────────── */
 
 var EASES = {
@@ -242,6 +256,12 @@ var DEFAULTS = {
   stoykaX: 'center',  // куда прижата, когда уже колонки
   rost: 0,            // подсветка: насколько фигура подрастает под курсором
   podsvet: 0,         // подсветка: сколько служебного цвета примешано
+  zahvat: 100,        // насколько полно сегмент доходит до курсора
+  predel: 100,        // докуда пускает коридор: 100 — до верхней границы
+  dogonIn: 82,        // лень догона: 0 — сегмент приклеен к курсору
+  vozvratMs: 520,     // возврат домой: свой ход, не тот, что у подъёма
+  vozvratEase: 'плавный',
+  vozvratBez: [0.65, 0, 0.35, 1],
   otklikMs: 260,      // ход подсветки
   otklikEase: 'торможение',
   otklikBez: [0.33, 1, 0.68, 1],
@@ -302,10 +322,15 @@ function postroit() {
     f.className = 'fig';
     c.appendChild(g); c.appendChild(nom); c.appendChild(f);
     lenta.appendChild(c);
+    figury[i] = f;
   }
+  figury.length = n;
+  Y = []; Y0 = []; t0 = []; doma = [];
+  for (var j = 0; j < n; j++) { Y[j] = 0; Y0[j] = 0; t0[j] = 0; doma[j] = true; }
   postroeno = n;
   pod = -1;
   odezhda();
+  narisovat();
 }
 
 /* Одежда колонок: что показано, а что погашено ручками. */
@@ -344,6 +369,11 @@ function primenit() {
     cols[i].style.alignItems = VYKL[P.stoyka] || 'center';
     cols[i].style.justifyContent = VYKLX[P.stoykaX] || 'center';
   }
+  /* Рост идёт от дома, а не от середины: сегмент, стоящий на нижней
+     границе, растёт вверх, стоящий у верхней — вниз. */
+  var opora = P.stoyka === 'top' ? 'top' : P.stoyka === 'bottom' ? 'bottom' : 'center';
+  for (var k = 0; k < figury.length; k++) if (figury[k]) figury[k].style.transformOrigin = opora + ' center';
+  narisovat();
   skazat();
 }
 
@@ -362,23 +392,108 @@ function skazat() {
    тем же долям, что строят сетку, поэтому мёртвых промежутков нет —
    шов отходит к ближайшей колонке, а боковые поля к крайним. Замера у
    элементов не спрашиваем: их координаты уже известны из geom(). */
-var pod = -1;
-function navesti(x) {
+var pod = -1, kursorY = 0;
+var figury = [], Y = [], Y0 = [], t0 = [], doma = [];
+
+/* Сколько у сегмента свободного хода вверх — от дома до верхней границы
+   полосы. Считается из долей, а не замером: дом задан стойкой, коридор
+   равен остатку полосы за вычетом самой фигуры. */
+function hodVverh(g) {
+  var svobodno = Math.max(0, g.lenta - P.vys);
+  if (P.stoyka === 'bottom') return svobodno;
+  if (P.stoyka === 'middle') return svobodno / 2;
+  return 0;                       // дом уже наверху — подниматься некуда
+}
+
+/* Цель подъёма: положение курсора по высоте полосы, переведённое в долю
+   коридора. Низ полосы — ноль, верх — полный ход; за края полосы доля
+   зажимается, поэтому в полях сегмент стоит на крайнем положении, а не
+   улетает. Захват и предел — две ручки, режущие один и тот же ход:
+   первая говорит, насколько полно слушаться курсора, вторая — докуда
+   вообще пускать. */
+function celPodyoma(g) {
+  var niz = g.pv + g.lenta;
+  var u = g.lenta > 0 ? (niz - kursorY) / g.lenta : 0;
+  if (u < 0) u = 0; if (u > 1) u = 1;
+  return u * hodVverh(g) * (P.predel / 100) * (P.zahvat / 100);
+}
+
+function narisovat() {
+  for (var i = 0; i < figury.length; i++) {
+    if (!figury[i]) continue;
+    var rast = (i === pod && P.rost) ? ' scaleY(' + (1 + P.rost / 100) + ')' : '';
+    figury[i].style.transform = 'translateY(' + (-Y[i]).toFixed(2) + 'px)' + rast;
+  }
+}
+
+/* ── КАДР ─────────────────────────────────────────────────────────────
+   Подъём под курсором идёт догоном: за кадр проходится доля пути до
+   цели, лень доли — ручка инерции. Возврат домой идёт ИНАЧЕ — по
+   времени и своей кривой от точки отрыва (П9). Цикл спит, пока все
+   дома и курсор никого не держит: вертеть кадры вхолостую незачем. */
+var ANIM = { id: 0, posl: 0 };
+function pusk() {
+  if (!ANIM.id) { ANIM.posl = 0; ANIM.id = requestAnimationFrame(kadr); }
+}
+function shag(dt, ts) {
+  var g = geom(), cel = pod >= 0 ? celPodyoma(g) : 0, zhivo = pod >= 0;
+  var len = Math.max(0, Math.min(0.999, P.dogonIn / 100));
+  var k = 1 - Math.pow(len, dt / 16.7);
+  for (var i = 0; i < Y.length; i++) {
+    if (i === pod) {
+      Y[i] += (cel - Y[i]) * k;
+      doma[i] = false;
+    } else if (!doma[i]) {
+      var d = P.vozvratMs > 0 ? Math.min(1, (ts - t0[i]) / P.vozvratMs) : 1;
+      Y[i] = Y0[i] * (1 - evalEase(P.vozvratEase, P.vozvratBez, d));
+      if (d >= 1) { Y[i] = 0; doma[i] = true; }
+      else zhivo = true;
+    }
+  }
+  return zhivo;
+}
+function kadr(ts) {
+  var dt = ANIM.posl ? Math.min(64, ts - ANIM.posl) : 16.7;
+  ANIM.posl = ts;
+  var zhivo = shag(dt, ts);
+  narisovat();
+  ANIM.id = zhivo ? requestAnimationFrame(kadr) : 0;
+}
+
+/* Отрыв: колонка, потерявшая курсор, запоминает, откуда пошла домой.
+   Без этой засечки возврат считался бы от текущего кадра и рвался бы
+   на каждом движении мыши. */
+function otorvat(i, ts) {
+  if (i < 0 || i >= Y.length) return;
+  Y0[i] = Y[i]; t0[i] = ts; doma[i] = Y[i] === 0;
+}
+
+/* ── КУРСОР: зона наведения ───────────────────────────────────────────
+   Приём «Зональная интерпретация»: попадание считается арифметикой по
+   тем же долям, что строят сетку, поэтому мёртвых промежутков нет —
+   шов отходит к ближайшей колонке, а боковые поля к крайним. Замера у
+   элементов не спрашиваем: их координаты уже известны из geom(). */
+function navesti(x, y) {
   var g = geom();
+  kursorY = y;
   var i = Math.floor((x - g.pb + P.shov / 2) / (g.kol + P.shov));
   if (i < 0) i = 0; if (i > g.n - 1) i = g.n - 1;
+  pusk();
   if (i === pod) return;
   if (pod >= 0 && lenta.children[pod]) lenta.children[pod].classList.remove('on');
+  otorvat(pod, performance.now());
   pod = i;
   if (lenta.children[pod]) lenta.children[pod].classList.add('on');
 }
 function snyat() {
   if (pod >= 0 && lenta.children[pod]) lenta.children[pod].classList.remove('on');
+  otorvat(pod, performance.now());
   pod = -1;
+  pusk();
 }
-addEventListener('pointermove', function (e) { navesti(e.clientX); });
+addEventListener('pointermove', function (e) { navesti(e.clientX, e.clientY); });
 addEventListener('pointerleave', snyat);
-addEventListener('pointerdown', function (e) { navesti(e.clientX); });
+addEventListener('pointerdown', function (e) { navesti(e.clientX, e.clientY); });
 
 /* ── ПАНЕЛЬ ───────────────────────────────────────────────────────── */
 var MESTA = {
@@ -423,6 +538,14 @@ var PANEL = StendPanel.build({
     ['figura', 'Цвет фигуры', 'цвет'],
 
     ['h', 'Курсор', { gde: 'Колонка' }],
+    ['g', 'Подъём за курсором', { gde: 'Фигура' }],
+    ['zahvat', 'Захват курсора', 'сила'],
+    ['predel', 'Ход вверх', 'доля', { ot: 'высота', ot0: 0, do: 100, edinica: '% коридора' }],
+    ['dogonIn', 'Инерция догона', 'инерция', { do: 95 }],
+    ['g', 'Возврат домой', { gde: 'Фигура' }],
+    ['vozvratMs', 'Ход', 'время', { do: 2000 }],
+    ['vozvratEase', 'Кривая', 'кривая'],
+    ['g', 'Подсветка'],
     ['podsvet', 'Подсветка колонки', 'сила'],
     ['rost', 'Рост фигуры', 'сила'],
     ['otklikMs', 'Ход подсветки', 'время', { do: 1200 }],
@@ -453,6 +576,11 @@ var PANEL = StendPanel.build({
     shir: 'Ширина прямоугольника в долях своей колонки. 100 — во всю колонку.',
     stoyka: 'Где прямоугольник стоит по высоте колонки.',
     stoykaX: 'Куда прямоугольник прижат, когда он уже колонки.',
+    zahvat: 'Насколько полно сегмент доходит до курсора. 100 — встаёт ровно на его высоту, 0 — не поднимается вовсе.',
+    predel: 'Докуда пускает коридор колонки. 100 — до самой верхней границы полосы, 50 — до середины свободного хода.',
+    dogonIn: 'Лень догона. 0 — сегмент приклеен к курсору, 95 — тянется за ним долго.',
+    vozvratMs: 'За сколько сегмент возвращается домой, когда курсор ушёл. Возврат идёт не тем ходом, что подъём: уходят и приходят по-разному.',
+    vozvratEase: 'Кривая возврата домой.',
     podsvet: 'Сколько служебного цвета примешивается к фигуре под курсором.',
     rost: 'Насколько фигура подрастает под курсором. Рост идёт трансформацией, раскладку не двигает.',
     otklikMs: 'За сколько подсветка доходит до конца.',
@@ -486,6 +614,24 @@ if (window.MutationObserver && PANEL && PANEL.panel) {
 
 postroit();
 primenit();
+
+/* ── СТОП-КАДР ────────────────────────────────────────────────────────
+   ?stop=мс — один кадр названного момента: курсор ставится на середину
+   полосы над средней колонкой (?stolb=N выбирает другую), физика
+   прогоняется шагами по 16.7 мс и рисуется один раз, цикл не идёт.
+   Движение здесь ведёт курсор, а не часы, поэтому снимок обязан
+   назвать и положение курсора — иначе он невоспроизводим. */
+var ADRES = new URLSearchParams(location.search);
+var stopMs = parseFloat(ADRES.get('stop'));
+if (isFinite(stopMs) && stopMs > 0) {
+  var g0 = geom();
+  var stolb = parseInt(ADRES.get('stolb'), 10);
+  pod = isFinite(stolb) ? Math.max(0, Math.min(g0.n - 1, stolb - 1)) : Math.floor(g0.n / 2);
+  kursorY = g0.pv + g0.lenta / 2;
+  if (lenta.children[pod]) lenta.children[pod].classList.add('on');
+  for (var t = 0; t < stopMs; t += 16.7) shag(16.7, t);
+  narisovat();
+}
 
 /* Ресайз: раскладку двигает сам грид, стенду остаётся пересказать числа.
    Замер один — окно; позиции колонок из него выводятся, а не снимаются. */
