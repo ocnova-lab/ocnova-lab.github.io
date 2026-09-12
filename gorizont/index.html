@@ -949,7 +949,16 @@ function relayout() {
   reflow = requestAnimationFrame(function () { reflow = 0; layout(); measure(); katPromerit(); });
 }
 
-function pic(src, alt, w, h) {
+/* Картинка выбирается языком так же, как текст. Подписи внутри схемы —
+   часть изображения, переводом слова их не достать, поэтому у записи два
+   источника: основной и второй (srcEn). Признак тот же, каким slovo()
+   подменяет текст: язык ленты разошёлся с языком статьи. */
+function istochnik(d) {
+  return (LANG !== STATYA.yazyk && d.srcEn) ? d.srcEn : d.src;
+}
+
+function pic(d, alt, w, h) {
+  var src = istochnik(d);
   return /\.svg$/.test(src) ? draw(src, w, h) : img(src, alt, w, h);
 }
 
@@ -1198,11 +1207,11 @@ function build() {
         var one = el('div', 'scroller');
         if (d.varianty) {
           var pole = el('span', 'pole');
-          pole.appendChild(d.risuem ? setkaSvg(d) : pic(d.src, 'илл. ' + d.n, d.w, d.h));
+          pole.appendChild(d.risuem ? setkaSvg(d) : pic(d, 'илл. ' + d.n, d.w, d.h));
           pole.appendChild(varySvg(d));
           one.appendChild(pole);
         } else {
-          one.appendChild(pic(d.src, 'илл. ' + d.n, d.w, d.h));
+          one.appendChild(pic(d, 'илл. ' + d.n, d.w, d.h));
         }
         c.appendChild(win(one));
         if (d.varianty) c.appendChild(lineyka(d.varianty));
@@ -1218,10 +1227,10 @@ function build() {
             f.appendChild(idxLine(it.n).cloneNode(false));
             f.lastChild.className = 'idx sub';
             f.lastChild.textContent = it.n;
-            f.appendChild(pic(it.src, 'илл. ' + it.n, it.w, it.h));
+            f.appendChild(pic(it, 'илл. ' + it.n, it.w, it.h));
             sc.appendChild(f);
           } else {
-            sc.appendChild(pic(it.src, 'илл. ' + d.n, it.w, it.h));
+            sc.appendChild(pic(it, 'илл. ' + d.n, it.w, it.h));
           }
         });
         sc.appendChild(el('i', 'vybeg'));
