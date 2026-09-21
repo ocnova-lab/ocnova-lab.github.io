@@ -2637,8 +2637,41 @@
     svetlota();
     vosstanovitPoryadok();
 
+    /* КНОПКА-СОСЕД — режимная кнопка рядом с шестерёнкой. Панель правит
+       величины, а такая кнопка переключает САМ СТЕНД: мобильный вид, разбор,
+       что угодно ещё. Место ей рядом с шестерёнкой — угол один, рука одна, —
+       и ставит её панель, а не стенд: иначе каждый стенд рисовал бы свой
+       кружок, свои поля и свою тему. Каждая следующая встаёт правее
+       предыдущей на свою ширину с полем; числа служебные — это геометрия
+       инструмента, а не набора.
+       Второй орган на ту же величину панели не мешает: стенд зовёт
+       `sostoyanie`, когда величину правят ручкой, и кнопка идёт следом. */
+    var sosedi = [];
+    function knopka(o) {
+      o = o || {};
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'st-gear st-sosed';
+      b.innerHTML = o.znak || '';
+      if (o.podskaz) b.title = o.podskaz;
+      var vkl = !!o.vkl;
+      function pokazat() {
+        b.classList.toggle('vkl', vkl);
+        b.setAttribute('aria-pressed', vkl ? 'true' : 'false');
+      }
+      b.addEventListener('click', function () {
+        vkl = !vkl; pokazat();
+        if (o.nazhat) o.nazhat(vkl);
+      });
+      b.style.left = (12 + 44 * (sosedi.length + 1)) + 'px';
+      sosedi.push(b);
+      pokazat(); temaSyuda(b); document.body.appendChild(b);
+      return { el: b, sostoyanie: function (v) { vkl = !!v; pokazat(); } };
+    }
+
     return {
       save: save, panel: panel, applyTheme: applyTheme, temaSyuda: temaSyuda,
+      // режимная кнопка рядом с шестерёнкой: { znak, podskaz, vkl, nazhat(vkl) }
+      knopka: knopka,
       params: P, defaults: DEFAULTS, controls: controls,
       // что уведено рукой от действующей основы (пресеты уже учтены)
       uvedennye: uvedennye,

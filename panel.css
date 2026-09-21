@@ -73,6 +73,10 @@
   cursor: pointer;
   transition: transform .15s ease, background .15s ease;
 }
+/* Кнопка-сосед: та же шестерёнка по виду, место ей считает панель (left),
+   включённое состояние — акцентом, как у нажатой ручки. */
+.st-sosed.vkl { background: var(--st-accent); border-color: transparent; }
+.st-sosed.vkl svg { stroke: #fff; }
 .st-gear:hover { background: rgba(44, 44, 46, .75); }
 .st-gear:active { transform: scale(.92); }
 .st-gear svg { width: 16px; height: 16px; display: block; }

@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Ярбус</title>
+<link rel="stylesheet" href="/panel.css" />
+<style>
+  @font-face { font-family: "Editorial New"; font-weight: 200; font-style: normal;
+    src: url("/fonts/EditorialNew-Thin.woff") format("woff"); font-display: swap; }
+  @font-face { font-family: "Editorial New"; font-weight: 300; font-style: normal;
+    src: url("/fonts/EditorialNew-Light.woff") format("woff"); font-display: swap; }
+  @font-face { font-family: "Editorial New"; font-weight: 400; font-style: normal;
+    src: url("/fonts/EditorialNew-Regular.woff") format("woff"); font-display: swap; }
+  @font-face { font-family: "Editorial New"; font-weight: 500; font-style: normal;
+    src: url("/fonts/EditorialNew-Medium.woff") format("woff"); font-display: swap; }
+  @font-face { font-family: "Editorial New"; font-weight: 700; font-style: normal;
+    src: url("/fonts/EditorialNew-Bold.woff") format("woff"); font-display: swap; }
+  @font-face { font-family: "Even Mono"; font-weight: 400; font-style: normal;
+    src: url("/fonts/EvenMono-Regular.woff2") format("woff2"),
+         url("/fonts/EvenMono-Regular.woff") format("woff"); font-display: swap; }
+  @font-face { font-family: "JetBrains Mono"; font-weight: 400; font-style: normal;
+    src: url("/fonts/JetBrainsMono-Regular.woff2") format("woff2"); font-display: swap; }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg, #ffffff);
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  /* Сцена — полоса, отцентрованная в окне. Все размеры внутри выведены из
+     модуля; модуль — доля ширины полосы, зажатая коридором. */
+  #scene {
+    position: fixed; inset: 0; z-index: 1;
+    display: grid; place-items: center;
+  }
+  .poster {
+    width: var(--band);
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    grid-template-areas:
+      "sluzh sluzh .     .     daty  daty"
+      "titul titul titul titul plash plash"
+      "lid   lid   lid   .     plash plash"
+      "avtor avtor .     .     cena  cena";
+    column-gap: var(--shov);
+    row-gap: var(--stroka);
+    align-items: end;
+  }
+  .b {
+    --k: 1;                                  /* кегль блока в долях модуля */
+    font-size: calc(var(--mod) * var(--k));
+    line-height: var(--lead);
+    color: var(--ink);
+    transition: none;
+  }
+  .poster.tesno {
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-areas:
+      "sluzh daty"
+      "titul titul"
+      "plash plash"
+      "lid   lid"
+      "avtor cena";
+  }
+  [data-b="sluzh"] { grid-area: sluzh; }
+  [data-b="daty"]  { grid-area: daty; text-align: right; }
+  [data-b="titul"] { grid-area: titul; line-height: var(--leadTitul); }
+  [data-b="lid"]   { grid-area: lid; }
+  [data-b="plash"] { grid-area: plash; }
+  [data-b="avtor"] { grid-area: avtor; }
+  [data-b="cena"]  { grid-area: cena; text-align: right; }
+
+  /* Плашка — геометрия, не фотография: стенд про место покоя, а картинка
+     принесла бы собственную доминанту, которой не управляют ручки. */
+  [data-b="plash"] .plita {
+    width: 100%;
+    aspect-ratio: var(--plashProp);
+    background: var(--plashInk);
+  }
+
+  /* Второе пространство: плашка отрывается от общей плоскости — получает
+     свою мерку глубины. Ошибка, названная Гильдебрандом (стр. 47—48),
+     здесь сделана нарочно и вынесена в ручку. */
+  .vtoroe [data-b="plash"] .plita { transform: scale(var(--vtoroeMasht)); }
+
+  /* Затемнение общей плоскости: гасит первое пространство, чтобы второе
+     осталось единственным. Тот же приём, что подложка под модальным окном. */
+  #zaten {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* Два холста. Поле доминанты идёт ПОД набор: оно показывает, где
+     сгущается вес, и не должно закрашивать сам набор. След обхода и метки
+     идут поверх — они читаются как слой разметки, а не как часть плаката. */
+  #pole, #over {
+    position: fixed; inset: 0;
+    width: 100vw; height: 100vh;
+    display: block;
+    pointer-events: none;
+  }
+  #pole { z-index: 0; }
+  #over { z-index: 5; }
+</style>
+</head>
+<body>
+
+<canvas id="pole"></canvas>
+<div id="scene">
+  <div class="poster" id="poster">
+    <div class="b" data-b="sluzh">№ 04 · ЗАЛ 2</div>
+    <div class="b" data-b="daty">21.09 — 14.12</div>
+    <div class="b" data-b="titul">Место<br>покоя</div>
+    <div class="b" data-b="lid">Первичный обход одинаков у всех. Взгляд садится там, куда его послала задача.</div>
+    <div class="b" data-b="plash"><div class="plita"></div></div>
+    <div class="b" data-b="avtor">Эрик Булатов</div>
+    <div class="b" data-b="cena">450 ₽</div>
+  </div>
+</div>
+<div id="zaten"></div>
+<canvas id="over"></canvas>
+
+<script src="/panel.js"></script>
+<script src="/panel-lib/obyavlenie.js"></script>
+<script src="/panel-lib/garnitura.js"></script>
+<script src="/panel-lib/segment.js"></script>
+<script src="/panel-lib/datchik.js"></script>
+<script src="/panel-lib/vyvod.js"></script>
+<script src="/panel-lib/zametka.js"></script>
+<script src="/panel-lib/toggle.js"></script>
+<script>
+/* ─────────────────────────────────────────────────────────────────────
+   Ярбус — куда садится взгляд.
+
+   Доминанта считается из самой раскладки: у каждого блока свой вес,
+   сложенный из площади чернил, контраста с фоном и воздуха вокруг.
+   Максимум веса — доминанта, и она одна на пространство.
+
+   Фокус выбирается ЗАДАЧЕЙ зрителя. Пиксели при смене задачи не
+   меняются ни на один: меняется только вопрос, с которым смотрят.
+
+   Первичный обход при любой задаче ОДИН И ТОТ ЖЕ — он идёт по весам,
+   то есть по доминанте, и задачи не знает. Расходятся не пути, а
+   место, где взгляд остаётся.
+
+   Смотрит: на раскладку (веса блоков) и на задачу зрителя.
+   Реагирует: поле доминанты — плавно (закон 9, силовое поле);
+              раскладка — долями и коридором (закон 3);
+              место покоя — щелчком от задачи.
+   ◌ Вход «задача» в девятке законов не назван: стенд — первый
+     прецедент, строка встаёт рядом со строками курсора и скролла.
+
+   Приём: «объяви закон и дай датчик» — расхождение доминанты и
+   фокуса меряется в модулях и показано живым датчиком в панели.
+
+   Параметры адреса: ?stop=мс, ?reset=1, ?theme=nothing
+   ───────────────────────────────────────────────────────────────────── */
+
+var BLOKI = ['sluzh', 'daty', 'titul', 'lid', 'plash', 'avtor', 'cena'];
+
+/* Кегль каждого блока — доля модуля. Числа тут суть пропорции набора,
+   а не пиксели: модуль задаётся ручкой и тянет за собой всё. */
+var KEGL = { sluzh: 0.50, daty: 0.50, titul: 3.00, lid: 0.86, plash: 1, avtor: 0.90, cena: 1.10 };
+
+/* Плотность чернил: сколько площади блока занято краской. У набора
+   она идёт от числа знаков, у плашки — вся площадь. */
+var ZNAKI = { sluzh: 11, daty: 13, titul: 11, lid: 74, plash: 0, avtor: 12, cena: 5 };
+
+/* Значимость блока для задачи. Это смысл блока, а не его форма:
+   ручками не двигается и при смене раскладки не меняется. */
+var ZADACHI = {
+  smotryu: { ru: 'Просто смотрю',   ves: { sluzh: .5, daty: .5, titul: .5, lid: .5, plash: .5, avtor: .5, cena: .5 } },
+  chto:    { ru: 'О чём это',       ves: { sluzh: .10, daty: .10, titul: 1.0, lid: .72, plash: .50, avtor: .30, cena: .08 } },
+  skolko:  { ru: 'Сколько стоит',   ves: { sluzh: .14, daty: .10, titul: .12, lid: .10, plash: .06, avtor: .06, cena: 1.0 } },
+  kogda:   { ru: 'Когда и где',     ves: { sluzh: .62, daty: 1.0, titul: .10, lid: .14, plash: .06, avtor: .06, cena: .10 } },
+  kto:     { ru: 'Кто автор',       ves: { sluzh: .10, daty: .08, titul: .22, lid: .18, plash: .12, avtor: 1.0, cena: .06 } },
+};
+
+var DEFAULTS = {
+  /* полоса и модуль */
+  band: 88,          // ширина полосы, % ширины экрана
+  bandPotolok: 900,  // потолок полосы, px — коридор сверху
+  porog: 620,        // порог тесноты, px
+  modul: 3.8,        // модуль, % ширины полосы
+  modulTesno: 6.5,   // модуль в тесноте, % ширины полосы
+  vysota: 84,        // потолок полосы, % высоты экрана
+  shov: 60,          // шов колонок, % модуля
+  stroka: 90,        // шов строк, % модуля
+  lead: 1.30,        // интерлиньяж набора, множитель
+  leadTitul: 0.92,   // интерлиньяж титула, множитель
+  garnTitul: 'Editorial New',
+  garnSluzh: 'Even Mono',
+  tolschTitul: 400,
+
+  /* доминанта — чем её строят */
+  akcent: 'titul',   // какой блок держит акцент
+  akcKegl: 100,      // кегль акцента, % своего кегля
+  kontrast: 0,       // контраст акцента, % от цвета акцента
+  izol: 0,           // воздух вокруг акцента, % модуля
+  glubina: 0,        // отрыв акцента от плоскости, %
+
+  /* из чего складывается вес — модель доминанты открыта */
+  vklRazmer: 50,     // вклад размера, %
+  vklKontrast: 70,   // вклад контраста, %
+  vklIzol: 40,       // вклад воздуха, %
+
+  /* задача зрителя */
+  zadacha: 'smotryu',
+  vliyanie: 25,      // влияние формы на фокус, %
+
+  /* обход */
+  obhod: 1500,       // первичный обход, мс
+  obhodEase: 'плавный',
+  obhodBez: [0.65, 0, 0.35, 1],
+  zaderzhka: 180,    // задержка на точке, мс
+  posadka: 900,      // посадка на фокус, мс
+  posadkaEase: 'торможение',
+  posadkaBez: [0.33, 1, 0.68, 1],
+  tyaga: 55,         // тяга фокуса, %
+  lenost: 20,        // инерция взгляда, %
+
+  /* два пространства */
+  vtoroe: 0,         // второе пространство включено
+  vtoroeGlub: 55,    // глубина второго, %
+  zaten: 0,          // затемнение первого, %
+  mercanie: 1400,    // период мерцания, мс
+  mercEase: 'плавный',
+  mercBez: [0.65, 0, 0.35, 1],
+
+  /* что видно */
+  pole: 1,           // поле доминанты
+  sled: 1,           // след обхода
+  metki: 1,          // метки доминанты и фокуса
+
+  /* цвет */
+  palitra: 'bw',
+  bg: '#ffffff',
+  ink: '#111111',
+  akcInk: '#d5320f',
+  plashInk: '#111111',
+  metkiInk: '#d5320f',   // цвет слоя разметки: поле, след, метки
+  plashProp: 0.78,   // пропорция плашки: ширина в долях высоты
+};
+
+var P = Object.assign({}, DEFAULTS);
+P.obhodBez = DEFAULTS.obhodBez.slice();
+P.posadkaBez = DEFAULTS.posadkaBez.slice();
+P.mercBez = DEFAULTS.mercBez.slice();
+try {
+  var saved = JSON.parse(localStorage.getItem('yarbus-params') || '{}');
+  Object.keys(saved).forEach(function (k) { if (k in P) P[k] = saved[k]; });
+} catch (e) {}
+
+var EASES = {
+  'линейный':   function (t) { return t; },
+  'разгон':     function (t) { return t * t * t; },
+  'торможение': function (t) { return 1 - Math.pow(1 - t, 3); },
+  'плавный':    function (t) { return t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; },
+  'квадрат':    function (t) { return t * t; },
+};
+var BEZ_APPROX = {
+  'линейный':   [0.25, 0.25, 0.75, 0.75],
+  'разгон':     [0.32, 0, 0.67, 0],
+  'торможение': [0.33, 1, 0.68, 1],
+  'плавный':    [0.65, 0, 0.35, 1],
+  'квадрат':    [0.45, 0, 0.75, 0.3],
+};
+function cubicBezierY(b, t) {
+  var x1 = b[0], y1 = b[1], x2 = b[2], y2 = b[3], s = t;
+  for (var i = 0; i < 8; i++) {
+    var x = 3 * (1 - s) * (1 - s) * s * x1 + 3 * (1 - s) * s * s * x2 + s * s * s;
+    var dx = 3 * (1 - s) * (1 - s) * x1 + 6 * (1 - s) * s * (x2 - x1) + 3 * s * s * (1 - x2);
+    if (Math.abs(dx) < 1e-6) break;
+    s -= (x - t) / dx;
+    if (s < 0) s = 0; if (s > 1) s = 1;
+  }
+  return 3 * (1 - s) * (1 - s) * s * y1 + 3 * (1 - s) * s * s * y2 + s * s * s;
+}
+function evalEase(name, bez, t) {
+  if (t <= 0) return 0; if (t >= 1) return 1;
+  if (name === 'bezier') return cubicBezierY(bez, t);
+  return (EASES[name] || EASES['плавный'])(t);
+}
+
+/* ── замер и вес ─────────────────────────────────────────────────────
+   Веса считаются из уже разложенных блоков — это чтение для наложения,
+   а не цикл раскладки (П3): замер идёт раз на правку ручки и на ресайз,
+   не в кадре. */
+var mer = { mod: 16, band: 600, pryam: {}, ves: {}, vesMax: 1, poryadok: [], dom: 'titul', fok: 'titul' };
+
+/* Цвет приходит из двух мест: из ручки он hex, а из style.color браузер
+   отдаёт его уже как rgb(). Разбор обязан понимать оба — на одном hex
+   веса выходили NaN, и доминанта с фокусом не считались вовсе. */
+function vRGB(cvet) {
+  var c = String(cvet || '#000').trim();
+  var m = c.match(/rgba?\(([^)]+)\)/i);
+  if (m) {
+    var ch = m[1].split(',').map(parseFloat);
+    return [ch[0] || 0, ch[1] || 0, ch[2] || 0];
+  }
+  var h = c.replace('#', '');
+  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  if (h.length < 6) return [0, 0, 0];
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+function svetlota(cvet) {
+  var c = vRGB(cvet);
+  return (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
+}
+function smeshat(a, b, t) {
+  var x = vRGB(a), y = vRGB(b);
+  return '#' + [0, 1, 2].map(function (i) {
+    return Math.round(x[i] + (y[i] - x[i]) * t).toString(16).padStart(2, '0');
+  }).join('');
+}
+
+var poster = document.getElementById('poster');
+var scene  = document.getElementById('scene');
+var zatenEl = document.getElementById('zaten');
+
+/* Раскладка: ручки кладут значения в переменные, размеры выводятся из них.
+   Ни одного числа в разметке — коридор модуля единственное место, где
+   пиксель есть решение глаза, принятое заранее. */
+function razlozhit() {
+  var W = window.innerWidth, H = window.innerHeight;
+  mer.tesno = W < P.porog;
+  poster.classList.toggle('tesno', mer.tesno);
+  /* Коридор полосы: доля ширины, зажатая снизу минимумом набора и сверху
+     потолком. На узком экране связывает доля (полоса берёт почти всё),
+     на широком — потолок (полоса становится колонкой посреди поля). */
+  mer.band = Math.max(280, Math.min(P.bandPotolok, W * P.band / 100));
+  /* В тесноте колонок две вместо шести: доля модуля другая, потому что
+     закон другой. Это то же перераспределение формы и пространства —
+     ужалось пространство, форма прибавила. */
+  var dolyaModulya = mer.tesno ? P.modulTesno : P.modul;
+
+  /* Второй ограничитель — высота. Ужимать один модуль мало: плашка меряется
+     от ширины колонки и на модуль не смотрит, поэтому в тесноте композиция
+     вылезала за экран целым ростом плашки. Ужимается ВЕДУЩАЯ мера — полоса,
+     а модуль идёт за ней своей долей. Высота почти линейна по полосе, два
+     прохода её добирают. Это замер контейнера на правку ручки, не цикл
+     раскладки (П3). */
+  var potolok = H * P.vysota / 100;
+  for (var proh = 0; proh < 3; proh++) {
+    mer.mod = Math.max(11, Math.min(64, mer.band * dolyaModulya / 100));
+    primenit();
+    var vys = poster.getBoundingClientRect().height;
+    if (vys <= potolok || proh === 2) break;
+    mer.band = Math.max(200, mer.band * potolok / vys);
+  }
+  vzvesit();
+}
+
+function primenit() {
+  var s = scene.style;
+  s.setProperty('--band', mer.band.toFixed(1) + 'px');
+  s.setProperty('--mod', mer.mod.toFixed(2) + 'px');
+  s.setProperty('--shov', (mer.mod * P.shov / 100).toFixed(2) + 'px');
+  s.setProperty('--stroka', (mer.mod * P.stroka / 100).toFixed(2) + 'px');
+  s.setProperty('--lead', P.lead);
+  s.setProperty('--leadTitul', P.leadTitul);
+  s.setProperty('--ink', P.ink);
+  s.setProperty('--plashInk', P.plashInk);
+  s.setProperty('--plashProp', P.plashProp);
+  s.setProperty('--vtoroeMasht', (1 + P.vtoroeGlub / 100 * 0.14 * (P.vtoroe ? 1 : 0)).toFixed(4));
+  document.body.style.setProperty('--bg', P.bg);
+
+  poster.classList.toggle('vtoroe', !!P.vtoroe);
+  zatenEl.style.opacity = (P.zaten / 100 * 0.92).toFixed(3);
+
+  var akcCvet = smeshat(P.ink, P.akcInk, P.kontrast / 100);
+  BLOKI.forEach(function (b) {
+    var el = poster.querySelector('[data-b="' + b + '"]');
+    var akc = (b === P.akcent);
+    el.style.setProperty('--k', (KEGL[b] * (akc ? P.akcKegl / 100 : 1)).toFixed(3));
+    el.style.color = akc ? akcCvet : P.ink;
+    el.style.margin = akc ? (mer.mod * P.izol / 100).toFixed(2) + 'px' : '0';
+    el.style.fontFamily = (b === 'titul' ? P.garnTitul : P.garnSluzh) +
+      (b === 'titul' ? ', "Times New Roman", serif' : ', ui-monospace, monospace');
+    el.style.fontWeight = (b === 'titul' ? P.tolschTitul : 400);
+    if (b === 'plash') {
+      el.querySelector('.plita').style.background = akc ? akcCvet : P.plashInk;
+      el.style.zIndex = P.vtoroe ? 3 : 'auto';
+    }
+    if (akc && P.glubina > 0) {
+      el.style.position = 'relative';
+      el.style.zIndex = 4;
+      el.style.transform = 'translateY(' + (-mer.mod * P.glubina / 100 * 0.18).toFixed(2) + 'px)';
+    } else {
+      el.style.transform = 'none';
+      if (b !== 'plash') el.style.zIndex = 'auto';
+    }
+  });
+  zatenEl.style.zIndex = P.vtoroe ? 2 : -1;
+}
+
+/* Вес блока: площадь чернил, контраст с фоном, воздух вокруг. Три вклада
+   вынесены в ручки — модель доминанты открыта и её видно, а не спрятана
+   в коэффициенте. */
+function vzvesit() {
+  var fonSv = svetlota(P.bg);
+  var pr = {};
+  BLOKI.forEach(function (b) {
+    var el = poster.querySelector('[data-b="' + b + '"]');
+    var r = el.getBoundingClientRect();
+    pr[b] = { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height };
+  });
+  mer.pryam = pr;
+
+  var vesa = {}, max = 0;
+  BLOKI.forEach(function (b) {
+    var el = poster.querySelector('[data-b="' + b + '"]');
+    var kegl = parseFloat(getComputedStyle(el).fontSize) || mer.mod;
+    var chernila = (b === 'plash')
+      ? pr[b].w * pr[b].h
+      : ZNAKI[b] * kegl * kegl * 0.34;                 // площадь краски набора
+    var cvet = (b === 'plash') ? (el.querySelector('.plita').style.background || P.plashInk)
+                               : el.style.color;
+    var kontr = Math.abs(svetlota(cvet) - fonSv);
+
+    /* Воздух: расстояние до ближайшего соседа в модулях. Изоляция делает
+       блок заметным сильнее, чем кегль, — это и проверяет ручка вклада. */
+    var bliz = Infinity;
+    BLOKI.forEach(function (o) {
+      if (o === b) return;
+      var dx = Math.max(0, Math.abs(pr[b].x - pr[o].x) - (pr[b].w + pr[o].w) / 2);
+      var dy = Math.max(0, Math.abs(pr[b].y - pr[o].y) - (pr[b].h + pr[o].h) / 2);
+      bliz = Math.min(bliz, Math.hypot(dx, dy));
+    });
+    var vozduh = Math.min(3, (isFinite(bliz) ? bliz : 0) / mer.mod);
+
+    var v = Math.pow(chernila / (mer.mod * mer.mod), P.vklRazmer / 100 * 0.5)
+          * Math.pow(0.04 + kontr, P.vklKontrast / 100)
+          * Math.pow(1 + vozduh, P.vklIzol / 100);
+    if (b === P.akcent) v *= (1 + P.glubina / 100 * 0.9);   // отрыв от плоскости добавляет веса
+    vesa[b] = v;
+    if (v > max) max = v;
+  });
+  mer.ves = vesa;
+  mer.vesMax = max || 1;
+  mer.poryadok = BLOKI.slice().sort(function (a, b) { return vesa[b] - vesa[a]; });
+  mer.dom = mer.poryadok[0];
+
+  /* Фокус: задача выбирает блок, форма спорит с ней ручкой влияния.
+     Влияние 0 — задача берёт своё целиком. Влияние 100 — доминанта
+     перебивает задачу, и фокус садится на неё. */
+  var z = ZADACHI[P.zadacha] || ZADACHI.smotryu;
+  var luchshiy = null, luchshee = -1;
+  BLOKI.forEach(function (b) {
+    var ocenka = Math.pow(z.ves[b], 1) * Math.pow(vesa[b] / mer.vesMax, P.vliyanie / 100);
+    if (isFinite(ocenka) && ocenka > luchshee) { luchshee = ocenka; luchshiy = b; }
+  });
+  if (!luchshiy) luchshiy = mer.dom;   // ничего не перевесило — покой остаётся у доминанты
+  /* Второе пространство держит своё место покоя: пока первую плоскость
+     не погасили, фокус мерцает между двумя. */
+  mer.fok = luchshiy;
+  mer.fokVtoroy = (P.vtoroe && P.zaten < 70) ? 'plash' : null;
+  if (P.vtoroe && P.zaten >= 70) mer.fok = 'plash';
+}
+
+/* ── расхождение: главный датчик стенда ── */
+function rashozhdenie() {
+  var a = mer.pryam[mer.dom], b = mer.pryam[mer.fok];
+  if (!a || !b) return 0;
+  return Math.hypot(a.x - b.x, a.y - b.y) / mer.mod;
+}
+
+/* ── панель ─────────────────────────────────────────────────────────── */
+var adres = new URLSearchParams(location.search);
+var STOP = adres.has('stop') ? parseFloat(adres.get('stop')) : null;
+
+/* Любая ручка правится адресом: тип берётся от значения в DEFAULTS.
+   Так снимаются стоп-кадры одной и той же раскладки под разные вопросы. */
+adres.forEach(function (zn, klyuch) {
+  if (!(klyuch in DEFAULTS)) return;
+  var ehtalon = DEFAULTS[klyuch];
+  P[klyuch] = (typeof ehtalon === 'number') ? parseFloat(zn) : zn;
+});
+
+var firstVisit = false;
+try { firstVisit = !localStorage.getItem('yarbus-params'); } catch (e) {}
+
+var PANEL = StendPanel.build({
+  storageKey: 'yarbus-params',
+  params: P, defaults: DEFAULTS,
+  eases: EASES, evalEase: evalEase, bezApprox: BEZ_APPROX,
+  zakon: [
+    ['h', 'Задача зрителя'],
+    ['', 'Закон стенда', 'заметка', { tekst:
+      'Пиксели при смене задачи не меняются ни на один. Меняется только вопрос, ' +
+      'с которым смотрят, — и место, где взгляд остаётся. Первичный обход идёт ' +
+      'по весам блоков и задачи не знает: он одинаков при любом вопросе.' }],
+    ['zadacha',  'Вопрос',            'выбор', { iz: Object.keys(ZADACHI).map(function (k) {
+      return [k, ZADACHI[k].ru]; }) }],
+    ['vliyanie', 'Влияние формы',     'сила'],
+    ['', 'Расхождение', 'датчик', { iz: { val: function () { return rashozhdenie(); },
+      y: [0, 14], vysota: 42 } }],
+    ['', 'Доминанта и фокус разошлись на', 'вывод', { opcii: {
+      ot: ['vliyanie', 'akcent'], ed: 'модулей',
+      schitat: function () { return Math.round(rashozhdenie() * 10) / 10; },
+      raschyot: function () { return (mer.dom === mer.fok)
+        ? 'совпали — констелляция'
+        : 'доминанта ' + mer.dom + ' · фокус ' + mer.fok; } } }],
+
+    ['h', 'Доминанта'],
+    ['akcent',   'Акцент держит',     'выбор', { iz: [
+      ['sluzh', 'Служебная строка'], ['daty', 'Даты'], ['titul', 'Титул'],
+      ['lid', 'Лид'], ['plash', 'Плашка'], ['avtor', 'Автор'], ['cena', 'Цена'] ] }],
+    ['akcKegl',  'Кегль акцента',     'доля', { ot: 'кегль', ot0: 40, do: 400, shag: 5 }],
+    ['kontrast', 'Контраст акцента',  'сила'],
+    ['izol',     'Воздух вокруг',     'доля', { ot: 'кегль', ot0: 0, do: 200, shag: 2 }],
+    ['glubina',  'Отрыв от плоскости','сила'],
+
+    ['g', 'Из чего складывается вес', { zakryt: true }],
+    ['', 'Модель доминанты', 'заметка', { tekst:
+      'Вес блока сложен из трёх вкладов. Модель открыта нарочно: доминанта ' +
+      'должна считаться на глазах, а не сидеть в коэффициенте.' }],
+    ['vklRazmer',   'Вклад размера',   'сила'],
+    ['vklKontrast', 'Вклад контраста', 'сила'],
+    ['vklIzol',     'Вклад воздуха',   'сила'],
+
+    ['h', 'Обход'],
+    ['obhod',     'Первичный обход',  'время'],
+    ['obhodEase', 'Кривая обхода',    'кривая'],
+    ['zaderzhka', 'Задержка на точке','порог времени'],
+    ['posadka',   'Посадка на фокус', 'время'],
+    ['posadkaEase','Кривая посадки',  'кривая'],
+    ['tyaga',     'Тяга фокуса',      'сила'],
+    ['lenost',    'Инерция взгляда',  'инерция'],
+
+    ['h', 'Два пространства'],
+    ['', 'Гипотеза', 'заметка', { tekst:
+      'Одно пространство — одна точка покоя. Включите второе: плашка ' +
+      'отрывается от общей плоскости и заводит свою. Держать обе ' +
+      'одновременно нельзя — взгляд начинает мерцать. Затемнение гасит ' +
+      'первую плоскость: на 70 % и выше мерцание прекращается, точка покоя ' +
+      'снова одна. Тот же приём, что подложка под модальным окном.' }],
+    ['vtoroe',     'Второе пространство', 'двоичное', { iz: ['Оторвать плашку', 'Держать в одной плоскости'] }],
+    ['vtoroeGlub', 'Глубина второго',     'сила', { pri: 'vtoroe' }],
+    ['zaten',      'Затемнение первого',  'сила', { pri: 'vtoroe' }],
+    ['mercanie',   'Период мерцания',     'время', { pri: 'vtoroe' }],
+    ['mercEase',   'Кривая мерцания',     'кривая', { pri: 'vtoroe' }],
+
+    ['h', 'Набор'],
+    ['band',       'Ширина полосы',   'доля', { ot: 'экран', ot0: 24, do: 100, shag: 1 }],
+    ['bandPotolok','Потолок полосы',  'порог'],
+    ['porog',      'Порог тесноты',   'порог'],
+    ['modul',      'Модуль',          'доля', { ot: 'колонка', ot0: 1.5, do: 16, shag: 0.1, pole: true }],
+    ['modulTesno', 'Модуль в тесноте','доля', { ot: 'колонка', ot0: 1.5, do: 16, shag: 0.1, pole: true }],
+    ['shov',       'Шов колонок',     'доля', { ot: 'кегль', ot0: 0, do: 240, shag: 5 }],
+    ['stroka',     'Шов строк',       'доля', { ot: 'кегль', ot0: 0, do: 300, shag: 5 }],
+    ['lead',       'Интерлиньяж',     'доля', { ot: 'кегль', ot0: 0.8, do: 2.4, shag: 0.01 }],
+    ['leadTitul',  'Интерлиньяж титула','доля', { ot: 'кегль', ot0: 0.7, do: 2, shag: 0.01 }],
+    ['garnTitul',  'Гарнитура титула','гарнитура'],
+    ['garnSluzh',  'Гарнитура служебного','гарнитура'],
+    ['tolschTitul','Насыщенность титула','толщина'],
+    ['plashProp',  'Пропорция плашки',   'доля', { ot: 'высота', kak: '\u00d7', ot0: 0.3, do: 2.6, shag: 0.01 }],
+    ['vysota',     'Потолок по высоте',  'доля', { ot: 'высота', ot0: 40, do: 100, shag: 1 }],
+
+    ['h', 'Что видно'],
+    ['pole',   'Поле доминанты', 'двоичное', { iz: ['Показать поле', 'Скрыть поле'] }],
+    ['sled',   'След обхода',    'двоичное', { iz: ['Показать след', 'Скрыть след'] }],
+    ['metki',  'Метки',          'двоичное', { iz: ['Показать метки', 'Скрыть метки'] }],
+
+    ['h', 'Цвет'],
+    ['palitra','Палитра', 'пресет', { iz: [
+      ['bw',    'Чёрное на белом', { bg: '#ffffff', ink: '#111111', akcInk: '#d5320f', plashInk: '#111111', metkiInk: '#d5320f' }],
+      ['night', 'Ночь',            { bg: '#101014', ink: '#f0f0f2', akcInk: '#ff5a2b', plashInk: '#f0f0f2', metkiInk: '#ff5a2b' }],
+      ['blue',  'Синий на светлом',{ bg: '#e7ecf6', ink: '#1b2db3', akcInk: '#d5320f', plashInk: '#1b2db3', metkiInk: '#d5320f' }],
+      ['own',   'Свои цвета', {}] ] }],
+    ['bg',       'Фон',            'цвет'],
+    ['ink',      'Текст',          'цвет'],
+    ['akcInk',   'Цвет акцента',   'цвет'],
+    ['plashInk', 'Цвет плашки',    'цвет'],
+    ['metkiInk', 'Цвет разметки',  'цвет'],
+  ],
+  desc: {
+    zadacha: 'С каким вопросом человек смотрит. Раскладка при смене вопроса не меняется ни на пиксель — меняется только место, где взгляд остаётся.',
+    vliyanie: 'Насколько форма спорит с задачей за фокус. 0 — задача берёт своё целиком, взгляд садится туда, где ответ. 100 — доминанта перебивает задачу, и фокус уезжает на самый заметный блок, даже если ответа там нет.',
+    akcent: 'Какой блок держит акцент. Ручки ниже действуют на него одного — так доминанту можно увести с того блока, где лежит ответ на вопрос, и посмотреть, что из этого выйдет.',
+    akcKegl: 'Кегль акцентного блока в долях его собственного кегля. 100 — как у всех.',
+    kontrast: 'Насколько цвет акцента уходит от общего цвета текста к цвету акцента. 0 — акцент не выделен цветом вовсе.',
+    izol: 'Воздух вокруг акцента в долях модуля. Изоляция часто делает блок заметнее, чем кегль: проверяется ручкой «вклад воздуха».',
+    glubina: 'Отрыв акцента от общей плоскости. Даёт вес, но заодно заводит второе пространство — ровно ошибка, на которую жаловался Гильдебранд.',
+    vklRazmer: 'Насколько площадь чернил тянет вес блока вверх.',
+    vklKontrast: 'Насколько контраст с фоном тянет вес блока вверх. Обычно сильнее размера: мелкое яркое бьёт крупное серое.',
+    vklIzol: 'Насколько воздух вокруг блока тянет его вес вверх. Поставьте в ноль — доминанта уедет на самый крупный блок; поднимите — победит самый одинокий.',
+    obhod: 'Сколько длится первичный обход. Он идёт по весам и одинаков при любой задаче — в этом весь стенд.',
+    obhodEase: 'Как взгляд идёт между точками первичного обхода.',
+    zaderzhka: 'Сколько взгляд стоит на каждой точке обхода, прежде чем уйти дальше.',
+    posadka: 'Сколько длится уход с последней точки обхода на фокус.',
+    posadkaEase: 'Как взгляд садится. «Торможение» — подъезжает и замирает.',
+    lenost: 'Насколько лениво взгляд догоняет цель. 0 — встаёт мгновенно.',
+    vtoroe: 'Плашка отрывается от общей плоскости и получает собственную мерку глубины. С этого момента точек покоя две.',
+    vtoroeGlub: 'Насколько сильно второе пространство отделено от первого.',
+    zaten: 'Гасит первую плоскость. На 70 % и выше она перестаёт быть пространством и становится фактурой — мерцание прекращается, точка покоя снова одна.',
+    mercanie: 'За сколько взгляд успевает сходить от одной точки покоя к другой и обратно.',
+    band: 'Ширина полосы в долях экрана. Снизу её держит минимум набора, сверху — потолок. На узком экране связывает доля и полоса берёт почти всю ширину; на широком связывает потолок и полоса становится колонкой посреди поля.',
+    bandPotolok: 'Потолок полосы в пикселях: дальше она не растёт, растут поля. Число здесь — решение глаза, принятое заранее, как и всякая граница коридора.',
+    porog: 'Ширина, ниже которой раскладка меняется качественно: шесть колонок становятся двумя, плашка встаёт во всю полосу. Единственный перелом в стенде — остальное держат доли и коридоры.',
+    modulTesno: 'Модуль в тесноте. Колонок две вместо шести, полоса берёт весь экран — доля модуля обязана быть другой, иначе набор проваливается.',
+    modul: 'Модуль набора в долях ширины полосы, зажатый коридором 9…64 px. Из него выведены все кегли, швы и воздух.',
+    shov: 'Расстояние между колонками в долях модуля.',
+    stroka: 'Расстояние между строками раскладки в долях модуля.',
+    garnTitul: 'Гарнитура титула. Список — алфавит свода плюс личный набор из витрины шрифтов.',
+    garnSluzh: 'Гарнитура служебных строк, лида, автора и цены.',
+    plashProp: 'Ширина плашки в долях её высоты. 1 — квадрат, меньше — вертикаль, больше — горизонталь. Площадь плашки идёт прямо в её вес, поэтому пропорция двигает доминанту.',
+    vysota: 'Потолок полосы по высоте экрана. Ведёт ширина, высота только не даёт композиции вылезти за окно: упёрлись в потолок — модуль ужимается.',
+    tyaga: 'Насколько сильно цель тянет взгляд к себе. Вместе с инерцией задаёт ход: сильная тяга и высокая инерция — тяжёлый разгон и тяжёлая остановка.',
+    mercEase: 'Как взгляд ходит от одной точки покоя к другой, когда пространств два.',
+    pole: 'Тепло доминанты: где на экране сгущается формальный вес. Считается из весов блоков, к задаче отношения не имеет.',
+    sled: 'След обхода — путь, который взгляд уже прошёл.',
+    metki: 'Кружок — доминанта, перекрестье — фокус. Когда они на одном блоке, подпись меняется на «констелляция».',
+    palitra: 'Готовые наборы цветов. Любая правка цвета ниже делает палитру своей.',
+    metkiInk: 'Цвет слоя разметки — поля, следа и меток. Он один на все три, чтобы разметка не спорила сама с собой и читалась и на светлом, и на чёрной плашке.',
+  },
+  onChange: function () { razlozhit(); sbrositObhod(); },
+});
+
+/* Стенд про ручки — на первом заходе панель открыта. В стоп-кадре её нет:
+   снимок снимается с раскладки, а не с панели. */
+if (firstVisit && STOP === null) (PANEL.pokazat ? PANEL.pokazat(true) : (PANEL.panel.hidden = false));
+
+/* ── наложение ──────────────────────────────────────────────────────── */
+var cv = document.getElementById('over');
+var ctx = cv.getContext('2d');
+var pcv = document.getElementById('pole');
+var pctx = pcv.getContext('2d');
+var W = 0, H = 0, dpr = 1;
+
+function razmer() {
+  dpr = Math.min(2, window.devicePixelRatio || 1);
+  W = window.innerWidth; H = window.innerHeight;
+  [cv, pcv].forEach(function (c) {
+    c.width = Math.round(W * dpr); c.height = Math.round(H * dpr);
+    c.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
+  });
+}
+
+/* ── ход взгляда ─────────────────────────────────────────────────────
+   Фаза 1 — первичный обход по весам, один и тот же при любой задаче.
+   Фаза 2 — посадка на фокус. Расходятся не пути, а место остановки. */
+var t0 = 0, glaz = { x: 0, y: 0 }, pusk = true;
+function sbrositObhod() { t0 = performance.now(); pusk = true; }
+
+function cel(ms) {
+  var por = mer.poryadok;
+  var shag = P.obhod / Math.max(1, por.length);           // ровная доля обхода на точку
+  var vsego = P.obhod + P.zaderzhka * por.length;
+  if (ms < vsego) {
+    var i = 0, ost = ms;
+    while (i < por.length - 1 && ost > shag + P.zaderzhka) { ost -= shag + P.zaderzhka; i++; }
+    var otkuda = mer.pryam[por[Math.max(0, i - 1)]] || mer.pryam[por[0]];
+    var kuda = mer.pryam[por[i]];
+    var d = Math.max(0, Math.min(1, ost / Math.max(1, shag)));
+    var e = evalEase(P.obhodEase, P.obhodBez, d);
+    return { x: otkuda.x + (kuda.x - otkuda.x) * e, y: otkuda.y + (kuda.y - otkuda.y) * e, faza: 1 };
+  }
+  var poslednyaya = mer.pryam[por[por.length - 1]];
+  var fok = mer.pryam[mer.fok];
+  var d2 = Math.max(0, Math.min(1, (ms - vsego) / Math.max(1, P.posadka)));
+  var e2 = evalEase(P.posadkaEase, P.posadkaBez, d2);
+  var x = poslednyaya.x + (fok.x - poslednyaya.x) * e2;
+  var y = poslednyaya.y + (fok.y - poslednyaya.y) * e2;
+
+  /* Мерцание: две точки покоя в одном месте держать нельзя — взгляд ходит
+     между ними, пока одну из плоскостей не погасили. */
+  if (d2 >= 1 && mer.fokVtoroy && mer.pryam[mer.fokVtoroy]) {
+    var v = mer.pryam[mer.fokVtoroy];
+    var faza = ((ms - vsego - P.posadka) % Math.max(200, P.mercanie)) / Math.max(200, P.mercanie);
+    var k = faza < 0.5 ? evalEase(P.mercEase, P.mercBez, faza * 2)
+                       : 1 - evalEase(P.mercEase, P.mercBez, (faza - 0.5) * 2);
+    var sila = (1 - P.zaten / 100) * (P.vtoroeGlub / 100);
+    x += (v.x - x) * k * sila; y += (v.y - y) * k * sila;
+  }
+  return { x: x, y: y, faza: 2 };
+}
+
+var sledTochki = [];
+function risovat(ms) {
+  ctx.clearRect(0, 0, W, H);
+  pctx.clearRect(0, 0, W, H);
+  if (!mer.pryam.titul) return;
+
+  /* Поле доминанты: вклад каждого блока — радиальное пятно с амплитудой по
+     весу и разбросом по своей площади. Сумма и есть силовое поле (закон 9). */
+  if (P.pole) {
+    pctx.save();
+    BLOKI.forEach(function (b) {
+      var r = mer.pryam[b], v = mer.ves[b] / mer.vesMax;
+      if (!r || v <= 0.02) return;
+      var rad = Math.max(mer.mod * 1.4, Math.min(mer.mod * 9, Math.hypot(r.w, r.h) * 0.55));
+      var g = pctx.createRadialGradient(r.x, r.y, 0, r.x, r.y, rad);
+      var a = 0.34 * Math.pow(v, 2.2);
+      var c = vRGB(P.metkiInk).join(',');
+      g.addColorStop(0, 'rgba(' + c + ',' + a.toFixed(3) + ')');
+      g.addColorStop(0.55, 'rgba(' + c + ',' + (a * 0.28).toFixed(3) + ')');
+      g.addColorStop(1, 'rgba(' + c + ',0)');
+      pctx.fillStyle = g;
+      pctx.fillRect(r.x - rad, r.y - rad, rad * 2, rad * 2);
+    });
+    pctx.restore();
+  }
+
+  var c = cel(ms);
+  var tyaga = Math.max(0.02, Math.min(1, P.tyaga / 100 * (1 - P.lenost / 100)));
+  glaz.x += (c.x - glaz.x) * tyaga;
+  glaz.y += (c.y - glaz.y) * tyaga;
+
+  if (P.sled) {
+    sledTochki.push([glaz.x, glaz.y]);
+    if (sledTochki.length > 220) sledTochki.shift();
+    ctx.save();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = P.metkiInk;
+    ctx.globalAlpha = 0.55;
+    ctx.beginPath();
+    sledTochki.forEach(function (p, i) { i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); });
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /* Сам взгляд — точка с ореолом в кегль модуля. */
+  ctx.save();
+  ctx.beginPath(); ctx.arc(glaz.x, glaz.y, mer.mod * 0.9, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(' + vRGB(P.metkiInk).join(',') + ',0.20)'; ctx.fill();
+  ctx.beginPath(); ctx.arc(glaz.x, glaz.y, mer.mod * 0.16, 0, Math.PI * 2);
+  ctx.fillStyle = P.metkiInk; ctx.fill();
+  ctx.restore();
+
+  if (P.metki) {
+    var d = mer.pryam[mer.dom], f = mer.pryam[mer.fok];
+    var shrift = Math.max(10, mer.mod * 0.42);
+    ctx.save();
+    ctx.font = shrift.toFixed(1) + 'px "Even Mono", ui-monospace, monospace';
+    ctx.strokeStyle = P.metkiInk; ctx.fillStyle = P.metkiInk; ctx.lineWidth = 1;
+
+    /* Сторона подписи выбирается по месту на экране: у правого края метка
+       уходила за кадр. */
+    function podpis(tekst, x, y, dy) {
+      var sh = ctx.measureText(tekst).width;
+      var sprava = (x + mer.mod * 1.6 + sh) < W - mer.mod * 2.5;
+      ctx.textAlign = sprava ? 'left' : 'right';
+      ctx.fillText(tekst, x + (sprava ? mer.mod * 1.6 : -mer.mod * 1.6), y + dy);
+    }
+    if (mer.dom === mer.fok) {
+      ctx.beginPath(); ctx.arc(d.x, d.y, mer.mod * 1.5, 0, Math.PI * 2); ctx.stroke();
+      podpis('КОНСТЕЛЛЯЦИЯ', d.x, d.y, -mer.mod * 1.2);
+    } else {
+      ctx.globalAlpha = 0.75;
+      ctx.beginPath(); ctx.arc(d.x, d.y, mer.mod * 1.3, 0, Math.PI * 2); ctx.stroke();
+      podpis('ДОМИНАНТА', d.x, d.y, -mer.mod * 1.0);
+      ctx.globalAlpha = 1;
+      ctx.beginPath();
+      ctx.moveTo(f.x - mer.mod, f.y); ctx.lineTo(f.x + mer.mod, f.y);
+      ctx.moveTo(f.x, f.y - mer.mod); ctx.lineTo(f.x, f.y + mer.mod);
+      ctx.stroke();
+      podpis('ФОКУС', f.x, f.y, mer.mod * 1.4);
+    }
+    ctx.restore();
+  }
+}
+
+/* ── цикл и стоп-кадр ───────────────────────────────────────────────── */
+function kadr(now) {
+  risovat(now - t0);
+  requestAnimationFrame(kadr);
+}
+
+function start() {
+  razmer(); razlozhit(); sbrositObhod();
+  glaz.x = mer.pryam[mer.poryadok[0]].x;
+  glaz.y = mer.pryam[mer.poryadok[0]].y;
+  if (STOP !== null) {
+    /* Стоп-кадр: состояние на названной миллисекунде, цикл не запускается.
+       Взгляд ставится сразу в цель — инерции в снимке быть не может. */
+    var c = cel(STOP); glaz.x = c.x; glaz.y = c.y;
+    sledTochki = [];
+    for (var i = 0; i <= 60; i++) { var p = cel(STOP * i / 60); sledTochki.push([p.x, p.y]); }
+    risovat(STOP);
+  } else {
+    requestAnimationFrame(kadr);
+  }
+}
+
+window.addEventListener('resize', function () {
+  razmer(); razlozhit();
+  if (STOP !== null) risovat(STOP);
+});
+
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(start);
+else window.addEventListener('load', start);
+</script>
+</body>
+</html>
