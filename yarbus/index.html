@@ -485,7 +485,17 @@ adres.forEach(function (zn, klyuch) {
 var firstVisit = false;
 try { firstVisit = !localStorage.getItem('yarbus-params'); } catch (e) {}
 
-var PANEL = StendPanel.build({
+/* ПОРЯДОК: раскладка ставится ДО панели и ДО шрифтов.
+   Панель — слой управления, а не условие показа. Пока стенд ждал её и
+   document.fonts.ready, любая осечка в органе оставляла на экране голый
+   текст без единого выведенного размера: переменные раскладки просто не
+   успевали встать. Поймано 21.09 на боевом адресе — в headless и на
+   локалке всё шло, у Сергея в браузере стенд был пуст. */
+razlozhit();
+
+var PANEL = null;
+try {
+PANEL = StendPanel.build({
   storageKey: 'yarbus-params',
   params: P, defaults: DEFAULTS,
   eases: EASES, evalEase: evalEase, bezApprox: BEZ_APPROX,
@@ -621,10 +631,17 @@ var PANEL = StendPanel.build({
   },
   onChange: function () { razlozhit(); sbrositObhod(); },
 });
+} catch (e) {
+  /* Стенд живёт и без панели: раскладка уже стоит, ход пойдёт на умолчаниях.
+     Ручки чинятся адресом ?reset=1. */
+  console.error('панель не собралась:', e);
+}
 
 /* Стенд про ручки — на первом заходе панель открыта. В стоп-кадре её нет:
    снимок снимается с раскладки, а не с панели. */
-if (firstVisit && STOP === null) (PANEL.pokazat ? PANEL.pokazat(true) : (PANEL.panel.hidden = false));
+if (PANEL && firstVisit && STOP === null) {
+  try { PANEL.pokazat ? PANEL.pokazat(true) : (PANEL.panel.hidden = false); } catch (e) {}
+}
 
 /* ── наложение ──────────────────────────────────────────────────────── */
 var cv = document.getElementById('over');
@@ -772,10 +789,13 @@ function kadr(now) {
   requestAnimationFrame(kadr);
 }
 
+var zapushchen = false;
 function start() {
+  if (zapushchen) return;
+  zapushchen = true;
   razmer(); razlozhit(); sbrositObhod();
-  glaz.x = mer.pryam[mer.poryadok[0]].x;
-  glaz.y = mer.pryam[mer.poryadok[0]].y;
+  var nachalo = mer.pryam[mer.poryadok[0]];
+  if (nachalo) { glaz.x = nachalo.x; glaz.y = nachalo.y; }
   if (STOP !== null) {
     /* Стоп-кадр: состояние на названной миллисекунде, цикл не запускается.
        Взгляд ставится сразу в цель — инерции в снимке быть не может. */
@@ -793,8 +813,19 @@ window.addEventListener('resize', function () {
   if (STOP !== null) risovat(STOP);
 });
 
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(start);
-else window.addEventListener('load', start);
+/* Шрифты меняют метрики, поэтому старт их ждёт — но не бесконечно. Три
+   входа, какой сработает первым: готовность шрифтов, загрузка страницы и
+   отсечка. Стенд обязан пойти в любом случае. */
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(start, start);
+  /* Шрифт доехал позже старта — метрики другие, нужен повторный замер. */
+  document.fonts.ready.then(function () {
+    razlozhit();
+    if (STOP !== null) risovat(STOP);
+  }, function () {});
+}
+window.addEventListener('load', start);
+setTimeout(start, 1200);
 </script>
 </body>
 </html>
