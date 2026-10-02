@@ -51,6 +51,7 @@
   <g id="k-albom"><text id="albom" text-anchor="middle"><textPath href="#os-albom" startOffset="50%"></textPath></text></g>
 </svg>
 
+<script>window.STEND_PANEL_VSEGDA = true; /* панель и на витрине: над стендом работают на опубликованном адресе (слово Сергея 02.10) */</script>
 <script src="/panel.js"></script>
 <script src="/panel-lib/obyavlenie.js"></script>
 <script src="/panel-lib/ugol.js"></script>
@@ -197,6 +198,7 @@ var DEFAULTS = {
   vsplesk: 25,          // всплеск: после спада дельта снова поднялась до такой доли ПИКА жеста — рука тронула трекпад заново
   vspleskPodryad: 3,    // и поднималась столько событий подряд: рука разгоняется, шум скачет одиночно
   zanyatoMs: 320,       // после шага колесо занято столько мс: не считается и не копится
+  dolgayaPauza: 600,    // тишина дольше этой, мс, — новый жест без условий; 0 — выключено, как в галерее
   setka: false, setkaCvet: '#e5352b',   // сетка колец: границы полос и базовые линии
   palette: 'white', bg: '#ffffff', ink: '#111111', dim: '#c9c9c9'
 };
@@ -493,6 +495,7 @@ var PANEL = StendPanel.build({
     ['vsplesk', 'Всплеск — новый жест', 'сила'],
     ['vspleskPodryad', 'Растёт событий подряд', 'счёт', { ot0: 1, do: 8 }],
     ['zanyatoMs', 'Занято после шага', 'порог времени', { do: 2000 }],
+    ['dolgayaPauza', 'Долгая пауза — новый жест', 'порог времени', { do: 3000 }],
     /* Звук — как в галерее M7: тон плюс короткий шум контакта. Браузер разрешает
        звук только после первого нажатия или клавиши — до них щелчков нет. */
     ['h', 'Звук', { zakryt: true, glaz: 'zvuk' }],
@@ -567,7 +570,8 @@ var PANEL = StendPanel.build({
     zhestPauza: 'Отсечка: разрыв длиннее неё открывает новый жест — но только если дельта после разрыва выросла. Провал от подтормозившего кадра, за которым хвост продолжает затухать, жестом не считается.',
     vsplesk: 'Новое касание поверх хвоста инерции: дельта должна подняться до такой доли пика прежнего жеста. 0 — засчитать любой подъём после спада, 100 — только повтор прежней силы.',
     vspleskPodryad: 'Сколько событий подряд дельта должна расти, чтобы подъём считался рукой, а не дрожью хвоста.',
-    zanyatoMs: 'Сколько после шага колесо не считается и не копится — иначе после шага выстрелило бы накопленным.'
+    zanyatoMs: 'Сколько после шага колесо не считается и не копится — иначе после шага выстрелило бы накопленным.',
+    dolgayaPauza: 'После тишины дольше этой любое событие открывает новый жест и обнуляет пик прежнего. Без неё мягкий жест после сильного флика не узнавался: первое событие после паузы не больше последнего перед ней, а до четверти прежнего пика мягкий жест не дорастает. 0 — выключено, чистая механика галереи.'
   },
   onChange: function () { peresobrat(); }
 });
@@ -1021,13 +1025,20 @@ window.addEventListener('wheel', function (e) {
              kol.rostPodryad >= Math.max(1, P.vspleskPodryad);
   // разрыв сам по себе не жест: рука после паузы начинает с роста
   var rastet = mysh || !kol.zhestSdelan || ad > kol.delPosled;
-  var novyy = P.zhestPauza <= 0 || (razryv > P.zhestPauza && rastet) || kasanie || vspl;
+  /* ДОЛГАЯ ПАУЗА (добавка к механике галереи, 02.10). Отсечка требует роста после
+     разрыва, чтобы подтормозивший кадр не сошёл за руку. Но хвост кончается
+     единицами, и новое касание начинается с единицы: «не выросло» — и жест
+     оставался «сделанным» сколько угодно, если мягкий жест не дорастал до доли
+     пика прежнего сильного. Провалы кадра — сотни миллисекунд; тишина дольше
+     долгой паузы — это уже точно рука ушла и вернулась. */
+  var dolgo = P.dolgayaPauza > 0 && razryv > P.dolgayaPauza;
+  var novyy = P.zhestPauza <= 0 || (razryv > P.zhestPauza && rastet) || dolgo || kasanie || vspl;
   kol.delPosled = ad;
   // пик жеста всплеском не понижается: настоящее касание его обнуляет, всплеск — нет
   if (novyy) { kol.zhest = 0; kol.zhestSdelan = false; kol.delMax = vspl ? Math.max(kol.delMax, ad) : ad; kol.delMinPosle = ad; }
   else if (ad > kol.delMax) { kol.delMax = ad; kol.delMinPosle = ad; }                           // новый пик — дно отсчитывается заново
   else kol.delMinPosle = Math.min(kol.delMinPosle, ad);
-  var pochemu = novyy ? (kasanie ? 'жест:касание' : vspl ? 'жест:всплеск' : razryv > P.zhestPauza ? 'жест:разрыв ' + Math.round(razryv) : 'жест:отсечка0') : 'тот же';
+  var pochemu = novyy ? (kasanie ? 'жест:касание' : vspl ? 'жест:всплеск' : dolgo && !rastet ? 'жест:долгая пауза ' + Math.round(razryv) : razryv > P.zhestPauza ? 'жест:разрыв ' + Math.round(razryv) : 'жест:отсечка0') : 'тот же';
   if (kol.zhestSdelan) { zapisKoleso(e, now, dY, pochemu + ' · шаг был'); return; }
   if (now < kol.zanyatoDo) { zapisKoleso(e, now, dY, pochemu + ' · занято'); return; }
   kol.zhest += dY;
