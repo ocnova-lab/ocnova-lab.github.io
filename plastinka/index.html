@@ -132,7 +132,7 @@ function avtoryTekst(spisok) {
 }
 
 var DEFAULTS = {
-  v: 7,                // без ручки — застава раскладки: 7 — колесо без замков; 6 — синяя цветовая схема; 5 — линии плюсика 1 px; 4 — в центре плюсик вдвое меньше; 3 — группа набрана ABC Gravity Wide по макету; 2 — выровнены отбивки колец (02.10)
+  v: 8,                // без ручки — застава раскладки: 8 — импульс по живой записи трекпада, подача выключена; 7 — колесо без замков; 6 — синяя цветовая схема; 5 — линии плюсика 1 px; 4 — плюсик вдвое меньше; 3 — группа ABC Gravity по макету; 2 — выровнены отбивки колец
   storona: 'A',        // без ручки: переворот пластинки — отдельный переход, следующий заход
   diam: 90,            // диаметр круга, % высоты окна
   diamW: 92,           // предел диаметра, % ширины окна
@@ -186,16 +186,16 @@ var DEFAULTS = {
      из каталога) целиком, вместе со значениями: один жест — один трек.
      Прежние «порог», «разрыв» и «новый взмах» ушли вместе со старой механикой
      по слову Сергея 02.10: она давала проскоки. */
-  koleso: 'put',        // устройство колеса: 'put' — путь (без запираний), 'impuls' — один жест, один трек
+  koleso: 'impuls',     // устройство колеса: 'impuls' — один взмах, один трек; 'put' — расстояние, каждые N px один трек
   peredacha: 1500,      // «Путь»: сколько px скролла на один трек; взмах трекпада вместе с инерцией — от тысячи px
-  kachok: 35,           // «Путь»: насколько диск подаётся под рукой до щелчка, % пути к соседнему треку
+  kachok: 0,            // «Путь»: насколько диск подаётся под рукой до щелчка, % пути к соседнему треку; 0 — стоит до щелчка
   putPauza: 150,        // «Путь»: тишина, после которой недокрученное возвращается, мс
   porogZhesta: 30,      // сколько скролла в px нужно на шаг; события во время занятости не копятся
   zhestPauza: 180,      // отсечка инерции: после шага события считаются тем же жестом, пока разрыв короче, мс; 0 — выключена
-  vsplesk: 25,          // всплеск: после спада дельта снова поднялась до такой доли ПИКА жеста — рука тронула трекпад заново
-  vspleskPodryad: 3,    // и поднималась столько событий подряд: рука разгоняется, шум скачет одиночно
-  zanyatoMs: 0,         // (было 320; 0 — выключено) после шага колесо занято столько мс: не считается и не копится
-  dolgayaPauza: 600,    // тишина дольше этой, мс, — новый жест без условий; 0 — выключено, как в галерее
+  rostX: 1.6,           // новый взмах поверх хвоста: скорость выросла во столько раз от дна хвоста
+  vspleskPodryad: 3,    // и держится выше столько событий подряд: рука разгоняется, слипшееся событие скачет одиночно
+  hvostPodryad: 6,      // хвост инерции признан, когда скорость столько событий подряд не растёт
+  // «занято после шага», «всплеск от пика» и «долгая пауза» сняты 03.10 вместе с прежними условиями: см. обработчик колеса
   setka: false, setkaCvet: '#e5352b',   // сетка колец: границы полос и базовые линии
   palette: 'white', bg: '#ffffff', ink: '#111111', dim: '#c9c9c9'
 };
@@ -321,6 +321,15 @@ function rost(g) {
 (function () {
   if ((SOHR.v || 1) >= 5 || !Object.keys(SOHR).length) return;
   P.krestLiniya = 1;
+  try { localStorage.setItem('plastinka-params', JSON.stringify(P)); } catch (e) {}
+})();
+
+/* КОЛЕСО, ИМПУЛЬС ПО ЖИВОЙ ЗАПИСИ (03.10, один раз на сохранённое): устройство возвращается
+   к импульсу, подача диска под рукой выключается — она тянула кольцо номеров вслед
+   за хвостом инерции и разрывала пружину на два движения. */
+(function () {
+  if ((SOHR.v || 1) >= 8 || !Object.keys(SOHR).length) return;
+  P.koleso = 'impuls'; P.kachok = 0;
   try { localStorage.setItem('plastinka-params', JSON.stringify(P)); } catch (e) {}
 })();
 
@@ -507,17 +516,16 @@ var PANEL = StendPanel.build({
     ['pereborTick', 'Перещёлк знака', 'время', { ot0: 20, do: 300 }],
     ['pereborVse', 'Совпавшие знаки', 'двоичное', { iz: ['Перебирать и совпавшие', 'Оставлять на месте'] }],
     ['g', 'Колесо'],
-    ['koleso', 'Устройство', 'выбор', { iz: [['put', 'Путь'], ['impuls', 'Импульс']] }],
+    ['koleso', 'Устройство', 'выбор', { iz: [['impuls', 'Импульс'], ['put', 'Путь']] }],
     ['peredacha', 'Путь на трек', 'путь', { ot0: 20, do: 3000 }],
     ['kachok', 'Подача под рукой', 'сила', { shag: 1 }],
     ['putPauza', 'Пауза до возврата', 'порог времени', { do: 1000 }],
     ['g', 'Колесо: импульс'],
     ['porogZhesta', 'Порог жеста', 'путь', { ot0: 0, do: 400 }],
-    ['zhestPauza', 'Отсечка инерции', 'порог времени', { do: 1500 }],
-    ['vsplesk', 'Всплеск — новый жест', 'сила'],
+    ['zhestPauza', 'Тишина — новый взмах', 'порог времени', { do: 1500 }],
+    ['rostX', 'Новый взмах: рост', 'сила', { ot0: 1.1, do: 4, shag: 0.05, edinica: '×' }],
     ['vspleskPodryad', 'Растёт событий подряд', 'счёт', { ot0: 1, do: 8 }],
-    ['zanyatoMs', 'Занято после шага', 'порог времени', { do: 2000 }],
-    ['dolgayaPauza', 'Долгая пауза — новый жест', 'порог времени', { do: 3000 }],
+    ['hvostPodryad', 'Хвост: ровных событий подряд', 'счёт', { ot0: 2, do: 12 }],
     /* Звук — как в галерее M7: тон плюс короткий шум контакта. Браузер разрешает
        звук только после первого нажатия или клавиши — до них щелчков нет. */
     ['h', 'Звук', { zakryt: true, glaz: 'zvuk' }],
@@ -590,16 +598,15 @@ var PANEL = StendPanel.build({
     dlinaPara: 'Сколько живёт каждая составляющая. Дольше 60 мс щелчок перестаёт быть щелчком и начинает слышаться тоном.',
     glushenie: 'Как часто щелчки могут идти подряд: чаще этого промежутка звук молчит.',
     zvukEase: 'Форма затухания щелчка.',
-    koleso: 'Путь — колесо отмеряет расстояние: каждые столько-то пикселей один трек. Ничего не запирается и не угадывается, каждое событие двигает диск; сильный взмах проезжает несколько треков. Импульс — один жест, один трек: инерция трекпада отсекается, новый взмах угадывается по росту.',
+    koleso: 'Импульс — один взмах, один трек: инерция трекпада узнаётся по ровному затуханию, новый взмах — по разгону поверх неё. Путь — колесо отмеряет расстояние, каждые столько-то пикселей один трек; сильный взмах проезжает несколько.',
     peredacha: 'Сколько пикселей скролла (вместе с инерцией) уходит на один трек. Взмах трекпада с инерцией даёт от тысячи пикселей, сильный — три тысячи. Меньше — отзывчивее, но сильный взмах проедет больше треков; больше — слабый взмах только качнёт диск.',
     kachok: 'Диск подаётся под рукой ещё до щелчка — видно, что ввод принят. 0 — стоит до щелчка, 100 — едет вровень с рукой.',
     putPauza: 'Если до щелчка не докрутил и рука ушла, диск возвращается на место через эту паузу.',
     porogZhesta: 'Импульс: сколько скролла нужно на шаг. Один жест — один трек.',
-    zhestPauza: 'Отсечка: разрыв длиннее неё открывает новый жест — но только если дельта после разрыва выросла. Провал от подтормозившего кадра, за которым хвост продолжает затухать, жестом не считается.',
-    vsplesk: 'Новое касание поверх хвоста инерции: дельта должна подняться до такой доли пика прежнего жеста. 0 — засчитать любой подъём после спада, 100 — только повтор прежней силы.',
-    vspleskPodryad: 'Сколько событий подряд дельта должна расти, чтобы подъём считался рукой, а не дрожью хвоста.',
-    zanyatoMs: 'Сколько после шага колесо не считается и не копится — иначе после шага выстрелило бы накопленным.',
-    dolgayaPauza: 'После тишины дольше этой любое событие открывает новый жест и обнуляет пик прежнего. Без неё мягкий жест после сильного флика не узнавался: первое событие после паузы не больше последнего перед ней, а до четверти прежнего пика мягкий жест не дорастает. 0 — выключено, чистая механика галереи.'
+    zhestPauza: 'Колесо молчало дольше этого — следующее событие начинает новый взмах.',
+    rostX: 'После шага инерция только затухает. Новый взмах — когда скорость поднялась во столько раз от самого низкого места хвоста и держится. Меньше — отзывчивее, больше — надёжнее против случайных всплесков.',
+    vspleskPodryad: 'Сколько событий подряд скорость должна держаться выше, чтобы это была рука. Одиночный скачок — слипшиеся события, его не считаем.',
+    hvostPodryad: 'Пока палец на трекпаде, скорость скачет. Когда она столько событий подряд не растёт — палец отпущен, пошла инерция, и с этого места ждём новый взмах.',
   },
   onChange: function () { peresobrat(); }
 });
@@ -1251,7 +1258,7 @@ function zapisKoleso(e, now, d, reshenie) {
   if (KOLESO_LOG.length > KOLESO_MAX) KOLESO_LOG.shift();
 }
 window.zhurnalKolesa = function () { return KOLESO_LOG; };
-var kol = { skrollT: -1e9, zhest: 0, zhestSdelan: false, rostPodryad: 0, delPosled: 0, momBylo: false, delMax: 0, delMinPosle: 0, zanyatoDo: -1e9 };
+var kol = { t: -1e9, znak: 0, acc: 0, sdelan: false, hvost: false, rovno: 0, rost: 0, zachyot: 0, pred: 0, pol: 0, kadr: 10, mom: false };
 /* УСТРОЙСТВО «ПУТЬ» (02.10). Импульс обязан угадывать, где кончилась инерция и
    началась рука, — а где угадывание, там и промахи: то запрёт, то проскочит.
    «Путь» ничего не угадывает. Колесо отмеряет расстояние: счётчик копит пиксели,
@@ -1280,50 +1287,68 @@ window.addEventListener('wheel', function (e) {
   e.preventDefault();
   var ky = e.deltaMode === 1 ? 100 / 6 : e.deltaMode === 2 ? innerHeight : 1;         // строки и экраны → px // без ручки
   var syroe = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX, dY = syroe * ky;
-  var now = performance.now();
+  var now = e.timeStamp || performance.now();   // время самого события: задержка страницы его не искажает
   if (P.koleso === 'put') {
-    put.acc += dY; put.tPosl = now;
+    put.acc += dY; put.tPosl = performance.now();
     var bylo = aktiv, porog = P.peredacha * 0.6, n = 0;
     while (put.acc >= porog && n++ < N) putShag(1);
     while (put.acc <= -porog && n++ < N) putShag(-1);
     zapisKoleso(e, now, dY, aktiv !== bylo ? 'путь · ШАГ ' + (aktiv + 1) : 'путь · копится ' + Math.round(put.acc));
     return;
   }
-  var razryv = now - kol.skrollT; kol.skrollT = now;
-  var ad = Math.abs(dY);
-  if (e.momentum === true) { kol.momBylo = true; zapisKoleso(e, now, dY, 'инерция'); return; }    // инерция: ни шага, ни жеста, ни разрыва
-  var kasanie = kol.momBylo; kol.momBylo = false;
-  var mysh = e.deltaMode !== 0 || (Math.abs(syroe) >= 100 && Number.isInteger(syroe));           // отметка мыши
-  var pol = Math.max(1, P.porogZhesta) * 0.15;                                                   // пол против шума мелких дельт — доля порога
-  kol.rostPodryad = (ad > kol.delPosled) ? (kol.rostPodryad || 0) + 1 : 0;
-  /* Новое касание поверх хвоста — условия галереи, как есть: хвост упал к полу, потом
-     дельта растёт несколько событий подряд и поднимается до доли пика прежнего жеста.
-     02.10 пробовал ослабить (мерить от дна хвоста, без пола и пика) — проба дала пять
-     шагов на три флика: дрожь хвоста сходит за руку. Эти условия и есть цена
-     «одного трека на жест»: мягкий взмах сразу после сильного, пока хвост не
-     догорел, не узнаётся. Кому это мешает — устройство «Путь». */
-  var vspl = !MOMENTUM_EST && !mysh && kol.zhestSdelan && ad >= pol && kol.delMinPosle <= pol &&
-             ad > kol.delMinPosle && ad >= kol.delMax * (P.vsplesk / 100) &&
-             kol.rostPodryad >= Math.max(1, P.vspleskPodryad);
-  // разрыв сам по себе не жест: рука после паузы начинает с роста, подтормозивший кадр продолжает затухать
-  var rastet = mysh || !kol.zhestSdelan || ad > kol.delPosled;
-  var dolgo = P.dolgayaPauza > 0 && razryv > P.dolgayaPauza;
-  var novyy = P.zhestPauza <= 0 || (razryv > P.zhestPauza && rastet) || dolgo || kasanie || vspl;
-  kol.delPosled = ad;
-  if (novyy) { kol.zhest = 0; kol.zhestSdelan = false; kol.delMax = vspl ? Math.max(kol.delMax, ad) : ad; kol.delMinPosle = ad; }
-  else if (ad > kol.delMax) { kol.delMax = ad; kol.delMinPosle = ad; }                           // новый пик — дно отсчитывается заново
-  else kol.delMinPosle = Math.min(kol.delMinPosle, ad);
-  var pochemu = novyy ? (kasanie ? 'жест:касание' : vspl ? 'жест:всплеск' : dolgo && !rastet ? 'жест:долгая пауза ' + Math.round(razryv) : razryv > P.zhestPauza ? 'жест:разрыв ' + Math.round(razryv) : 'жест:отсечка0') : 'тот же';
-  if (kol.zhestSdelan) { zapisKoleso(e, now, dY, pochemu + ' · шаг был'); return; }
-  if (P.zanyatoMs > 0 && now < kol.zanyatoDo) { zapisKoleso(e, now, dY, pochemu + ' · занято'); return; }
-  kol.zhest += dY;
-  if (Math.abs(kol.zhest) >= Math.max(1, P.porogZhesta)) {
-    var kuda = kol.zhest > 0 ? 1 : -1;
-    perehod(aktiv + kuda);
-    kol.zhest = 0; kol.zhestSdelan = true; kol.zanyatoDo = now + P.zanyatoMs;
-    zapisKoleso(e, now, dY, pochemu + ' · ШАГ ' + (kuda > 0 ? '→' : '←')); return;
+  /* ИМПУЛЬС ПО ЖИВОЙ ЗАПИСИ (03.10). Запись с трекпада Сергея без рывков показала,
+     как поток устроен на самом деле:
+       палец на трекпаде — скорость скачет: 22, 19, 22, 28, 18, 21, 6, 12, 30, 35, 78;
+       палец отпущен — инерция, идеально гладкая: 38, 36, 36, 34, 34, 32, 31, 30 … 1.
+     «Дрожь хвоста», с которой боролась механика галереи, давали длинные кадры: они
+     склеивали события в комки. Кадр теперь короткий, и хвост чистый. Отсюда правила:
+       1. Порог делает шаг. Дальше взмах «сделан», события его не двигают.
+       2. Хвост признан, когда скорость несколько событий подряд не растёт.
+       3. В хвосте новый взмах — это разгон: скорость поднялась в «рост» раз от дна
+          хвоста и держится несколько событий. Одиночный скачок — слипшиеся события.
+          События разгона идут в зачёт порога, поэтому шаг не запаздывает.
+       4. Тишина или смена направления — новый взмах без условий.
+     Скорость — дельта, приведённая к обычному промежутку между событиями: слипшееся
+     событие несёт двойную дельту за двойное время. Время берётся из самого события,
+     а не из момента обработки: тогда задержка страницы его не искажает. */
+  var dt = now - kol.t; kol.t = now;
+  var ad = Math.abs(dY), zn = dY > 0 ? 1 : -1;
+  if (e.momentum === true) { zapisKoleso(e, now, dY, 'инерция'); kol.mom = true; return; }   // браузер пометил инерцию сам
+  var kasanie = kol.mom; kol.mom = false;
+  if (dt >= 4 && dt <= 25) kol.kadr += (dt - kol.kadr) * 0.1;          // обычный промежуток между событиями
+  var v = dt > kol.kadr * 1.5 && dt < 250 ? ad * kol.kadr / dt : ad;      // скорость, приведённая к нему
+  var pochemu = 'тот же';
+  if (dt > P.zhestPauza || zn !== kol.znak || kasanie) {
+    pochemu = kasanie ? 'взмах:касание' : zn !== kol.znak ? 'взмах:разворот' : 'взмах:тишина ' + Math.round(dt);
+    kol.acc = 0; kol.sdelan = false; kol.hvost = false; kol.rovno = 0; kol.rost = 0; kol.zachyot = 0;
+  } else if (kol.sdelan) {
+    if (!kol.hvost) {
+      kol.rovno = v <= kol.pred * 1.06 + 0.6 ? kol.rovno + 1 : 0;
+      if (kol.rovno >= Math.max(2, P.hvostPodryad)) { kol.hvost = true; kol.pol = v; kol.rost = 0; kol.zachyot = 0; pochemu = 'хвост признан'; }
+    } else if (v >= kol.pol * P.rostX + 3) {                               // 3 px — пол против шума мелких дельт // без ручки
+      kol.rost++; kol.zachyot += dY;
+      if (kol.rost >= Math.max(1, P.vspleskPodryad)) {
+        pochemu = 'взмах:разгон';
+        kol.acc = kol.zachyot - dY; kol.sdelan = false; kol.hvost = false; kol.rovno = 0; kol.rost = 0; kol.zachyot = 0;
+      }
+    } else {
+      /* Дно хвоста опускает не один отсчёт, а больший из двух соседних: на подвисшей
+         странице событие приходит с опозданием, его скорость выходит заниженной, и
+         одно такое событие роняло дно — следом обычный комок сходил за разгон
+         (живая запись 02.10: сильный взмах давал второй шаг). В чистом хвосте
+         соседние отсчёты почти равны, и правило ничего не меняет. */
+      kol.rost = 0; kol.zachyot = 0; kol.pol = Math.min(kol.pol, Math.max(v, kol.pred));
+    }
   }
-  zapisKoleso(e, now, dY, pochemu + ' · копится ' + Math.round(kol.zhest));
+  kol.znak = zn; kol.pred = v;
+  if (kol.sdelan) { zapisKoleso(e, now, dY, pochemu + ' · шаг был' + (kol.hvost ? ', дно ' + kol.pol.toFixed(1) : '')); return; }
+  kol.acc += dY;
+  if (Math.abs(kol.acc) >= Math.max(1, P.porogZhesta)) {
+    perehod(aktiv + zn);
+    kol.acc = 0; kol.sdelan = true; kol.hvost = false; kol.rovno = 0; kol.rost = 0; kol.zachyot = 0;
+    zapisKoleso(e, now, dY, pochemu + ' · ШАГ ' + (zn > 0 ? '→' : '←')); return;
+  }
+  zapisKoleso(e, now, dY, pochemu + ' · копится ' + Math.round(kol.acc));
 }, { passive: false });
 /* ЖУРНАЛ КОЛЕСА ПО КЛАВИШЕ K. Как на галерее: проскок или запирание на живом
    трекпаде видны только по записи с него. На локалке журнал уходит Клоду через
@@ -1332,7 +1357,7 @@ window.addEventListener('keydown', function (e) {
   if (e.code !== 'KeyK' || e.metaKey || e.ctrlKey || (e.target.closest && e.target.closest('input, textarea, select'))) return;
   var telo = JSON.stringify({ vid: 'koleso', stend: 'plastinka', ua: navigator.userAgent, momentumEst: MOMENTUM_EST,
     ruchki: { koleso: P.koleso, peredacha: P.peredacha, porogZhesta: P.porogZhesta, zhestPauza: P.zhestPauza,
-              vspleskPodryad: P.vspleskPodryad, vsplesk: P.vsplesk, zanyatoMs: P.zanyatoMs, dolgayaPauza: P.dolgayaPauza },
+              rostX: P.rostX, vspleskPodryad: P.vspleskPodryad, hvostPodryad: P.hvostPodryad },
     polya: ['мс', 'dY', 'инерция', 'deltaMode', 'решение'], sobytiya: KOLESO_LOG.slice() });
   var gotovo = function (kuda) { var t = document.title; document.title = 'журнал колеса: ' + kuda; setTimeout(function () { document.title = t; }, 2000); };
   if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) {
