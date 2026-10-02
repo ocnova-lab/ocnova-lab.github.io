@@ -140,7 +140,7 @@ function avtoryTekst(spisok) {
 }
 
 var DEFAULTS = {
-  v: 5,                // без ручки — застава раскладки: 5 — линии плюсика 1 px; 4 — в центре плюсик вдвое меньше; 3 — группа набрана ABC Gravity Wide по макету; 2 — выровнены отбивки колец (02.10)
+  v: 6,                // без ручки — застава раскладки: 6 — синяя цветовая схема; 5 — линии плюсика 1 px; 4 — в центре плюсик вдвое меньше; 3 — группа набрана ABC Gravity Wide по макету; 2 — выровнены отбивки колец (02.10)
   storona: 'A',        // без ручки: переворот пластинки — отдельный переход, следующий заход
   diam: 90,            // диаметр круга, % высоты окна
   diamW: 92,           // предел диаметра, % ширины окна
@@ -222,6 +222,9 @@ Object.assign(DEFAULTS, {
 });
 /* ПРАВКА УМОЛЧАНИЙ (02.10, вторая выгрузка панели): цвет. Активное — синий, пассивное — его светлый тон. */
 Object.assign(DEFAULTS, { ink: '#2642e1', dim: '#d4d9f9' });
+/* ПРАВКА УМОЛЧАНИЙ (02.10, третья выгрузка панели): цветовая схема — синий фон,
+   светлый набор; активное и пассивное одного цвета, различие держит плотность. */
+Object.assign(DEFAULTS, { palette: 'blue', bg: '#2742e2', ink: '#e0deff', dim: '#e0deff' });
 var P = Object.assign({}, DEFAULTS);
 var SOHR = {};
 try { SOHR = JSON.parse(localStorage.getItem('plastinka-params') || '{}') || {}; Object.assign(P, SOHR); } catch (e) {}
@@ -321,6 +324,14 @@ function rost(g) {
 (function () {
   if ((SOHR.v || 1) >= 5 || !Object.keys(SOHR).length) return;
   P.krestLiniya = 1;
+  try { localStorage.setItem('plastinka-params', JSON.stringify(P)); } catch (e) {}
+})();
+
+/* СИНЯЯ СХЕМА (02.10, один раз на сохранённое): цвет приводится к новой схеме и там,
+   где настройки уже сохранены, — иначе на опубликованном адресе остался бы прежний. */
+(function () {
+  if ((SOHR.v || 1) >= 6 || !Object.keys(SOHR).length) return;
+  P.palette = DEFAULTS.palette; P.bg = DEFAULTS.bg; P.ink = DEFAULTS.ink; P.dim = DEFAULTS.dim;
   try { localStorage.setItem('plastinka-params', JSON.stringify(P)); } catch (e) {}
 })();
 
@@ -509,6 +520,7 @@ var PANEL = StendPanel.build({
     ['zvukEase',  'Кривая затухания',     'кривая'],
     ['h', 'Цвет'],
     ['palette', 'Палитра', 'палитра', { iz: [
+      ['blue', 'Синяя', { bg: '#2742e2', ink: '#e0deff', dim: '#e0deff' }],
       ['white', 'Чёрное на белом', { bg: '#ffffff', ink: '#111111', dim: '#c9c9c9' }],
       ['light', 'Светлая', { bg: '#eeede8', ink: '#16161a', dim: '#bcbab2' }],
       ['night', 'Ночь', { bg: '#101014', ink: '#f0f0f2', dim: '#4a4a54' }]
