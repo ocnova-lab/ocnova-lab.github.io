@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Пластинка</title>
+<link rel="stylesheet" href="/panel.css" />
+<style>
+  @font-face { font-family: "Editorial New"; font-weight: 400; font-style: normal;
+    src: url("/fonts/EditorialNew-Regular.woff") format("woff"); font-display: swap; }
+  @font-face { font-family: "Editorial New"; font-weight: 700; font-style: normal;
+    src: url("/fonts/EditorialNew-Bold.woff") format("woff"); font-display: swap; }
+  @font-face { font-family: "Even Mono"; font-weight: 400; font-style: normal;
+    src: url("/fonts/EvenMono-Regular.woff2") format("woff2"); font-display: swap; }
+  @font-face { font-family: "JetBrains Mono"; font-weight: 400; font-style: normal;
+    src: url("/fonts/JetBrainsMono-Regular.woff2") format("woff2"); font-display: swap; }
+  @font-face { font-family: "JetBrains Mono"; font-weight: 700; font-style: normal;
+    src: url("/fonts/JetBrainsMono-Bold.woff2") format("woff2"); font-display: swap; }
+  /* ABC Gravity — вне алфавита свода, по макету Сергея (02.10). Вариативная: вес один,
+     900; ширина 50…150, наклон −16…0 — правятся осями на кольце. */
+  @font-face { font-family: "ABC Gravity"; font-weight: 100 900; font-stretch: 50% 150%; font-style: normal;
+    src: url("/fonts/gravity-nabor.woff2") format("woff2"),   /* лёгкий набор: латиница, кириллица, цифры */
+         url("/fonts/ABCGravityCyrillicVariable-Trial.ttf") format("truetype"); font-display: swap; }
+  @font-face { font-family: "Pragmatica Next VF"; font-weight: 100 900; font-style: normal;
+    src: url("/fonts/PragmaticaNextVF.woff") format("woff"); font-display: swap; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { overflow: hidden; overscroll-behavior: none; }
+  /* сцена во весь экран: координаты внутри считает стенд от размеров окна */
+  svg#scene { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; display: block;
+    user-select: none; -webkit-user-select: none; }
+  svg#scene .sektor { fill: transparent; cursor: pointer; pointer-events: all; }
+  svg#scene text { pointer-events: none; }
+  svg#scene #setka circle { fill: none; pointer-events: none; }
+  svg#scene #krest { pointer-events: none; }
+</style>
+</head>
+<body>
+<svg id="scene" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <path id="os-vremya" /><path id="os-trek" /><path id="os-gruppa" /><path id="os-dlit" />
+    <path id="os-avtory" /><path id="os-albom" />
+  </defs>
+  <g id="setka"></g>
+  <g id="krest"><line /><line /></g>
+  <g id="sloy-nomera"></g>
+  <g id="k-trek"><text><textPath href="#os-trek"></textPath></text></g>
+  <g id="k-gruppa"><text><textPath href="#os-gruppa"></textPath></text></g>
+  <g id="k-dlit"><text><textPath href="#os-dlit"></textPath></text></g>
+  <g id="k-avtory"><text><textPath href="#os-avtory"></textPath></text></g>
+  <g id="k-albom"><text id="albom" text-anchor="middle"><textPath href="#os-albom" startOffset="50%"></textPath></text></g>
+</svg>
+
+<script src="/panel.js"></script>
+<script src="/panel-lib/obyavlenie.js"></script>
+<script src="/panel-lib/ugol.js"></script>
+<script src="/panel-lib/garnitura.js"></script>
+<script src="/panel-lib/palitra.js"></script>
+<script src="/panel-lib/segment.js"></script>
+<script src="/panel-lib/toggle.js"></script>
+<script src="/panel-lib/pruzhina.js"></script>
+<script src="/panel-lib/para.js"></script>
+<script>
+'use strict';
+/* ─────────────────────────────────────────────────────────────
+   Пластинка — страница альбома как сторона винила.
+   Внешнее кольцо — номера треков стороны, под каждым номером
+   отметка времени, с которой трек начинается на стороне; вглубь
+   от активного номера четыре концентрических строки: название
+   трека, группа, длительность, авторы. Сингл дописывается в кольцо
+   авторов через точку: есть сингл — строка длиннее, нет — в кольце
+   только авторы. Название альбома стоит в кольце группы, на
+   противоположной стороне круга; группа и альбом на смене трека неподвижны.
+
+   Смотрит: на окно (высота задаёт диаметр круга, ширина — предел,
+            дальше которого круг не растёт) и на содержимое
+            (длительность трека задаёт его долю окружности).
+   Реагирует: плавно на окно; на руку — по одному треку за жест.
+   Законы: 3 Доли и Коридор (диаметр = min(доля высоты, доля ширины);
+           у каждого кольца свой диаметр в долях высоты, кегли — доли
+           диаметра круга; упёрся круг в ширину — кольца сжимаются с ним);
+           6 Содержимое (сектор трека = его длительность / длительность
+           стороны; ручка «Пропорция» ведёт от равных секторов к этим);
+           14 Защёлка ◌ — кандидат: колесо меняет трек щелчком, один
+           жест — один трек.
+   Приём: «Вёрстка по осям» — роли одного текста (номер / трек /
+          группа / длительность) разнесены по своим осям; оси здесь —
+          концентрические окружности, сшитые общим лучом номера; выключка
+          строк относительно луча — ручкой, по умолчанию по центру.
+   Гарнитура: Helvetica Bold — по прямому слову задачи, в алфавите
+          свода её нет.
+
+   Смена текста — перебором знаков (приём из каталога и галереи M7). Это
+   второе действие поверх перемещения: у перебора своё время, кривая, пауза
+   до начала и свой веер по кольцам.
+
+   Звук: сухой щелчок на каждой смене трека — синтез из галереи M7.
+   В центре круга — плюсик из двух линий.
+
+   Параметры адреса: ?stop=мс — стоп-кадр перехода с первого трека на
+   ?trek=N (без stop — просто открыть на треке N); ?storona=B;
+   ?reset=1; ?theme=nothing
+   ───────────────────────────────────────────────────────────── */
+
+/* Материал: Nirvana — Nevermind, первое издание на виниле (DGC, 1991).
+   Двенадцать треков, по шесть на сторону; скрытый Endless, Nameless
+   был только на компакт-диске. Трек: название, длительность в секундах,
+   авторы, сингл (дата выхода или пусто). Авторы и даты — по статье
+   «Nevermind» английской Википедии, сверено 2026-10-02. */
+var ALBOM = {
+  gruppa: 'Nirvana',
+  imya: 'Nevermind',
+  storony: {
+    A: [
+      ['Smells Like Teen Spirit', 301, 'Cobain, Grohl, Novoselic', 'Single, September 10, 1991'],
+      ['In Bloom', 254, 'Cobain', 'Single, November 30, 1992'],
+      ['Come as You Are', 219, 'Cobain', 'Single, February 18, 1992'],
+      ['Breed', 183, 'Cobain', ''],
+      ['Lithium', 257, 'Cobain', 'Single, July 13, 1992'],
+      ['Polly', 177, 'Cobain', '']
+    ],
+    B: [
+      ['Territorial Pissings', 142, 'Cobain, Powers', ''],
+      ['Drain You', 223, 'Cobain', ''],
+      ['Lounge Act', 156, 'Cobain', ''],
+      ['Stay Away', 212, 'Cobain', ''],
+      ['On a Plain', 196, 'Cobain', ''],
+      ['Something in the Way', 232, 'Cobain', '']
+    ]
+  }
+};
+
+var DEFAULTS = {
+  v: 5,                // без ручки — застава раскладки: 5 — линии плюсика 1 px; 4 — в центре плюсик вдвое меньше; 3 — группа набрана ABC Gravity Wide по макету; 2 — выровнены отбивки колец (02.10)
+  storona: 'A',        // без ручки: переворот пластинки — отдельный переход, следующий заход
+  diam: 90,            // диаметр круга, % высоты окна
+  diamW: 92,           // предел диаметра, % ширины окна
+  cx: 50, cy: 50,      // центр круга, % ширины и высоты окна
+  nachalo: 0,          // угол, с которого начинается сторона: 0 — верх
+  krestRazmer: 2,      // плюсик в центре круга: длина линии, % диаметра; 0 — его нет
+  krestLiniya: 1,      // толщина линий плюсика, px
+  krestUgol: 0,        // поворот: 0 — плюс, 45 — косой крестик
+  prop: 100,           // 0 — равные секторы, 100 — по длительности
+  garnitura: 'Helvetica',
+  tolshchina: 700,
+  treking: 0,          // доли кегля
+  vykl: 'center',      // выключка строк на кольцах относительно луча номера
+  /* У каждого кольца свой диаметр (внешний край строки, % высоты окна), свой
+     кегль, своя гарнитура ('obshchaya' — как общая) и свой регистр. Диаметр
+     кольца номеров — это «Диаметр» круга. Цепочка «интерлиньяж + отбивки»
+     заменена диаметрами по просьбе 2026-10-02: кольца ставятся независимо. */
+  kNum: 4, gNum: 'obshchaya', trNum: 0,   // tr* — свой трекинг кольца: добавка к общему, доли кегля
+  dVremya: 83.1, kVremya: 1.6, gVremya: 'obshchaya', trVremya: 0, uVremya: 0, plVremya: 20,   // отметка начала трека на дуге
+  dTrek: 75.6, kTrek: 4, gTrek: 'obshchaya', trTrek: 0, regTrek: 'kak', uTrek: 0,
+  dGruppa: 66.6, kGruppa: 4, gGruppa: 'obshchaya', trGruppa: 0, regGruppa: 'kak', uGruppa: 0,
+  wdthGruppa: 150, slntGruppa: 0,   // оси вариативной гарнитуры группы: ширина и наклон
+  gruppaStoit: true,   // название группы на смене трека не едет
+  dDlit: 57.6, kDlit: 4, gDlit: 'obshchaya', trDlit: 0, uDlit: 0, plDlit: 20,   // plDlit — плотность цвета строки: доля чернил поверх фона
+  dAvtory: 49.4, kAvtory: 2.4, gAvtory: 'obshchaya', trAvtory: 0, regAvtory: 'kak', uAvtory: 0, plAvtory: 20,
+  kAlbom: 4, gAlbom: 'obshchaya', trAlbom: -0.025, regAlbom: 'cap', uAlbom: 180, albomChitaetsya: true,   // альбом в кольце группы: напротив её названия, читается внизу круга
+  hod: 'kolca',        // что едет при смене трека: кольца к номеру или диск под иглу
+  vremya: 700, hodEase: 'плавный', hodBez: [0.65, 0, 0.35, 1],
+  volna: 90,           // отставание каждого следующего кольца, мс
+  vrPauza: 20,         // отметки времени трогаются после номеров через столько мс
+  nomPruzhVkl: true,   // номера и отметки времени приходят на место пружиной, с отскоком
+  nomPruzh: [1000, 0.55],   // [период мс, затухание]: меньше затухание — сильнее отскок
+  gashenie: 100,       // насколько гаснет строка, пока меняется текст (когда перебор выключен)
+  perebor: true,       // перебор знаков: строка пересобирается буква за буквой
+  pereborMs: 1800, pereborEase: 'линейный', pereborBez: [0.25, 0.25, 0.75, 0.75],   // своё время и кривая перебора
+  pereborPauza: 0,     // через сколько после смены трека перебор начинается, мс
+  pereborVolna: 180,   // веер перебора: пауза между кольцами, мс
+  pereborFront: 42,    // фронт перебора, % длины строки
+  pereborTick: 70,     // перещёлк знака, мс — период, не движение
+  pereborVse: false,   // перебирать ли знаки, которые в старом и новом тексте совпали
+  // Звук — щелчок на смене трека, значения и синтез перенесены из галереи M7
+  zvuk: true,           // глаз секции: щелчок при смене трека
+  gromkostTon: 4,       // громкость тона, %
+  gromkostShum: 0,      // громкость шума-контакта, %
+  zatuhanie: 2,         // затухание тона, мс
+  dlinaShuma: 7,        // длина шума, мс
+  glushenie: 100,       // глушение на скорости, мс
+  zvukEase: 'торможение', zvukBez: [0.33, 1, 0.68, 1],
+  porog: 40,           // путь колеса до щелчка, px
+  razryv: 160,         // пауза колеса, после которой следующий жест новый, мс
+  tolchok: 1.5,        // во сколько раз шаг должен превысить затухающую инерцию, чтобы считаться новым взмахом
+  setka: false, setkaCvet: '#e5352b',   // сетка колец: границы полос и базовые линии
+  palette: 'white', bg: '#ffffff', ink: '#111111', dim: '#c9c9c9'
+};
+/* ПРИНЯТАЯ РАСКЛАДКА (02.10): настройки Сергея после выравнивания колец. Порядок
+   от края к центру: номера, трек, авторы и сингл, длительность, группа, время
+   начала. Это исходное состояние стенда и то, к чему возвращает сброс панели. */
+Object.assign(DEFAULTS, {
+  prop: 0, garnitura: 'Helvetica Now Display', tolshchina: 600, dVremya: 43.7,
+  gVremya: 'JetBrains Mono', dTrek: 77.8, trTrek: -0.035, dGruppa: 55.9, gGruppa: 'ABC Gravity', trGruppa: -0.07,
+  regGruppa: 'up', dDlit: 63.2, dAvtory: 70.5, kAvtory: 4, gAvtory: 'Helvetica Now Display',
+  trAvtory: -0.035, regAvtory: 'cap', hod: 'disk', volna: 180, porog: 20, razryv: 80
+});
+/* ПРАВКА УМОЛЧАНИЙ (02.10, выгрузка панели): четырнадцать ручек, уведённых Сергеем
+   от прежней основы, стали основой. Название группы вернулось в Helvetica Now
+   Display с прописной; отметки времени вынесены наружу, под номера. */
+Object.assign(DEFAULTS, {
+  diam: 96, cx: 70, treking: 0.025, dVremya: 83.05, kVremya: 1.3,
+  gGruppa: 'Helvetica Now Display', trGruppa: -0.045, regGruppa: 'cap',
+  nomPruzh: [670, 0.71], pereborEase: 'плавный', pereborBez: [0.65, 0, 0.35, 1],
+  pereborVolna: 0, pereborFront: 23, porog: 58
+});
+/* ПРАВКА УМОЛЧАНИЙ (02.10, вторая выгрузка панели): цвет. Активное — синий, пассивное — его светлый тон. */
+Object.assign(DEFAULTS, { ink: '#2642e1', dim: '#d4d9f9' });
+var P = Object.assign({}, DEFAULTS);
+var SOHR = {};
+try { SOHR = JSON.parse(localStorage.getItem('plastinka-params') || '{}') || {}; Object.assign(P, SOHR); } catch (e) {}
+
+/* Рост знака в долях кегля: по нему верх строки ложится на окружность своего
+   кольца. Это метрика шрифта, а не замер раскладки; снимается раз на
+   гарнитуру и насыщенность. */
+var kanva = document.createElement('canvas').getContext('2d');
+var rostKesh = {};
+function imyaGarn(g) { return String(!g || g === 'obshchaya' ? P.garnitura : g).replace(/"/g, ''); }
+function semya(g) { return '"' + imyaGarn(g) + '", Arial, sans-serif'; }
+function rost(g) {
+  var klyuch = imyaGarn(g) + '/' + P.tolshchina;
+  if (!(klyuch in rostKesh)) {
+    kanva.font = P.tolshchina + ' 200px ' + semya(g);
+    var m = kanva.measureText('H0123456789');
+    rostKesh[klyuch] = m.actualBoundingBoxAscent > 0 ? m.actualBoundingBoxAscent / 200 : 0.72;
+  }
+  return rostKesh[klyuch];
+}
+
+/* ПЕРЕНОС СТАРЫХ НАСТРОЕК. До 2026-10-02 кольца стояли цепочкой: полоса =
+   кегль × интерлиньяж, плюс отбивки. Сохранённое в таком виде пересчитывается
+   в диаметры один раз, чтобы настроенная раскладка осталась на месте. */
+(function () {
+  if (!Object.keys(SOHR).length || 'dTrek' in SOHR) return;
+  function g(k, d) { return k in SOHR ? +SOHR[k] : d; }
+  function vProcenty(r) { return Math.max(20, Math.round(2 * r * P.diam * 10) / 10); }   // радиус в долях диаметра круга → % высоты
+  var rz = rost(), rNum = 0.5 - rz * P.kNum / 100, lead = g('lead', 125), niz = 0;
+  var otb = [0, g('otbGruppa', 0), g('otbDlit', 0), g('otbAvtory', 0)];
+  [['dTrek', P.kTrek], ['dGruppa', P.kGruppa], ['dDlit', P.kDlit], ['dAvtory', P.kAvtory]].forEach(function (x, i) {
+    var k = x[1] / 100, h = k * lead / 100, vozduh = (h - rz * k) / 2, verh, baza;
+    if (i === 0) { baza = rNum - k * g('leadNum', 200) / 100; verh = baza + rz * k + vozduh; }
+    else { verh = niz - k * otb[i] / 100; baza = verh - vozduh - rz * k; }
+    niz = verh - h;
+    P[x[0]] = vProcenty(baza + rz * k);
+  });
+  var kV = P.kVremya / 100;
+  P.dVremya = vProcenty(rNum - kV * g('leadVremya', 130) / 100 + rz * kV);
+  try { localStorage.setItem('plastinka-params', JSON.stringify(P)); } catch (e) {}
+})();
+
+/* ВЫРАВНИВАНИЕ КОЛЕЦ (02.10, один раз на сохранённое). Порядок колец берётся
+   как настроен: номера снаружи, внутри группа строк, глубже всех — время
+   начала. Внутри группы зазор между низом строки и верхом следующей делается
+   одинаковым — средним из того, что стояло. Отбивка группы от номеров и от
+   времени начала делается одинаковой — средней из двух. Сумма зазоров при
+   этом та же: номера и время начала остаются на своих местах. */
+(function () {
+  if ((SOHR.v || 1) >= 2 || !Object.keys(SOHR).length) { P.v = DEFAULTS.v; return; }
+  function kv(k) { return k * P.diam / 100; }                 // кегль из % диаметра круга в % высоты окна
+  var bazaNum = P.diam / 2 - rost(P.gNum) * kv(P.kNum);        // низ цифр номеров, радиус в % высоты
+  var krayV = P.dVremya / 2;                                    // верх отметок времени
+  var gr = [['dTrek', P.kTrek, P.gTrek], ['dGruppa', P.kGruppa, P.gGruppa],
+            ['dDlit', P.kDlit, P.gDlit], ['dAvtory', P.kAvtory, P.gAvtory]]
+    .filter(function (x) { return x[1] > 0; })
+    .map(function (x) { return { d: x[0], kray: P[x[0]] / 2, rost: rost(x[2]) * kv(x[1]) }; })
+    .sort(function (a, b) { return b.kray - a.kray; });
+  var posl = gr[gr.length - 1];
+  if (gr.length && krayV < posl.kray && gr[0].kray < bazaNum) {
+    var summa = 0;
+    for (var i = 1; i < gr.length; i++) summa += (gr[i - 1].kray - gr[i - 1].rost) - gr[i].kray;
+    var plotnost = gr.length > 1 ? summa / (gr.length - 1) : 0;
+    var otbivka = ((bazaNum - gr[0].kray) + (posl.kray - posl.rost - krayV)) / 2;
+    var kray = bazaNum - otbivka;
+    gr.forEach(function (x) {
+      P[x.d] = Math.max(20, Math.round(kray * 2 * 100) / 100);
+      kray = kray - x.rost - plotnost;
+    });
+  }
+  P.v = DEFAULTS.v;
+  try { localStorage.setItem('plastinka-params', JSON.stringify(P)); } catch (e) {}
+})();
+
+/* ГРУППА ПО МАКЕТУ (02.10, один раз на сохранённое). Название группы набрано
+   ABC Gravity Wide: ширина 150, наклон 0, трекинг −7 % кегля, прописными. Кегль
+   не меняется. Альбом, стоящий в том же кольце, до этого брал набор у группы —
+   теперь у него свои гарнитура, трекинг и регистр, и они получают прежние
+   значения группы, чтобы альбом остался как был. */
+(function () {
+  if ((SOHR.v || 1) >= 3 || !Object.keys(SOHR).length) return;
+  P.gAlbom = P.gGruppa; P.trAlbom = P.trGruppa; P.regAlbom = P.regGruppa;
+  P.gGruppa = 'ABC Gravity'; P.regGruppa = 'up'; P.wdthGruppa = 150; P.slntGruppa = 0;
+  P.trGruppa = Math.round((-0.07 - P.treking) * 1000) / 1000;   // вместе с общим трекингом — ровно −7 %
+  try { localStorage.setItem('plastinka-params', JSON.stringify(P)); } catch (e) {}
+})();
+
+/* ПЛЮСИК (02.10, один раз на сохранённое): знак в центре — прямой плюс, вдвое меньше прежнего. */
+(function () {
+  if ((SOHR.v || 1) >= 4 || !Object.keys(SOHR).length) return;
+  P.krestUgol = 0;
+  P.krestRazmer = 'krestRazmer' in SOHR ? Math.round(SOHR.krestRazmer * 50) / 100 : DEFAULTS.krestRazmer;
+  try { localStorage.setItem('plastinka-params', JSON.stringify(P)); } catch (e) {}
+})();
+
+/* ЛИНИИ ПЛЮСИКА (02.10, один раз на сохранённое): толщина 1 px. */
+(function () {
+  if ((SOHR.v || 1) >= 5 || !Object.keys(SOHR).length) return;
+  P.krestLiniya = 1;
+  try { localStorage.setItem('plastinka-params', JSON.stringify(P)); } catch (e) {}
+})();
+
+var ADRES = new URLSearchParams(location.search);
+ADRES.forEach(function (v, k) {
+  if (!(k in DEFAULTS)) return;
+  var t = typeof DEFAULTS[k];
+  P[k] = t === 'number' ? +v : t === 'boolean' ? (v === '1' || v === 'true') : v;
+});
+var STOP = ADRES.has('stop') ? +ADRES.get('stop') : null;
+
+var EASES = {
+  'линейный': function (t) { return t; },
+  'разгон': function (t) { return t * t * t; },
+  'торможение': function (t) { return 1 - Math.pow(1 - t, 3); },
+  'плавный': function (t) { return t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; },
+  'квадрат': function (t) { return t * t; }
+};
+var BEZ_APPROX = {
+  'линейный': [0.25, 0.25, 0.75, 0.75],
+  'разгон': [0.32, 0, 0.67, 0],
+  'торможение': [0.33, 1, 0.68, 1],
+  'плавный': [0.65, 0, 0.35, 1],
+  'квадрат': [0.45, 0, 0.75, 0.3]
+};
+function cubicBezierY(b, t) {
+  var x1 = b[0], y1 = b[1], x2 = b[2], y2 = b[3], s = t;
+  for (var i = 0; i < 8; i++) {
+    var x = 3 * (1 - s) * (1 - s) * s * x1 + 3 * (1 - s) * s * s * x2 + s * s * s;
+    var dx = 3 * (1 - s) * (1 - s) * x1 + 6 * (1 - s) * s * (x2 - x1) + 3 * s * s * (1 - x2);
+    if (Math.abs(dx) < 1e-6) break;
+    s -= (x - t) / dx;
+    if (s < 0) s = 0; if (s > 1) s = 1;
+  }
+  return 3 * (1 - s) * (1 - s) * s * y1 + 3 * (1 - s) * s * s * y2 + s * s * s;
+}
+function evalEase(name, bez, t) {
+  if (t <= 0) return 0; if (t >= 1) return 1;
+  if (name === 'bezier') return cubicBezierY(bez, t);
+  return (EASES[name] || EASES['плавный'])(t);
+}
+
+var KEGL = { ot: 'высота', edinica: '% диаметра', ot0: 0, do: 20, shag: 0.1 };   // 0 — кольца нет
+function kegl(dop) { return Object.assign({}, KEGL, dop || {}); }
+// диаметр кольца: от 20 % высоты окна; верх с тем же запасом, что у круга
+var DIAM = { ot: 'высота', ot0: 20, do: 200, shag: 0.05 };
+var GARNITURY = [
+  ['Helvetica', 'системная, по заданию'],
+  ['Helvetica Neue', 'системная'],
+  ['Helvetica Now Display', 'с мака'],
+  ['JetBrains Mono', 'алфавит'],
+  ['Pragmatica Next VF', 'алфавит'],
+  ['Editorial New', 'алфавит'],
+  ['Even Mono', 'алфавит'],
+  ['ABC Gravity', 'вариативная, по макету']
+].concat((StendPanel.garnituraSpisok ? StendPanel.garnituraSpisok() : []).filter(function (g) { return g[1] === 'мой набор'; }));
+// гарнитура кольца: общая или своя; списком — шесть органов с показом шрифта заняли бы всю панель
+var GARN_KOLTSA = { organ: 'select', iz: [['obshchaya', 'Как общая']].concat(GARNITURY.map(function (g) { return [g[0], g[0]]; })) };
+/* Типы руки («порог жеста», «разрыв жеста») есть в библиотеке лаборатории, а в
+   каноне их пока нет. Чтобы один и тот же файл собирал панель и там, и там,
+   тип берётся по наличию: нет типа руки — та же величина объявляется прежним
+   типом с теми же границами и единицей. */
+var TIPY = (StendPanel.tablicaVelichin && StendPanel.tablicaVelichin.tipy) || {};
+var T_POROG = TIPY['порог жеста'] ? ['порог жеста', undefined] : ['длина', { ot0: 0, do: 400 }];
+var T_RAZRYV = TIPY['разрыв жеста'] ? ['разрыв жеста', undefined] : ['порог времени', { do: 2000 }];
+var REGISTR = { iz: [['kak', '\u2014'], ['up', 'AG'], ['lo', 'ag'], ['cap', 'Ag']] };
+
+var PANEL = StendPanel.build({
+  storageKey: 'plastinka-params',
+  params: P, defaults: DEFAULTS,
+  eases: EASES, evalEase: evalEase, bezApprox: BEZ_APPROX,
+  /* Кегли меряются диаметром круга, единица приписана перебивкой. Диаметры
+     колец — доли высоты окна, как и сам круг; когда круг упёрся в ширину,
+     все кольца сжимаются вместе с ним в ту же меру. Углы сдвига строк —
+     полный круг: 350 читается как «на десять градусов раньше луча». */
+  zakon: [
+    ['h', 'Круг'],
+    ['diam', 'Диаметр', 'доля', { ot: 'высота', ot0: 10, do: 200, shag: 1 }],
+    ['diamW', 'Предел диаметра', 'доля', { ot: 'ширина', ot0: 10, do: 200, shag: 1 }],
+    ['cx', 'Центр по горизонтали', 'доля', { ot: 'ширина', ot0: 0, do: 100, shag: 0.5 }],
+    ['cy', 'Центр по вертикали', 'доля', { ot: 'высота', ot0: 0, do: 100, shag: 0.5 }],
+    ['nachalo', 'Начало стороны', 'угол'],
+    ['prop', 'Пропорция секторов', 'сила', { shag: 1 }],
+    ['g', 'Плюсик в центре'],
+    ['krestRazmer', 'Размер', 'доля', { ot: 'высота', edinica: '% диаметра', ot0: 0, do: 100, shag: 0.1 }],
+    ['krestLiniya', 'Толщина линии', 'длина', { ot0: 0, do: 20, shag: 0.5 }],
+    ['krestUgol', 'Поворот', 'угол'],
+    ['h', 'Набор'],
+    ['garnitura', 'Гарнитура', 'гарнитура', { iz: GARNITURY }],
+    ['tolshchina', 'Насыщенность', 'толщина', { shag: 100 }],
+    ['treking', 'Трекинг', 'кернинг', { shag: 0.005 }],
+    /* Три варианта, а не словарь «выключка»: четвёртый его знак — «по ширине» —
+       на кольце не определён, у строки здесь нет меры. */
+    ['vykl', 'Выключка колец', 'выбор', { iz: [['left', 'Влево'], ['center', 'По центру'], ['right', 'Вправо']] }],
+    ['g', 'Номера'],
+    ['kNum', 'Кегль', 'доля', kegl()],
+    ['gNum', 'Гарнитура', 'выбор', GARN_KOLTSA],
+    ['trNum', 'Трекинг', 'кернинг', { ot0: -0.3, do: 0.5, shag: 0.005 }],
+    ['g', 'Время начала'],
+    ['dVremya', 'Диаметр', 'доля', DIAM],
+    ['kVremya', 'Кегль', 'доля', kegl()],
+    ['gVremya', 'Гарнитура', 'выбор', GARN_KOLTSA],
+    ['trVremya', 'Трекинг', 'кернинг', { ot0: -0.3, do: 0.5, shag: 0.005 }],
+    ['uVremya', 'Сдвиг от луча', 'угол'],
+    ['plVremya', 'Плотность цвета', 'сила', { shag: 1 }],
+    ['g', 'Трек'],
+    ['dTrek', 'Диаметр', 'доля', DIAM],
+    ['kTrek', 'Кегль', 'доля', kegl()],
+    ['gTrek', 'Гарнитура', 'выбор', GARN_KOLTSA],
+    ['trTrek', 'Трекинг', 'кернинг', { ot0: -0.3, do: 0.5, shag: 0.005 }],
+    ['regTrek', 'Регистр', 'выбор', REGISTR],
+    ['uTrek', 'Сдвиг от луча', 'угол'],
+    ['g', 'Группа'],
+    ['dGruppa', 'Диаметр', 'доля', DIAM],
+    ['kGruppa', 'Кегль', 'доля', kegl()],
+    ['gGruppa', 'Гарнитура', 'выбор', GARN_KOLTSA],
+    ['trGruppa', 'Трекинг', 'кернинг', { ot0: -0.3, do: 0.5, shag: 0.005 }],
+    ['regGruppa', 'Регистр', 'выбор', REGISTR],
+    ['wdthGruppa', 'Ширина знаков', 'сила', { ot0: 50, do: 150, shag: 0.5, edinica: 'wdth' }],
+    ['slntGruppa', 'Наклон знаков', 'сила', { ot0: -16, do: 0, shag: 0.5, edinica: '°' }],
+    ['uGruppa', 'Сдвиг от луча', 'угол'],
+    ['gruppaStoit', 'Движение', 'двоичное', { iz: ['Стоит на месте', 'Едет со всеми'] }],
+    ['g', 'Длительность'],
+    ['dDlit', 'Диаметр', 'доля', DIAM],
+    ['kDlit', 'Кегль', 'доля', kegl()],
+    ['gDlit', 'Гарнитура', 'выбор', GARN_KOLTSA],
+    ['trDlit', 'Трекинг', 'кернинг', { ot0: -0.3, do: 0.5, shag: 0.005 }],
+    ['uDlit', 'Сдвиг от луча', 'угол'],
+    ['plDlit', 'Плотность цвета', 'сила', { shag: 1 }],
+    ['g', 'Авторы и сингл'],
+    ['dAvtory', 'Диаметр', 'доля', DIAM],
+    ['kAvtory', 'Кегль', 'доля', kegl()],
+    ['gAvtory', 'Гарнитура', 'выбор', GARN_KOLTSA],
+    ['trAvtory', 'Трекинг', 'кернинг', { ot0: -0.3, do: 0.5, shag: 0.005 }],
+    ['regAvtory', 'Регистр', 'выбор', REGISTR],
+    ['uAvtory', 'Сдвиг от луча', 'угол'],
+    ['plAvtory', 'Плотность цвета', 'сила', { shag: 1 }],
+    ['g', 'Альбом'],
+    ['kAlbom', 'Кегль', 'доля', kegl({ do: 40 })],
+    ['gAlbom', 'Гарнитура', 'выбор', GARN_KOLTSA],
+    ['trAlbom', 'Трекинг', 'кернинг', { ot0: -0.3, do: 0.5, shag: 0.005 }],
+    ['regAlbom', 'Регистр', 'выбор', REGISTR],
+    ['uAlbom', 'Сдвиг от луча', 'угол'],
+    ['albomChitaetsya', 'Разворот', 'двоичное', { iz: ['Читается внизу круга', 'Верхом наружу, как строки'] }],
+    ['h', 'Сетка'],
+    ['setka', 'Показать', 'двоичное'],
+    ['setkaCvet', 'Цвет', 'цвет'],
+    ['h', 'Смена трека'],
+    ['hod', 'Едет', 'выбор', { iz: [['kolca', 'Кольца'], ['disk', 'Диск']] }],
+    ['vremya', 'Время', 'время', { do: 5000 }],
+    ['hodEase', 'Кривая', 'кривая'],
+    ['gashenie', 'Гашение строки', 'сила', { shag: 1 }],
+    /* Пружина — только у номеров и отметок времени: они проскакивают место и
+       возвращаются. Строки под иглой меряют свой ход от ровного хода диска и
+       отскока не повторяют. У пружины нет «времени»: сколько идёт движение,
+       решают период и затухание. */
+    ['g', 'Пружина номеров и времени'],
+    ['nomPruzhVkl', 'Ход', 'двоичное', { iz: ['С пружиной в конце', 'По кривой, как кольца'] }],
+    ['nomPruzh', 'Пружина', 'пружина', { iz: { period: [100, 4000], zatuhanie: [0.05, 1.6] } }],
+    ['g', 'Веер'],
+    ['volna', 'Пауза между кольцами', 'порог времени', { do: 1000 }],
+    ['vrPauza', 'Пауза времени после номеров', 'порог времени', { do: 2000, shag: 5 }],
+    /* Перебор — приём из каталога и галереи M7: фронт идёт по строке, на фронте
+       знак перещёлкивает, за фронтом стоит новый. Это ОТДЕЛЬНОЕ действие поверх
+       перемещения: своё время, своя кривая, своя пауза до начала и свой веер.
+       Кольцо может давно стоять на месте, а строка ещё пересобираться. */
+    ['g', 'Перебор знаков'],
+    ['perebor', 'Перебор', 'двоичное', { iz: ['Перебирать знаки', 'Менять гашением'] }],
+    ['pereborMs', 'Время', 'время', { do: 10000 }],
+    ['pereborEase', 'Кривая', 'кривая'],
+    ['pereborPauza', 'Пауза до начала', 'порог времени', { do: 5000 }],
+    ['pereborVolna', 'Пауза между кольцами', 'порог времени', { do: 2000 }],
+    ['pereborFront', 'Фронт', 'доля', { ot: 'строка' }],
+    ['pereborTick', 'Перещёлк знака', 'время', { ot0: 20, do: 300 }],
+    ['pereborVse', 'Совпавшие знаки', 'двоичное', { iz: ['Перебирать и совпавшие', 'Оставлять на месте'] }],
+    ['g', 'Колесо'],
+    ['porog', 'Порог жеста', T_POROG[0], T_POROG[1]],
+    ['razryv', 'Разрыв жеста', T_RAZRYV[0], T_RAZRYV[1]],
+    ['tolchok', 'Новый взмах поверх инерции', 'сила', { ot0: 1.1, do: 4, shag: 0.1, edinica: '×' }],
+    /* Звук — как в галерее M7: тон плюс короткий шум контакта. Браузер разрешает
+       звук только после первого нажатия или клавиши — до них щелчков нет. */
+    ['h', 'Звук', { zakryt: true, glaz: 'zvuk' }],
+    ['gromkostPara', 'Громкость', 'пара', { iz: [
+        ['gromkostTon',  'тон',  'сила', { do: 20, shag: 0.5 }],
+        ['gromkostShum', 'шум',  'сила', { do: 20, shag: 0.5 }]] }],
+    ['dlinaPara', 'Длительности', 'пара', { iz: [
+        ['zatuhanie',  'тон', 'время', { do: 60 }],
+        ['dlinaShuma', 'шум', 'время', { do: 60 }]] }],
+    ['glushenie', 'Глушение на скорости', 'время', { do: 100 }],
+    ['zvukEase',  'Кривая затухания',     'кривая'],
+    ['h', 'Цвет'],
+    ['palette', 'Палитра', 'палитра', { iz: [
+      ['white', 'Чёрное на белом', { bg: '#ffffff', ink: '#111111', dim: '#c9c9c9' }],
+      ['light', 'Светлая', { bg: '#eeede8', ink: '#16161a', dim: '#bcbab2' }],
+      ['night', 'Ночь', { bg: '#101014', ink: '#f0f0f2', dim: '#4a4a54' }]
+    ] }],
+    ['bg', 'Фон', 'цвет'],
+    ['ink', 'Активное', 'цвет'],
+    ['dim', 'Пассивное', 'цвет']
+  ],
+  desc: {
+    diam: 'Диаметр круга в долях высоты окна. Внешний край круга — верх цифр.',
+    diamW: 'Коридор: круг не станет шире этой доли ширины окна. На узком экране ведёт она.',
+    nachalo: 'Где на круге стоит первый трек стороны. 0 — верх, дальше по часовой.',
+    krestRazmer: 'Длина каждой из двух линий плюсика в центре круга. Ноль — его нет.',
+    krestUgol: '0 — плюс, 45 — косой крестик.',
+    prop: '0 — номера стоят равномерно, как на циферблате. 100 — сектор каждого трека равен его доле в длительности стороны.',
+    setka: 'Круги построения: сплошные — внешний край каждого кольца (его диаметр), пунктир — базовые линии строк.',
+    dTrek: 'Диаметр кольца по верху строки, в долях высоты окна. Кольца ставятся независимо: можно сжать любое до 20 % и поменять кольца местами.',
+    dGruppa: 'Диаметр кольца по верху строки, в долях высоты окна.',
+    dDlit: 'Диаметр кольца по верху строки, в долях высоты окна.',
+    dAvtory: 'Диаметр кольца по верху строки, в долях высоты окна.',
+    dVremya: 'Диаметр кольца отметок времени по верху цифр, в долях высоты окна.',
+    gTrek: 'Своя гарнитура кольца или общая из начала секции.',
+    trTrek: 'Свой трекинг кольца: добавка к общему трекингу, в долях кегля. 0 — как общий.',
+    regTrek: 'Как набрана строка: как в данных, прописными, строчными или с прописной в каждом слове.',
+    vykl: 'Как строки колец стоят относительно луча своего номера: начинаются на нём, делятся им пополам или заканчиваются на нём.',
+    uTrek: 'Строка начинается на луче своего номера; сдвиг уводит начало вдоль кольца. 350 — на десять градусов раньше.',
+    uGruppa: 'Сдвиг начала строки вдоль кольца от луча номера.',
+    gruppaStoit: 'Название группы на смене трека стоит неподвижно на начале стороны и в веере не участвует — или едет вместе с остальными кольцами.',
+    kVremya: 'Отметка под номером: на какой минуте стороны трек начинается.',
+    kAlbom: 'Название альбома стоит в кольце группы на том же диаметре; кегль, гарнитура, трекинг и регистр у него свои. Движется или стоит вместе с группой.',
+    wdthGruppa: 'Ось ширины вариативной гарнитуры: у ABC Gravity от 50 (сжатое) до 150 (Wide). На обычные гарнитуры не действует.',
+    slntGruppa: 'Ось наклона вариативной гарнитуры: у ABC Gravity от −16 до 0. На обычные гарнитуры не действует.',
+    uAlbom: 'Где на кольце группы стоит название альбома, от названия группы. 180 — напротив него.',
+    albomChitaetsya: 'Строки колец стоят верхом наружу, внизу круга такая строка перевёрнута. Название альбома можно развернуть верхом к центру — тогда внизу оно читается слева направо.',
+    kAvtory: 'Одно кольцо на авторов и сингл: дата сингла дописана только у треков, выходивших синглом.',
+    uDlit: 'Сдвиг начала строки вдоль кольца от луча номера.',
+    plAvtory: 'Насколько строка авторов и сингла темнее фона: 100 — цвет «Активное», 20 — серый в пятую часть.',
+    plVremya: 'Плотность цвета отметок времени у невыбранных треков: 20 — тот же светлый тон, что у длительности и авторов. Отметка выбранного трека всегда полного цвета «Активное».',
+    plDlit: 'Насколько строка длительности темнее фона: 100 — цвет «Активное», 20 — серый в пятую часть чёрного. Считается от палитры, поэтому на тёмной теме серый тоже получится.',
+    hod: 'Кольца — номера стоят, строки переезжают к новому номеру. Диск — строки стоят под иглой, поворачивается кольцо номеров.',
+    nomPruzhVkl: 'Как номера и отметки времени приходят на место: пружиной — проскакивают и возвращаются, или по общей кривой без отскока. Работает, когда едет диск.',
+    nomPruzh: 'Период — как быстро пружина качается; затухание — как скоро успокаивается. Затухание около 0,3 даёт несколько заметных качаний, 0,6 — один мягкий отскок, от 1 и выше отскока нет.',
+    vrPauza: 'Через сколько после кольца номеров трогается кольцо отметок времени. В общей очереди веера оно не стоит.',
+    volna: 'Веер: кольца трогаются по очереди от внешнего к внутреннему, каждое следующее позже предыдущего на эту паузу. Очередь берётся из диаметров колец.',
+    gashenie: 'Насколько строка гаснет, пока её текст меняется на новый. 0 — подмена на полном цвете. Работает, когда перебор выключен.',
+    perebor: 'Как строка меняет текст на смене трека: пересобирается буква за буквой, пока кольцо едет, или гаснет и возвращается с новым текстом.',
+    pereborMs: 'Сколько длится перебор одной строки — от первого перещёлка до готового текста. От времени перемещения колец не зависит.',
+    pereborEase: 'Как фронт идёт по строке: линейно — ровно, с торможением — быстро начинает и долго дособирает конец.',
+    pereborPauza: 'Сколько ждать после смены трека, прежде чем начнётся перебор. Ноль — вместе с началом движения.',
+    pereborVolna: 'Веер перебора: каждое следующее вглубь кольцо начинает пересобираться позже предыдущего на эту паузу. Ноль — все строки разом.',
+    pereborFront: 'Ширина фронта, на котором знаки перещёлкиваются, в долях длины строки. Ноль — знаки меняются по одному без перещёлка.',
+    pereborTick: 'Как часто перещёлкивается знак на фронте.',
+    pereborVse: 'Знак, который в старом и новом тексте один и тот же (вся строка группы, фамилия автора), перещёлкивается вместе со всеми или стоит спокойно.',
+    gromkostPara: 'Две составляющие щелчка: тон даёт высоту, шум — контакт. Ноль на одной оставляет вторую звучать.',
+    dlinaPara: 'Сколько живёт каждая составляющая. Дольше 60 мс щелчок перестаёт быть щелчком и начинает слышаться тоном.',
+    glushenie: 'Как часто щелчки могут идти подряд: чаще этого промежутка звук молчит.',
+    zvukEase: 'Форма затухания щелчка.',
+    porog: 'Сколько надо прокрутить колесом, чтобы трек сменился.',
+    razryv: 'Один жест — один трек. Пауза колеса длиннее этой начинает новый жест. Она же — время, за которое одиночный щелчок колеса мыши признаётся щелчком.',
+    tolchok: 'После взмаха тачпад ещё секунду шлёт затухающую инерцию. Новый взмах узнаётся по шагу, который во столько раз больше наименьшего шага инерции. Меньше — отзывчивее, но чувствительнее к дрожи; больше — второй взмах надо делать решительнее.'
+  },
+  onChange: function () { peresobrat(); }
+});
+
+/* ── сцена ── */
+var NS = 'http://www.w3.org/2000/svg';
+var TAU = Math.PI * 2;
+var svg = document.getElementById('scene');
+var sloyNomera = document.getElementById('sloy-nomera');
+var albomEl = document.getElementById('albom'), albomTp = albomEl.querySelector('textPath'), albomG = document.getElementById('k-albom');
+var KOLCA = ['trek', 'gruppa', 'dlit', 'avtory'].map(function (k) {
+  var g = document.getElementById('k-' + k);
+  return { g: g, text: g.querySelector('text'), tp: g.querySelector('textPath'), os: document.getElementById('os-' + k) };
+});
+
+var TREKI = ALBOM.storony[P.storona] || ALBOM.storony.A;
+var N = TREKI.length;
+function dlitTekst(s) { return Math.floor(s / 60) + ':' + ('0' + s % 60).slice(-2); }
+/* Регистр строки: как в данных, прописными, строчными, с прописной в каждом слове. */
+function registr(t, r) {
+  if (r === 'up') return t.toUpperCase();
+  if (r === 'lo') return t.toLowerCase();
+  if (r === 'cap') return t.toLowerCase().replace(/(^|[^a-zа-яё0-9'’])([a-zа-яё])/g, function (m, a, b) { return a + b.toUpperCase(); });
+  return t;
+}
+function tekstKoltsa(k, i) {   // k: 1 трек, 2 группа, 3 длительность, 4 авторы и сингл
+  if (k === 1) return registr(TREKI[i][0], P.regTrek);
+  if (k === 2) return registr(ALBOM.gruppa, P.regGruppa);
+  if (k === 3) return dlitTekst(TREKI[i][1]);
+  return registr(TREKI[i][2] + (TREKI[i][3] ? ' \u00b7 ' + TREKI[i][3] : ''), P.regAvtory);   // сингл — только если был
+}
+var KV = KOLCA.length + 1;  // доля кольца отметок времени
+var M = KOLCA.length + 2;   // долей перехода: диск, кольца строк, кольцо времени
+
+var NOMERA = TREKI.map(function (t, i) {
+  var g = document.createElementNS(NS, 'g');
+  var sektor = document.createElementNS(NS, 'path'); sektor.setAttribute('class', 'sektor');
+  var text = document.createElementNS(NS, 'text');
+  /* Номер едет по кольцу, но вокруг себя не вращается: цифра всегда
+     горизонтальна и ставится серединой в точку кольца. Отметка времени —
+     наоборот, лежит на дуге и поворачивается вместе с кольцом: она в
+     поворотной группе рядом с зоной нажатия, серединой на луче номера. */
+  text.setAttribute('text-anchor', 'middle');
+  text.textContent = String(i + 1);
+  g.appendChild(sektor); sloyNomera.appendChild(g); sloyNomera.appendChild(text);
+  // отметка начала: сумма длительностей треков до этого
+  var vremya = document.createElementNS(NS, 'text');
+  vremya.setAttribute('text-anchor', 'middle');
+  var tv = document.createElementNS(NS, 'textPath');
+  atr(tv, { href: '#os-vremya', startOffset: '50%' });   // середина оси в два оборота — луч
+  tv.textContent = dlitTekst(TREKI.slice(0, i).reduce(function (s, x) { return s + x[1]; }, 0));
+  vremya.appendChild(tv); g.appendChild(vremya);
+  sektor.addEventListener('click', function () { perehod(i); });
+  return { g: g, sektor: sektor, text: text, vremya: vremya };
+});
+
+/* геометрия: всё выводится из окна и ручек, замеров раскладки нет */
+var G = { cx: 0, cy: 0, R: 0, ugly: [], doli: [] };
+
+// точка на круге: угол 0 — верх, дальше по часовой
+function tochka(r, grad) {
+  var a = grad * Math.PI / 180;
+  return (G.cx + r * Math.sin(a)).toFixed(2) + ' ' + (G.cy - r * Math.cos(a)).toFixed(2);
+}
+// ось строки: окружность по часовой от верха, два оборота — длинная строка не рвётся на стыке
+function os(r, protiv) {   // protiv — против часовой: строка на ней стоит верхом к центру
+  var verh = tochka(r, 0), niz = tochka(r, 180), d = 'M' + verh, f = protiv ? 0 : 1;
+  for (var i = 0; i < 2; i++) d += 'A' + r + ' ' + r + ' 0 1 ' + f + ' ' + niz + 'A' + r + ' ' + r + ' 0 1 ' + f + ' ' + verh;
+  return d;
+}
+// зона нажатия: кольцевой сектор от луча номера на размах его трека
+function sektorPut(rVn, rNar, razmah) {
+  var bolsh = razmah > 180 ? 1 : 0;
+  return 'M' + tochka(rNar, 0) + 'A' + rNar + ' ' + rNar + ' 0 ' + bolsh + ' 1 ' + tochka(rNar, razmah) +
+    'L' + tochka(rVn, razmah) + 'A' + rVn + ' ' + rVn + ' 0 ' + bolsh + ' 0 ' + tochka(rVn, 0) + 'Z';
+}
+
+function atr(el, o) { for (var k in o) el.setAttribute(k, o[k]); }
+
+function geometriya() {
+  var w = window.innerWidth, h = window.innerHeight;
+  var D = Math.min(h * P.diam / 100, w * P.diamW / 100);   // коридор: высота ведёт, ширина ограничивает
+  G.R = D / 2; G.cx = w * P.cx / 100; G.cy = h * P.cy / 100;
+
+  // секторы: смесь равных долей и долей по длительности
+  var vsego = TREKI.reduce(function (s, t) { return s + t[1]; }, 0), p = P.prop / 100, nakop = 0;
+  G.ugly = []; G.doli = [];
+  TREKI.forEach(function (t) {
+    var d = (1 - p) / N + p * t[1] / vsego;
+    G.ugly.push(nakop * 360); G.doli.push(d * 360); nakop += d;
+  });
+
+  /* КОЛЬЦА СТАВЯТСЯ НЕЗАВИСИМО. У каждого свой диаметр в долях высоты окна —
+     это внешний край строки, верх знаков; базовая линия лежит глубже на рост
+     знака. Когда круг упёрся в ширину окна, все кольца сжимаются в ту же меру,
+     что и он. Кегль 0 — кольца нет. */
+  var mashtab = P.diam > 0 ? D / (h * P.diam / 100) : 1;
+  function krayKoltsa(d) { return Math.max(1, h * d / 100 * mashtab / 2); }
+
+  var kNum = D * P.kNum / 100, kV = D * P.kVremya / 100;
+  var rNum = Math.max(1, G.R - rost(P.gNum) * kNum);        // верх цифр на окружности круга
+  G.rC = Math.max(1, G.R - rost(P.gNum) * kNum / 2);        // середина цифры на кольце
+  G.dyNum = rost(P.gNum) * kNum / 2;                        // от середины цифры до её базовой линии
+  var krayV = krayKoltsa(P.dVremya), bazaV = Math.max(1, krayV - rost(P.gVremya) * kV);
+  document.getElementById('os-vremya').setAttribute('d', os(bazaV));
+
+  var treki = [P.trTrek, P.trGruppa, P.trDlit, P.trAvtory];   // свой трекинг — добавка к общему
+  var osi = [[P.dTrek, P.kTrek, P.gTrek], [P.dGruppa, P.kGruppa, P.gGruppa],
+             [P.dDlit, P.kDlit, P.gDlit], [P.dAvtory, P.kAvtory, P.gAvtory]].map(function (x, i) {
+    var k = D * x[1] / 100, kray = krayKoltsa(x[0]);
+    return { kray: kray, baza: Math.max(1, kray - rost(x[2]) * k), k: k, g: x[2], tr: P.treking + treki[i] };
+  });
+
+  osi.forEach(function (x, i) {
+    KOLCA[i].os.setAttribute('d', os(x.baza));
+    atr(KOLCA[i].text, { 'font-family': semya(x.g), 'font-weight': P.tolshchina, 'font-size': x.k.toFixed(2),
+      visibility: x.k > 0 ? 'visible' : 'hidden' });
+    KOLCA[i].text.style.letterSpacing = (x.tr * x.k).toFixed(2) + 'px';
+    // оси вариативной гарнитуры — пока только у кольца группы
+    KOLCA[i].text.style.fontVariationSettings = i === 1 ? '"wdth" ' + P.wdthGruppa + ', "slnt" ' + P.slntGruppa : 'normal';
+    // ось в два оборота, строка привязана к её середине — лучу на втором обороте:
+    // при выключке по центру и вправо левой части строки есть куда лечь
+    KOLCA[i].text.setAttribute('text-anchor', { left: 'start', center: 'middle', right: 'end' }[P.vykl] || 'middle');
+    KOLCA[i].tp.setAttribute('startOffset', '50%');
+  });
+  // зона нажатия номера: полоса вокруг кольца номеров, чуть шире цифры в обе стороны
+  var rVn = Math.max(1, rNum - kNum * 0.6), rNar = G.R + kNum * 0.5;
+  NOMERA.forEach(function (n, i) {
+    n.sektor.setAttribute('d', sektorPut(rVn, rNar, G.doli[i]));
+    atr(n.text, { 'font-family': semya(P.gNum), 'font-weight': P.tolshchina, 'font-size': kNum.toFixed(2) });
+    n.text.style.letterSpacing = ((P.treking + P.trNum) * kNum).toFixed(2) + 'px';
+    atr(n.vremya, { 'font-family': semya(P.gVremya), 'font-weight': P.tolshchina, 'font-size': kV.toFixed(2),
+      visibility: kV > 0 ? 'visible' : 'hidden' });
+    n.vremya.style.letterSpacing = ((P.treking + P.trVremya) * kV).toFixed(2) + 'px';
+  });
+  /* Альбом — в кольце группы: его верхний край лежит на окружности кольца,
+     набор у него свой (гарнитура, трекинг, регистр, кегль). Развёрнутый «читается
+     внизу» идёт против часовой, верхом к центру: базовая линия тогда ложится
+     на внешний край кольца, и строка занимает ту же полосу. */
+  var av = osi[1], kA = D * P.kAlbom / 100;   // кольцо группы
+  document.getElementById('os-albom').setAttribute('d',
+    P.albomChitaetsya ? os(av.kray, true) : os(Math.max(1, av.kray - rost(P.gAlbom) * kA)));
+  atr(albomEl, { 'font-family': semya(P.gAlbom), 'font-weight': P.tolshchina, 'font-size': kA.toFixed(2),
+    visibility: kA > 0 ? 'visible' : 'hidden' });
+  albomEl.style.letterSpacing = ((P.treking + P.trAlbom) * kA).toFixed(2) + 'px';
+  albomTp.textContent = registr(ALBOM.imya, P.regAlbom);
+  document.body.style.background = P.bg;
+
+  // крестик в центре: две линии через центр круга, длина — доля диаметра
+  var pol = D * P.krestRazmer / 200, linii = document.querySelectorAll('#krest line');
+  /* Прямой плюс ставится на сетку пикселей экрана: край тонкой линии ложится на
+     границу пикселя, и линия в 1 px выходит чёткой, а не размытой на два. Сдвиг
+     от точного центра — меньше половины пикселя. Косому крестику это не нужно. */
+  var kx = G.cx, ky = G.cy;
+  if (P.krestUgol % 90 === 0) {
+    var dpr = window.devicePixelRatio || 1, tl = P.krestLiniya;
+    kx = Math.round((G.cx - tl / 2) * dpr) / dpr + tl / 2;
+    ky = Math.round((G.cy - tl / 2) * dpr) / dpr + tl / 2;
+  }
+  for (var li = 0; li < 2; li++) {
+    var ak = (P.krestUgol + li * 90) * Math.PI / 180, dx = pol * Math.sin(ak), dy = -pol * Math.cos(ak);
+    atr(linii[li], { x1: (kx - dx).toFixed(2), y1: (ky - dy).toFixed(2), x2: (kx + dx).toFixed(2), y2: (ky + dy).toFixed(2),
+      stroke: P.ink, 'stroke-width': P.krestLiniya, visibility: pol > 0 && P.krestLiniya > 0 ? 'visible' : 'hidden' });
+  }
+
+  // сетка: у каждого кольца внешний край сплошной линией и базовая линия пунктиром
+  var setka = document.getElementById('setka');
+  setka.textContent = '';
+  if (P.setka) {
+    var krugi = [[G.R, 0], [rNum, 1]];
+    if (kV > 0) krugi.push([krayV, 0], [bazaV, 1]);
+    osi.forEach(function (x) { if (x.k > 0) krugi.push([x.kray, 0], [x.baza, 1]); });
+    krugi.forEach(function (kr) {
+      var c = document.createElementNS(NS, 'circle');
+      atr(c, { cx: G.cx.toFixed(2), cy: G.cy.toFixed(2), r: kr[0].toFixed(2), stroke: P.setkaCvet,
+        'stroke-width': 1, 'stroke-opacity': kr[1] ? 0.55 : 1 });   // волосяная линия // без ручки
+      if (kr[1]) c.setAttribute('stroke-dasharray', '2 4');           // базовая линия — пунктиром // без ручки
+      setka.appendChild(c);
+    });
+  }
+}
+
+/* ── смена трека ──
+   Шесть долей на одном переходе: диск с номерами (0), четыре кольца строк
+   (1–4) и кольцо отметок времени (5). У каждой свой
+   угол «где активный трек»; кольца трогаются с паузой друг за другом. Новый
+   переход стартует от того угла, где доля стоит сейчас, — разворот посреди
+   хода без скачка. Углы копятся без приведения к 0…360: путь всегда кратчайший. */
+var aktiv = 0;
+function ryad(v) { var a = []; for (var k = 0; k < M; k++) a.push(v); return a; }
+var ugol = ryad(0), ot = ryad(0), cel = 0, t0 = -1e9;
+var pokazan = ryad(0);                // какой трек сейчас набран в кольце
+var alfa = ryad(1);                   // гашение строки на подмене текста
+var dolya = ryad(1);                  // доля хода каждого кольца (перемещение)
+var dolyaP = ryad(1);                 // доля перебора каждого кольца — своя, от хода не зависит
+var byl = ryad(''), vidno = ryad(''); // перебор: с какой строки кольцо уходит и что набрано сейчас
+var teplo = TREKI.map(function (t, i) { return i === 0 ? 1 : 0; });   // активность номера
+var chasy = 0;                        // время сцены, мс
+
+/* ВЕЕР. Кольца трогаются по очереди от внешнего к внутреннему — по тому, как
+   они стоят на круге, а не по номеру в списке: очередь берётся из диаметров.
+   Когда едет диск, в веере номера и строки; когда едут кольца, номера стоят,
+   и веер идёт по строкам. Отметки времени в очереди не стоят: они идут
+   следом за номерами со своей короткой паузой, где бы ни лежало их кольцо. Кольцо с кеглем 0
+   в очереди не стоит. */
+function pauzy() {
+  var disk = P.hod === 'disk';
+  var ryady = [[1, P.dTrek, P.kTrek], [3, P.dDlit, P.kDlit], [4, P.dAvtory, P.kAvtory]];
+  if (!P.gruppaStoit) ryady.push([2, P.dGruppa, P.kGruppa]);   // неподвижная группа места в веере не занимает
+  if (disk) ryady.push([0, P.diam, P.kNum]);
+  var z = ryad(0);
+  ryady.filter(function (x) { return x[2] > 0; })
+       .sort(function (a, b) { return b[1] - a[1]; })
+       .forEach(function (x, mesto) { z[x[0]] = mesto * P.volna; });
+  z[KV] = z[0] + P.vrPauza;   // отметки времени в очереди не стоят: идут следом за номерами со своей паузой
+  return z;
+}
+// очередь перебора: свой веер по строкам от внешней к внутренней, после своей паузы
+function pauzyPerebora() {
+  var z = ryad(0);
+  [[1, P.dTrek, P.kTrek], [2, P.dGruppa, P.kGruppa], [3, P.dDlit, P.kDlit], [4, P.dAvtory, P.kAvtory]]
+    .filter(function (x) { return x[2] > 0; })
+    .sort(function (a, b) { return b[1] - a[1]; })
+    .forEach(function (x, mesto) { z[x[0]] = P.pereborPauza + mesto * P.pereborVolna; });
+  return z;
+}
+/* ── звук: тихий сухой щелчок на смене трека (синтез Web Audio, перенос из
+   галереи M7). Браузер разрешает звук только после первого нажатия или
+   клавиши — до них щелчки молчат. ── */
+var actx = null, lastClickT = -1;   // −1: часы контекста идут с нуля, и первый щелчок не должен попасть под глушение
+function ensureAudio() {
+  if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) {} }
+  if (actx && actx.state === 'suspended') actx.resume();
+}
+function shchelchok() {
+  if (!P.zvuk) return;                                       // глаз секции «Звук»
+  if (!actx) return;
+  if (actx.state !== 'running') {
+    /* Первая смена трека сама и есть то нажатие, которое включает звук: контекст
+       в этот миг ещё просыпается. Щелчок дожидается его, а не пропадает. */
+    actx.resume().then(function () { if (actx.state === 'running') shchelchok(); }).catch(function () {});
+    return;
+  }
+  var t = actx.currentTime;
+  if (t - lastClickT < P.glushenie / 1000) return;           // глушение на быстрой смене
+  lastClickT = t;
+  // тонкий точечный тик: синус с затуханием по кривой панели плюс микрошум контакта в атаке
+  var o = actx.createOscillator(); o.type = 'sine'; o.frequency.value = 4200;   // 4200 Гц // без ручки: типа «частота» в своде нет
+  var g = actx.createGain();
+  var dlina = Math.max(0.001, P.zatuhanie / 1000), pik = P.gromkostTon / 100;
+  var ogib = new Float32Array(32);
+  for (var j = 0; j < 32; j++) ogib[j] = pik * (1 - evalEase(P.zvukEase, P.zvukBez, j / 31));
+  g.gain.setValueCurveAtTime(ogib, t, dlina);
+  o.connect(g); g.connect(actx.destination);
+  o.start(t); o.stop(t + dlina + 0.002);
+  var shum = Math.max(0.0005, P.dlinaShuma / 1000);
+  var len = Math.max(1, Math.floor(actx.sampleRate * shum)), buf = actx.createBuffer(1, len, actx.sampleRate), d = buf.getChannelData(0);
+  for (var i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);   // шум-щелчок контакта
+  var src = actx.createBufferSource(); src.buffer = buf;
+  var hp = actx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 3000;   // 3000 Гц // без ручки: типа «частота» в своде нет
+  var g2 = actx.createGain(); g2.gain.value = P.gromkostShum / 100;
+  src.connect(hp); hp.connect(g2); g2.connect(actx.destination);
+  src.start(t);
+}
+// первое нажатие или клавиша включают звук (политика браузера)
+window.addEventListener('pointerdown', ensureAudio, true);
+window.addEventListener('keydown', ensureAudio, true);
+
+/* Видимый угол номеров и отметок времени. Ровный ход диска (ugol[0]) остаётся
+   опорой для строк, а номера и отметки рисуются по своему углу — с пружиной. */
+var vid = { nom: 0, nomOt: 0, vr: 0, vrOt: 0 };
+function perehod(i) {
+  i = ((i % N) + N) % N;
+  if (i === aktiv) return;
+  // перебор стартует с того, что набрано сейчас, — и посреди прошлого перебора тоже
+  for (var k = 0; k < M; k++) { ot[k] = ugol[k]; byl[k] = vidno[k]; dolya[k] = 0; dolyaP[k] = 0; }
+  var raznica = ((G.ugly[i] - ugol[0]) % 360 + 540) % 360 - 180;   // кратчайшая дуга
+  cel = ugol[0] + raznica; t0 = chasy; aktiv = i;
+  vid.nomOt = vid.nom; vid.vrOt = vid.vr;   // пружина стартует с того места, где номер виден сейчас
+  shchelchok();                              // трек сменился → щелчок
+}
+function vstat(i) {                    // без движения: старт и правка геометрии ручкой
+  aktiv = i; cel = G.ugly[i]; t0 = -1e9;
+  for (var k = 0; k < M; k++) {
+    ugol[k] = ot[k] = cel; pokazan[k] = i; alfa[k] = 1; dolya[k] = 1; dolyaP[k] = 1;
+    byl[k] = vidno[k] = k ? tekstKoltsa(k, i) : '';
+  }
+  teplo = teplo.map(function (t, j) { return j === i ? 1 : 0; });
+  vid.nom = vid.nomOt = vid.vr = vid.vrOt = cel;
+}
+
+function shag(dt) {
+  chasy += dt;
+  var z = pauzy(), zp = pauzyPerebora(), T = Math.max(1, P.vremya);
+  for (var k = 0; k < M; k++) {
+    var u = (chasy - t0 - z[k]) / T;
+    dolya[k] = evalEase(P.hodEase, P.hodBez, u);
+    dolyaP[k] = evalEase(P.pereborEase, P.pereborBez, (chasy - t0 - zp[k]) / Math.max(1, P.pereborMs));
+    ugol[k] = ot[k] + (cel - ot[k]) * dolya[k];
+    if (k === 0 || k === KV) continue;   // у диска и отметок времени текст не меняется
+    // подмена текста: строка гаснет за половину хода, меняется в нуле, возвращается
+    if (pokazan[k] !== aktiv && chasy >= t0 + z[k]) {
+      if (tekstKoltsa(k, pokazan[k]) === tekstKoltsa(k, aktiv)) pokazan[k] = aktiv;
+      else { alfa[k] -= dt * 2 / T; if (alfa[k] <= 0) { alfa[k] = 0; pokazan[k] = aktiv; } }
+    } else if (pokazan[k] === aktiv && alfa[k] < 1) alfa[k] = Math.min(1, alfa[k] + dt * 2 / T);
+  }
+  // номера и отметки времени: отклик пружины от своего старта в веере либо общая кривая
+  var pr = P.nomPruzhVkl && StendPanel.pruzhina ? StendPanel.pruzhina(P.nomPruzh) : null;
+  var dNom = pr ? pr(Math.max(0, chasy - t0 - z[0])) : dolya[0];
+  var dVr = pr ? pr(Math.max(0, chasy - t0 - z[KV])) : dolya[KV];
+  vid.nom = vid.nomOt + (cel - vid.nomOt) * dNom;
+  vid.vr = vid.vrOt + (cel - vid.vrOt) * dVr;
+  for (var i = 0; i < N; i++) {
+    var kuda = i === aktiv ? 1 : 0, s = dt * 2 / T;
+    teplo[i] += Math.max(-s, Math.min(s, kuda - teplo[i]));
+  }
+}
+
+function smes(a, b, t) {               // цвет между двумя #rrggbb
+  var x = parseInt(a.slice(1), 16), y = parseInt(b.slice(1), 16), r = [16, 8, 0].map(function (sd) {
+    var p = (x >> sd) & 255, q = (y >> sd) & 255;
+    return Math.round(p + (q - p) * t);
+  });
+  return 'rgb(' + r.join(',') + ')';
+}
+function smesHex(a, b, t) {            // то же, но ответ в виде #rrggbb — чтобы смешивать дальше
+  var x = parseInt(a.slice(1), 16), y = parseInt(b.slice(1), 16);
+  return '#' + [16, 8, 0].map(function (sd) {
+    var p = (x >> sd) & 255, q = (y >> sd) & 255;
+    return ('0' + Math.round(p + (q - p) * t).toString(16)).slice(-2);
+  }).join('');
+}
+function povorot(grad) { return 'rotate(' + grad.toFixed(3) + ' ' + G.cx.toFixed(2) + ' ' + G.cy.toFixed(2) + ')'; }
+
+/* ── ПЕРЕБОР ЗНАКОВ (перенос из галереи и каталога M7) ──
+   Буква меняется на букву своего регистра, цифра на цифру, знаки препинания
+   не трогаются. Случайности нет — хеш от зерна и номера знака: воспроизводимо.
+   Фронт идёт по строке слева направо: за фронтом новый знак, на фронте
+   перещёлк, перед фронтом ещё старый. Отличие от галереи: строка здесь не
+   моноширинная и стоит по центру, поэтому длина берётся наибольшая из двух —
+   хвост старой строки не срезается на старте, а уходит знак за знаком, когда
+   до него доходит фронт. При доле 0 набрано ровно старое, при 1 — ровно новое. */
+var ALF = { lo: 'abcdefghijklmnopqrstuvwxyz', up: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' };
+var CIFRY = '0123456789', NBSP = ' ';
+function probel(ch) { return ch === ' ' || ch === NBSP; }
+function jit(seed, i) { var x = Math.sin(seed * 37.7 + i * 13.31) * 43758.545; return x - Math.floor(x); }
+function znakPrep(ch) { return ch.toLowerCase() === ch.toUpperCase() && !(ch >= '0' && ch <= '9'); }
+function flapChar(ch, n) {
+  if (ch >= '0' && ch <= '9') return CIFRY[n % 10];
+  var set = ch === ch.toUpperCase() ? ALF.up : ALF.lo;
+  return set[n % set.length];
+}
+function perebrat(staroe, novoe, seed, p, tick, win) {
+  if (p >= 1 || staroe === novoe && !P.pereborVse) return novoe;
+  var Ls = staroe.length, Ln = novoe.length, L = Math.max(Ls, Ln), out = '';
+  for (var i = 0; i < L; i++) {
+    var nov = i < Ln ? novoe[i] : '', star = i < Ls ? staroe[i] : '';
+    var t = (i + jit(seed, i) * 2.2) / (L + 2.2);          // порог знака с дрожью: фронт не линейка
+    if (p >= t) { out += nov; continue; }                   // за фронтом — новый знак (или уже ничего)
+    var obrazec = nov && !probel(nov) ? nov : star;         // чьим алфавитом перещёлкивать
+    var stoit = star === nov && !P.pereborVse;              // совпавший знак стоит спокойно
+    if (p > 0 && t - p < win && obrazec && !probel(obrazec) && !znakPrep(obrazec) && !stoit)
+      out += flapChar(obrazec, tick + i * 7 + seed * 3);
+    else out += star || NBSP;                               // перед фронтом — как было
+  }
+  return out.replace(/[  ]+$/, '');                    // пустой хвост не держит ширину строки
+}
+
+function risuy() {
+  var disk = P.hod === 'disk';
+  var sdvigi = [P.uTrek, P.uGruppa, P.uDlit, P.uAvtory];
+  NOMERA.forEach(function (n, i) {
+    var grad = P.nachalo + G.ugly[i] - (disk ? vid.nom : 0);
+    n.g.setAttribute('transform', povorot(grad));
+    var a = grad * Math.PI / 180, cvet = smes(P.dim, P.ink, teplo[i]);
+    atr(n.text, { x: (G.cx + G.rC * Math.sin(a)).toFixed(2), y: (G.cy - G.rC * Math.cos(a) + G.dyNum).toFixed(2), fill: cvet });
+    // отметка времени сидит в группе номера, но едет своей долей: в веере она после всех, кто снаружи
+    // отметка выбранного трека — полным цветом, остальные — своей плотностью, как длительность и авторы
+    var cvetVr = smes(smesHex(P.bg, P.ink, P.plVremya / 100), P.ink, teplo[i]);
+    atr(n.vremya, { transform: povorot(P.uVremya + (disk ? vid.nom - vid.vr : 0)), fill: cvetVr });
+  });
+  KOLCA.forEach(function (kc, j) {
+    var k = j + 1;
+    // название группы может стоять: тогда его угол — начало стороны, от хода не зависит
+    var hod = k === 2 && P.gruppaStoit ? 0 : ugol[k] - (disk ? ugol[0] : 0);
+    kc.g.setAttribute('transform', povorot(P.nachalo + sdvigi[j] + hod));
+    var t = P.perebor
+      ? perebrat(byl[k], tekstKoltsa(k, aktiv), k, dolyaP[k], Math.floor(chasy / Math.max(20, P.pereborTick)), P.pereborFront / 100)
+      : tekstKoltsa(k, pokazan[k]);
+    vidno[k] = t;
+    if (kc.tp.textContent !== t) kc.tp.textContent = t;
+    var plotn = k === 3 ? P.plDlit : k === 4 ? P.plAvtory : 100;   // своя плотность цвета у длительности и авторов
+    kc.text.setAttribute('fill', plotn < 100 ? smes(P.bg, P.ink, plotn / 100) : P.ink);
+    kc.text.setAttribute('opacity', P.perebor ? 1 : (1 - (1 - alfa[k]) * P.gashenie / 100).toFixed(3));
+  });
+  // альбом живёт в кольце группы: стоит вместе с ней или едет вместе с ней, плюс свой сдвиг
+  var hodGr = P.gruppaStoit ? 0 : ugol[2] - (disk ? ugol[0] : 0);
+  albomG.setAttribute('transform', povorot(P.nachalo + P.uGruppa + hodGr + P.uAlbom));
+  albomEl.setAttribute('fill', P.ink);
+}
+
+function peresobrat() {
+  geometriya();
+  // правка пропорции двигает лучи: строки встают на новый луч сразу, если перехода нет
+  var konec = Math.max(P.vremya + (M + 1) * P.volna, P.pereborPauza + KOLCA.length * P.pereborVolna + P.pereborMs,
+    (M + 1) * P.volna + 6 * (P.nomPruzh[0] || 0));   // и пока пружина не успокоилась
+  if (chasy - t0 > konec) vstat(aktiv);
+  risuy();
+}
+
+/* ── рука ── */
+/* КОЛЕСО: один жест — один трек. Жест узнаётся тремя способами, потому что
+   тачпад и мышь шлют разное.
+   1. Поток тачпада: шаги копятся до порога, трек меняется, жест «занят».
+      Дальше идёт инерция — до секунды и дольше, без пауз. Новый взмах поверх неё
+      раньше терялся: паузы нет, жест всё ещё занят. Теперь он узнаётся по
+      форме: инерция только затухает, и шаг, который заметно больше её
+      наименьшего шага, — это новый толчок руки.
+   2. Пауза дольше «разрыва жеста» или смена направления — тоже новый жест.
+   3. Одиночный щелчок колеса мыши: одно событие и тишина. На пороге в
+      пикселях он терялся (медленный щелчок — 4 px). Событие, за которым
+      в течение «разрыва» ничего не пришло, считается щелчком и меняет трек.
+      Хвост инерции тачпада — тоже одиночные события, но по 1–2 px: их
+      отсекает наименьший шаг щелчка.
+   4. Быстрое кручение колеса мыши: события идут редко (десятки мс между
+      ними), а тачпад шлёт плотно, каждый кадр. Два редких события подряд —
+      значит, это колесо, и дальше каждый щелчок меняет трек. */
+var kol = { nakop: 0, zanyat: false, tPosl: 0, znak: 0, pik: 0, pol: 0, spad: false, zhdyot: 0, redkih: 0, plotno: false };
+var PLOTNO = 35;           // мс: события тачпада идут плотнее этого, щелчки колеса — реже // без ручки
+var SHAG_SHCHELCHKA = 3;   // px: одиночное событие мельче — хвост инерции, а не щелчок колеса // без ручки
+var SPAD = 0.6;            // доля пика, ниже которой инерция считается начавшей затухать // без ручки
+function kolesoShag(znak, abs) {
+  perehod(aktiv + znak);
+  kol.zanyat = true; kol.pik = kol.pol = abs; kol.spad = false;
+}
+window.addEventListener('wheel', function (e) {
+  if (e.target.closest && e.target.closest('.stend-panel, [class^="st-"]')) return;   // панель листается сама
+  var ky = e.deltaMode === 1 ? 100 / 6 : e.deltaMode === 2 ? innerHeight : 1;         // строки и экраны → px // без ручки
+  var d = (Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX) * ky;
+  if (!d) return;
+  var teper = performance.now(), dt = teper - kol.tPosl, abs = Math.abs(d), znak = d > 0 ? 1 : -1;
+  kol.tPosl = teper;
+  clearTimeout(kol.zhdyot);
+  // мышь, которая шлёт строки или экраны, — это всегда щелчок колеса: трек на каждый
+  if (e.deltaMode !== 0) { kolesoShag(znak, abs); kol.zanyat = false; kol.nakop = 0; kol.znak = znak; return; }
+  // редкие события подряд — колесо мыши на ходу: каждый щелчок — трек
+  // Плотное событие хоть раз за жест — это тачпад, и редкие события дальше — подвисание кадра, а не колесо.
+  if (dt > P.razryv || znak !== kol.znak) { kol.redkih = 0; kol.plotno = false; }
+  else if (dt < PLOTNO) { kol.plotno = true; kol.redkih = 0; }
+  else if (abs >= SHAG_SHCHELCHKA) kol.redkih++;
+  if (kol.redkih >= 2 && !kol.plotno) { kolesoShag(znak, abs); kol.zanyat = false; kol.nakop = 0; kol.znak = znak; return; }
+  var novyi = dt > P.razryv || znak !== kol.znak;
+  if (!novyi && kol.zanyat) {
+    if (!kol.spad) {                       // жест ещё растёт или держится у пика
+      kol.pik = Math.max(kol.pik, abs);
+      if (abs < kol.pik * SPAD) { kol.spad = true; kol.pol = abs; }
+    } else if (abs > kol.pol * P.tolchok + SHAG_SHCHELCHKA) novyi = true;   // новый толчок поверх инерции
+    else kol.pol = Math.min(kol.pol, abs);
+  }
+  if (novyi) { kol.nakop = 0; kol.zanyat = false; }
+  kol.znak = znak;
+  if (kol.zanyat) return;
+  kol.nakop += d;
+  if (Math.abs(kol.nakop) >= P.porog) { kolesoShag(znak, abs); return; }
+  // до порога не дошло: если это событие останется одиночным — это щелчок колеса мыши
+  if (dt > P.razryv && abs >= SHAG_SHCHELCHKA) {
+    kol.zhdyot = setTimeout(function () {
+      if (!kol.zanyat && performance.now() - kol.tPosl >= P.razryv - 1) { kolesoShag(znak, abs); kol.zanyat = false; kol.nakop = 0; }
+    }, P.razryv);
+  }
+}, { passive: true });
+window.addEventListener('keydown', function (e) {
+  if (e.target.closest && e.target.closest('input, textarea, select')) return;
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') perehod(aktiv + 1);
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') perehod(aktiv - 1);
+});
+window.addEventListener('resize', peresobrat);
+
+/* ── пуск ── */
+geometriya();
+var trekAdr = ADRES.has('trek') ? Math.max(1, Math.min(N, +ADRES.get('trek') || 1)) - 1 : null;
+if (STOP !== null) {
+  // стоп-кадр: переход с первого трека на названный, остановленный на STOP мс
+  vstat(0); perehod(trekAdr === null ? 1 : trekAdr);
+  for (var ms = 0; ms < STOP; ms += 1000 / 120) shag(1000 / 120);
+  risuy();
+} else {
+  vstat(trekAdr === null ? 0 : trekAdr);
+  risuy();
+  var proshl = performance.now();
+  (function kadr(teper) {
+    requestAnimationFrame(kadr);
+    shag(Math.min(50, Math.max(0, (teper || proshl) - proshl)));
+    proshl = teper || proshl;
+    risuy();
+  })();
+}
+// гарнитура могла догрузиться после первого кадра — рост цифры снимается заново
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { rostKesh = {}; peresobrat(); });
+if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', function () { rostKesh = {}; peresobrat(); });
+</script>
+</body>
+</html>
