@@ -60,6 +60,7 @@
 <script src="/panel-lib/toggle.js"></script>
 <script src="/panel-lib/pruzhina.js"></script>
 <script src="/panel-lib/para.js"></script>
+<script src="/panel-lib/schyot.js"></script>
 <script>
 'use strict';
 /* ─────────────────────────────────────────────────────────────
@@ -82,7 +83,7 @@
            6 Содержимое (сектор трека = его длительность / длительность
            стороны; ручка «Пропорция» ведёт от равных секторов к этим);
            14 Защёлка ◌ — кандидат: колесо меняет трек щелчком, один
-           жест — один трек.
+           жест — один трек (импульсный дискретный скролл из галереи M7).
    Приём: «Вёрстка по осям» — роли одного текста (номер / трек /
           группа / длительность) разнесены по своим осям; оси здесь —
           концентрические окружности, сшитые общим лучом номера; выключка
@@ -129,6 +130,13 @@ var ALBOM = {
     ]
   }
 };
+
+/* Авторы в данных записаны фамилиями. Когда автор у трека один, в кольце он
+   пишется полностью, именем и фамилией; когда их несколько — фамилиями. */
+var IMENA = { Cobain: 'Kurt Cobain', Grohl: 'Dave Grohl', Novoselic: 'Krist Novoselic', Powers: 'Chet Powers' };
+function avtoryTekst(spisok) {
+  return spisok.indexOf(',') < 0 && IMENA[spisok] ? IMENA[spisok] : spisok;
+}
 
 var DEFAULTS = {
   v: 5,                // без ручки — застава раскладки: 5 — линии плюсика 1 px; 4 — в центре плюсик вдвое меньше; 3 — группа набрана ABC Gravity Wide по макету; 2 — выровнены отбивки колец (02.10)
@@ -180,9 +188,15 @@ var DEFAULTS = {
   dlinaShuma: 7,        // длина шума, мс
   glushenie: 100,       // глушение на скорости, мс
   zvukEase: 'торможение', zvukBez: [0.33, 1, 0.68, 1],
-  porog: 40,           // путь колеса до щелчка, px
-  razryv: 160,         // пауза колеса, после которой следующий жест новый, мс
-  tolchok: 1.5,        // во сколько раз шаг должен превысить затухающую инерцию, чтобы считаться новым взмахом
+  /* СКРОЛЛ — смена трека колесом. Механика перенесена из галереи M7 (а туда —
+     из каталога) целиком, вместе со значениями: один жест — один трек.
+     Прежние «порог», «разрыв» и «новый взмах» ушли вместе со старой механикой
+     по слову Сергея 02.10: она давала проскоки. */
+  porogZhesta: 30,      // сколько скролла в px нужно на шаг; события во время занятости не копятся
+  zhestPauza: 180,      // отсечка инерции: после шага события считаются тем же жестом, пока разрыв короче, мс; 0 — выключена
+  vsplesk: 25,          // всплеск: после спада дельта снова поднялась до такой доли ПИКА жеста — рука тронула трекпад заново
+  vspleskPodryad: 3,    // и поднималась столько событий подряд: рука разгоняется, шум скачет одиночно
+  zanyatoMs: 320,       // после шага колесо занято столько мс: не считается и не копится
   setka: false, setkaCvet: '#e5352b',   // сетка колец: границы полос и базовые линии
   palette: 'white', bg: '#ffffff', ink: '#111111', dim: '#c9c9c9'
 };
@@ -193,7 +207,7 @@ Object.assign(DEFAULTS, {
   prop: 0, garnitura: 'Helvetica Now Display', tolshchina: 600, dVremya: 43.7,
   gVremya: 'JetBrains Mono', dTrek: 77.8, trTrek: -0.035, dGruppa: 55.9, gGruppa: 'ABC Gravity', trGruppa: -0.07,
   regGruppa: 'up', dDlit: 63.2, dAvtory: 70.5, kAvtory: 4, gAvtory: 'Helvetica Now Display',
-  trAvtory: -0.035, regAvtory: 'cap', hod: 'disk', volna: 180, porog: 20, razryv: 80
+  trAvtory: -0.035, regAvtory: 'cap', hod: 'disk', volna: 180
 });
 /* ПРАВКА УМОЛЧАНИЙ (02.10, выгрузка панели): четырнадцать ручек, уведённых Сергеем
    от прежней основы, стали основой. Название группы вернулось в Helvetica Now
@@ -202,7 +216,7 @@ Object.assign(DEFAULTS, {
   diam: 96, cx: 70, treking: 0.025, dVremya: 83.05, kVremya: 1.3,
   gGruppa: 'Helvetica Now Display', trGruppa: -0.045, regGruppa: 'cap',
   nomPruzh: [670, 0.71], pereborEase: 'плавный', pereborBez: [0.65, 0, 0.35, 1],
-  pereborVolna: 0, pereborFront: 23, porog: 58
+  pereborVolna: 0, pereborFront: 23
 });
 /* ПРАВКА УМОЛЧАНИЙ (02.10, вторая выгрузка панели): цвет. Активное — синий, пассивное — его светлый тон. */
 Object.assign(DEFAULTS, { ink: '#2642e1', dim: '#d4d9f9' });
@@ -363,13 +377,6 @@ var GARNITURY = [
 ].concat((StendPanel.garnituraSpisok ? StendPanel.garnituraSpisok() : []).filter(function (g) { return g[1] === 'мой набор'; }));
 // гарнитура кольца: общая или своя; списком — шесть органов с показом шрифта заняли бы всю панель
 var GARN_KOLTSA = { organ: 'select', iz: [['obshchaya', 'Как общая']].concat(GARNITURY.map(function (g) { return [g[0], g[0]]; })) };
-/* Типы руки («порог жеста», «разрыв жеста») есть в библиотеке лаборатории, а в
-   каноне их пока нет. Чтобы один и тот же файл собирал панель и там, и там,
-   тип берётся по наличию: нет типа руки — та же величина объявляется прежним
-   типом с теми же границами и единицей. */
-var TIPY = (StendPanel.tablicaVelichin && StendPanel.tablicaVelichin.tipy) || {};
-var T_POROG = TIPY['порог жеста'] ? ['порог жеста', undefined] : ['длина', { ot0: 0, do: 400 }];
-var T_RAZRYV = TIPY['разрыв жеста'] ? ['разрыв жеста', undefined] : ['порог времени', { do: 2000 }];
 var REGISTR = { iz: [['kak', '\u2014'], ['up', 'AG'], ['lo', 'ag'], ['cap', 'Ag']] };
 
 var PANEL = StendPanel.build({
@@ -481,9 +488,11 @@ var PANEL = StendPanel.build({
     ['pereborTick', 'Перещёлк знака', 'время', { ot0: 20, do: 300 }],
     ['pereborVse', 'Совпавшие знаки', 'двоичное', { iz: ['Перебирать и совпавшие', 'Оставлять на месте'] }],
     ['g', 'Колесо'],
-    ['porog', 'Порог жеста', T_POROG[0], T_POROG[1]],
-    ['razryv', 'Разрыв жеста', T_RAZRYV[0], T_RAZRYV[1]],
-    ['tolchok', 'Новый взмах поверх инерции', 'сила', { ot0: 1.1, do: 4, shag: 0.1, edinica: '×' }],
+    ['porogZhesta', 'Порог жеста', 'путь', { ot0: 0, do: 400 }],
+    ['zhestPauza', 'Отсечка инерции', 'порог времени', { do: 1500 }],
+    ['vsplesk', 'Всплеск — новый жест', 'сила'],
+    ['vspleskPodryad', 'Растёт событий подряд', 'счёт', { ot0: 1, do: 8 }],
+    ['zanyatoMs', 'Занято после шага', 'порог времени', { do: 2000 }],
     /* Звук — как в галерее M7: тон плюс короткий шум контакта. Браузер разрешает
        звук только после первого нажатия или клавиши — до них щелчков нет. */
     ['h', 'Звук', { zakryt: true, glaz: 'zvuk' }],
@@ -554,9 +563,11 @@ var PANEL = StendPanel.build({
     dlinaPara: 'Сколько живёт каждая составляющая. Дольше 60 мс щелчок перестаёт быть щелчком и начинает слышаться тоном.',
     glushenie: 'Как часто щелчки могут идти подряд: чаще этого промежутка звук молчит.',
     zvukEase: 'Форма затухания щелчка.',
-    porog: 'Сколько надо прокрутить колесом, чтобы трек сменился.',
-    razryv: 'Один жест — один трек. Пауза колеса длиннее этой начинает новый жест. Она же — время, за которое одиночный щелчок колеса мыши признаётся щелчком.',
-    tolchok: 'После взмаха тачпад ещё секунду шлёт затухающую инерцию. Новый взмах узнаётся по шагу, который во столько раз больше наименьшего шага инерции. Меньше — отзывчивее, но чувствительнее к дрожи; больше — второй взмах надо делать решительнее.'
+    porogZhesta: 'Сколько скролла нужно на шаг. Один жест — один трек.',
+    zhestPauza: 'Отсечка: разрыв длиннее неё открывает новый жест — но только если дельта после разрыва выросла. Провал от подтормозившего кадра, за которым хвост продолжает затухать, жестом не считается.',
+    vsplesk: 'Новое касание поверх хвоста инерции: дельта должна подняться до такой доли пика прежнего жеста. 0 — засчитать любой подъём после спада, 100 — только повтор прежней силы.',
+    vspleskPodryad: 'Сколько событий подряд дельта должна расти, чтобы подъём считался рукой, а не дрожью хвоста.',
+    zanyatoMs: 'Сколько после шага колесо не считается и не копится — иначе после шага выстрелило бы накопленным.'
   },
   onChange: function () { peresobrat(); }
 });
@@ -586,7 +597,7 @@ function tekstKoltsa(k, i) {   // k: 1 трек, 2 группа, 3 длител�
   if (k === 1) return registr(TREKI[i][0], P.regTrek);
   if (k === 2) return registr(ALBOM.gruppa, P.regGruppa);
   if (k === 3) return dlitTekst(TREKI[i][1]);
-  return registr(TREKI[i][2] + (TREKI[i][3] ? ' \u00b7 ' + TREKI[i][3] : ''), P.regAvtory);   // сингл — только если был
+  return registr(avtoryTekst(TREKI[i][2]) + (TREKI[i][3] ? ' \u00b7 ' + TREKI[i][3] : ''), P.regAvtory);   // сингл — только если был
 }
 var KV = KOLCA.length + 1;  // доля кольца отметок времени
 var M = KOLCA.length + 2;   // долей перехода: диск, кольца строк, кольцо времени
@@ -968,66 +979,66 @@ function peresobrat() {
 }
 
 /* ── рука ── */
-/* КОЛЕСО: один жест — один трек. Жест узнаётся тремя способами, потому что
-   тачпад и мышь шлют разное.
-   1. Поток тачпада: шаги копятся до порога, трек меняется, жест «занят».
-      Дальше идёт инерция — до секунды и дольше, без пауз. Новый взмах поверх неё
-      раньше терялся: паузы нет, жест всё ещё занят. Теперь он узнаётся по
-      форме: инерция только затухает, и шаг, который заметно больше её
-      наименьшего шага, — это новый толчок руки.
-   2. Пауза дольше «разрыва жеста» или смена направления — тоже новый жест.
-   3. Одиночный щелчок колеса мыши: одно событие и тишина. На пороге в
-      пикселях он терялся (медленный щелчок — 4 px). Событие, за которым
-      в течение «разрыва» ничего не пришло, считается щелчком и меняет трек.
-      Хвост инерции тачпада — тоже одиночные события, но по 1–2 px: их
-      отсекает наименьший шаг щелчка.
-   4. Быстрое кручение колеса мыши: события идут редко (десятки мс между
-      ними), а тачпад шлёт плотно, каждый кадр. Два редких события подряд —
-      значит, это колесо, и дальше каждый щелчок меняет трек. */
-var kol = { nakop: 0, zanyat: false, tPosl: 0, znak: 0, pik: 0, pol: 0, spad: false, zhdyot: 0, redkih: 0, plotno: false };
-var PLOTNO = 35;           // мс: события тачпада идут плотнее этого, щелчки колеса — реже // без ручки
-var SHAG_SHCHELCHKA = 3;   // px: одиночное событие мельче — хвост инерции, а не щелчок колеса // без ручки
-var SPAD = 0.6;            // доля пика, ниже которой инерция считается начавшей затухать // без ручки
-function kolesoShag(znak, abs) {
-  perehod(aktiv + znak);
-  kol.zanyat = true; kol.pik = kol.pol = abs; kol.spad = false;
+/* КОЛЕСО — импульсный дискретный скролл: один жест — один трек. Механика
+   перенесена из галереи M7 целиком, со значениями; там она выверена по живым
+   записям трекпада.
+   Порог делает шаг; после шага жест считается сделанным, и события дальше —
+   тот же жест, пока не начнётся новый. Две ветки: МЫШЬ даёт крупные целые
+   отметки без инерции — её жест кончается разрывом длиннее отсечки. ТРЕКПАД
+   после отрыва пальцев шлёт инерцию: если браузер помечает её сам
+   (WheelEvent.momentum), она не считается вовсе, а первое событие руки после
+   неё — новый жест. Если не помечает — инерция угадывается: хвост тает от пика,
+   и новое касание — это разгон: дельта упала к полу, а потом несколько
+   событий подряд растёт и поднимается до заметной доли прежнего пика.
+   Одиночный скачок в хвосте — дрожь, а не рука. Разрыв сам по себе не жест:
+   после паузы рука начинает с роста, а подтормозивший кадр продолжает
+   затухать. */
+var MOMENTUM_EST = (typeof WheelEvent !== 'undefined') && ('momentum' in WheelEvent.prototype);   // браузер помечает инерцию колеса сам
+var KOLESO_LOG = [], KOLESO_MAX = 400, KOLESO_T0 = 0;   // журнал колеса для разбора жалоб: zhurnalKolesa() в консоли // без ручки
+function zapisKoleso(e, now, d, reshenie) {
+  if (!KOLESO_T0) KOLESO_T0 = now;
+  KOLESO_LOG.push([Math.round(now - KOLESO_T0), +d.toFixed(2), e.momentum === undefined ? '-' : (e.momentum ? 1 : 0), e.deltaMode, reshenie]);
+  if (KOLESO_LOG.length > KOLESO_MAX) KOLESO_LOG.shift();
 }
+window.zhurnalKolesa = function () { return KOLESO_LOG; };
+var kol = { skrollT: -1e9, zhest: 0, zhestSdelan: false, rostPodryad: 0, delPosled: 0, momBylo: false, delMax: 0, delMinPosle: 0, zanyatoDo: -1e9 };
 window.addEventListener('wheel', function (e) {
   if (e.target.closest && e.target.closest('.stend-panel, [class^="st-"]')) return;   // панель листается сама
+  e.preventDefault();
   var ky = e.deltaMode === 1 ? 100 / 6 : e.deltaMode === 2 ? innerHeight : 1;         // строки и экраны → px // без ручки
-  var d = (Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX) * ky;
-  if (!d) return;
-  var teper = performance.now(), dt = teper - kol.tPosl, abs = Math.abs(d), znak = d > 0 ? 1 : -1;
-  kol.tPosl = teper;
-  clearTimeout(kol.zhdyot);
-  // мышь, которая шлёт строки или экраны, — это всегда щелчок колеса: трек на каждый
-  if (e.deltaMode !== 0) { kolesoShag(znak, abs); kol.zanyat = false; kol.nakop = 0; kol.znak = znak; return; }
-  // редкие события подряд — колесо мыши на ходу: каждый щелчок — трек
-  // Плотное событие хоть раз за жест — это тачпад, и редкие события дальше — подвисание кадра, а не колесо.
-  if (dt > P.razryv || znak !== kol.znak) { kol.redkih = 0; kol.plotno = false; }
-  else if (dt < PLOTNO) { kol.plotno = true; kol.redkih = 0; }
-  else if (abs >= SHAG_SHCHELCHKA) kol.redkih++;
-  if (kol.redkih >= 2 && !kol.plotno) { kolesoShag(znak, abs); kol.zanyat = false; kol.nakop = 0; kol.znak = znak; return; }
-  var novyi = dt > P.razryv || znak !== kol.znak;
-  if (!novyi && kol.zanyat) {
-    if (!kol.spad) {                       // жест ещё растёт или держится у пика
-      kol.pik = Math.max(kol.pik, abs);
-      if (abs < kol.pik * SPAD) { kol.spad = true; kol.pol = abs; }
-    } else if (abs > kol.pol * P.tolchok + SHAG_SHCHELCHKA) novyi = true;   // новый толчок поверх инерции
-    else kol.pol = Math.min(kol.pol, abs);
+  var syroe = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX, dY = syroe * ky;
+  var now = performance.now();
+  var razryv = now - kol.skrollT; kol.skrollT = now;
+  var ad = Math.abs(dY);
+  if (e.momentum === true) { kol.momBylo = true; zapisKoleso(e, now, dY, 'инерция'); return; }    // инерция: ни шага, ни жеста, ни разрыва
+  var kasanie = kol.momBylo; kol.momBylo = false;
+  var mysh = e.deltaMode !== 0 || (Math.abs(syroe) >= 100 && Number.isInteger(syroe));           // отметка мыши
+  var pol = Math.max(1, P.porogZhesta) * 0.15;                                                   // пол против шума мелких дельт — доля порога
+  kol.rostPodryad = (ad > kol.delPosled) ? (kol.rostPodryad || 0) + 1 : 0;
+  // новое касание отделено от хвоста тишиной: хвост упал к полу, потом дельта разгоняется несколько событий подряд
+  var vspl = !MOMENTUM_EST && !mysh && kol.zhestSdelan && ad >= pol && kol.delMinPosle <= pol &&
+             ad > kol.delMinPosle && ad >= kol.delMax * (P.vsplesk / 100) &&
+             kol.rostPodryad >= Math.max(1, P.vspleskPodryad);
+  // разрыв сам по себе не жест: рука после паузы начинает с роста
+  var rastet = mysh || !kol.zhestSdelan || ad > kol.delPosled;
+  var novyy = P.zhestPauza <= 0 || (razryv > P.zhestPauza && rastet) || kasanie || vspl;
+  kol.delPosled = ad;
+  // пик жеста всплеском не понижается: настоящее касание его обнуляет, всплеск — нет
+  if (novyy) { kol.zhest = 0; kol.zhestSdelan = false; kol.delMax = vspl ? Math.max(kol.delMax, ad) : ad; kol.delMinPosle = ad; }
+  else if (ad > kol.delMax) { kol.delMax = ad; kol.delMinPosle = ad; }                           // новый пик — дно отсчитывается заново
+  else kol.delMinPosle = Math.min(kol.delMinPosle, ad);
+  var pochemu = novyy ? (kasanie ? 'жест:касание' : vspl ? 'жест:всплеск' : razryv > P.zhestPauza ? 'жест:разрыв ' + Math.round(razryv) : 'жест:отсечка0') : 'тот же';
+  if (kol.zhestSdelan) { zapisKoleso(e, now, dY, pochemu + ' · шаг был'); return; }
+  if (now < kol.zanyatoDo) { zapisKoleso(e, now, dY, pochemu + ' · занято'); return; }
+  kol.zhest += dY;
+  if (Math.abs(kol.zhest) >= Math.max(1, P.porogZhesta)) {
+    var kuda = kol.zhest > 0 ? 1 : -1;
+    perehod(aktiv + kuda);
+    kol.zhest = 0; kol.zhestSdelan = true; kol.zanyatoDo = now + P.zanyatoMs;
+    zapisKoleso(e, now, dY, pochemu + ' · ШАГ ' + (kuda > 0 ? '→' : '←')); return;
   }
-  if (novyi) { kol.nakop = 0; kol.zanyat = false; }
-  kol.znak = znak;
-  if (kol.zanyat) return;
-  kol.nakop += d;
-  if (Math.abs(kol.nakop) >= P.porog) { kolesoShag(znak, abs); return; }
-  // до порога не дошло: если это событие останется одиночным — это щелчок колеса мыши
-  if (dt > P.razryv && abs >= SHAG_SHCHELCHKA) {
-    kol.zhdyot = setTimeout(function () {
-      if (!kol.zanyat && performance.now() - kol.tPosl >= P.razryv - 1) { kolesoShag(znak, abs); kol.zanyat = false; kol.nakop = 0; }
-    }, P.razryv);
-  }
-}, { passive: true });
+  zapisKoleso(e, now, dY, pochemu + ' · копится ' + Math.round(kol.zhest));
+}, { passive: false });
 window.addEventListener('keydown', function (e) {
   if (e.target.closest && e.target.closest('input, textarea, select')) return;
   if (e.key === 'ArrowRight' || e.key === 'ArrowDown') perehod(aktiv + 1);
