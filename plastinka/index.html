@@ -26,29 +26,18 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { height: 100%; }
   body { overflow: hidden; overscroll-behavior: none; }
-  /* сцена во весь экран: координаты внутри считает стенд от размеров окна */
-  svg#scene { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; display: block;
-    user-select: none; -webkit-user-select: none; }
-  svg#scene .sektor { fill: transparent; cursor: pointer; pointer-events: all; }
-  svg#scene text { pointer-events: none; }
-  svg#scene #setka circle { fill: none; pointer-events: none; }
-  svg#scene #krest { pointer-events: none; }
+  /* Сцена — холст WebGL во весь экран. Поверх него лежит SVG со служебной графикой:
+     сетка колец и плюсик в центре. Они неподвижны, поэтому браузер рисует их один раз. */
+  canvas#gl { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; display: block; }
+  svg#scene { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; display: block; pointer-events: none; }
+  svg#scene #setka circle { fill: none; }
 </style>
 </head>
 <body>
+<canvas id="gl"></canvas>
 <svg id="scene" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <path id="os-vremya" /><path id="os-trek" /><path id="os-gruppa" /><path id="os-dlit" />
-    <path id="os-avtory" /><path id="os-albom" />
-  </defs>
   <g id="setka"></g>
   <g id="krest"><line /><line /></g>
-  <g id="sloy-nomera"></g>
-  <g id="k-trek"><text><textPath href="#os-trek"></textPath></text></g>
-  <g id="k-gruppa"><text><textPath href="#os-gruppa"></textPath></text></g>
-  <g id="k-dlit"><text><textPath href="#os-dlit"></textPath></text></g>
-  <g id="k-avtory"><text><textPath href="#os-avtory"></textPath></text></g>
-  <g id="k-albom"><text id="albom" text-anchor="middle"><textPath href="#os-albom" startOffset="50%"></textPath></text></g>
 </svg>
 
 <script>window.STEND_PANEL_VSEGDA = true; /* панель и на витрине: над стендом работают на опубликованном адресе (слово Сергея 02.10) */</script>
@@ -98,6 +87,9 @@
 
    Звук: сухой щелчок на каждой смене трека — синтез из галереи M7.
    В центре круга — плюсик из двух линий.
+
+   Отрисовка — WebGL: знаки лежат в текстуре полем расстояний, поворот
+   и перенос считает видеокарта; в покое кадр не рисуется.
 
    Параметры адреса: ?stop=мс — стоп-кадр перехода с первого трека на
    ?trek=N (без stop — просто открыть на треке N); ?storona=B;
@@ -615,13 +607,7 @@ var PANEL = StendPanel.build({
 /* ── сцена ── */
 var NS = 'http://www.w3.org/2000/svg';
 var TAU = Math.PI * 2;
-var svg = document.getElementById('scene');
-var sloyNomera = document.getElementById('sloy-nomera');
-var albomEl = document.getElementById('albom'), albomTp = albomEl.querySelector('textPath'), albomG = document.getElementById('k-albom');
-var KOLCA = ['trek', 'gruppa', 'dlit', 'avtory'].map(function (k) {
-  var g = document.getElementById('k-' + k);
-  return { g: g, text: g.querySelector('text'), tp: g.querySelector('textPath'), os: document.getElementById('os-' + k) };
-});
+var KOLCA = ['trek', 'gruppa', 'dlit', 'avtory'];   // кольца строк, от первой доли перехода
 
 var TREKI = ALBOM.storony[P.storona] || ALBOM.storony.A;
 var N = TREKI.length;
@@ -642,48 +628,16 @@ function tekstKoltsa(k, i) {   // k: 1 трек, 2 группа, 3 длител�
 var KV = KOLCA.length + 1;  // доля кольца отметок времени
 var M = KOLCA.length + 2;   // долей перехода: диск, кольца строк, кольцо времени
 
+/* Номер едет по кольцу, но вокруг себя не вращается: цифра всегда горизонтальна и
+   ставится серединой в точку кольца. Отметка времени — наоборот, лежит на дуге и
+   поворачивается вместе с кольцом, серединой на луче номера. */
 var NOMERA = TREKI.map(function (t, i) {
-  var g = document.createElementNS(NS, 'g');
-  var sektor = document.createElementNS(NS, 'path'); sektor.setAttribute('class', 'sektor');
-  var text = document.createElementNS(NS, 'text');
-  /* Номер едет по кольцу, но вокруг себя не вращается: цифра всегда
-     горизонтальна и ставится серединой в точку кольца. Отметка времени —
-     наоборот, лежит на дуге и поворачивается вместе с кольцом: она в
-     поворотной группе рядом с зоной нажатия, серединой на луче номера. */
-  text.setAttribute('text-anchor', 'middle');
-  text.textContent = String(i + 1);
-  g.appendChild(sektor); sloyNomera.appendChild(g); sloyNomera.appendChild(text);
   // отметка начала: сумма длительностей треков до этого
-  var vremya = document.createElementNS(NS, 'text');
-  vremya.setAttribute('text-anchor', 'middle');
-  var tv = document.createElementNS(NS, 'textPath');
-  atr(tv, { href: '#os-vremya', startOffset: '50%' });   // середина оси в два оборота — луч
-  tv.textContent = dlitTekst(TREKI.slice(0, i).reduce(function (s, x) { return s + x[1]; }, 0));
-  vremya.appendChild(tv); g.appendChild(vremya);
-  sektor.addEventListener('click', function () { perehod(i); });
-  return { g: g, sektor: sektor, text: text, vremya: vremya };
+  return { nomer: String(i + 1), vremya: dlitTekst(TREKI.slice(0, i).reduce(function (s, x) { return s + x[1]; }, 0)) };
 });
 
 /* геометрия: всё выводится из окна и ручек, замеров раскладки нет */
 var G = { cx: 0, cy: 0, R: 0, ugly: [], doli: [] };
-
-// точка на круге: угол 0 — верх, дальше по часовой
-function tochka(r, grad) {
-  var a = grad * Math.PI / 180;
-  return (G.cx + r * Math.sin(a)).toFixed(2) + ' ' + (G.cy - r * Math.cos(a)).toFixed(2);
-}
-// ось строки: окружность по часовой от верха, два оборота — длинная строка не рвётся на стыке
-function os(r, protiv) {   // protiv — против часовой: строка на ней стоит верхом к центру
-  var verh = tochka(r, 0), niz = tochka(r, 180), d = 'M' + verh, f = protiv ? 0 : 1;
-  for (var i = 0; i < 2; i++) d += 'A' + r + ' ' + r + ' 0 1 ' + f + ' ' + niz + 'A' + r + ' ' + r + ' 0 1 ' + f + ' ' + verh;
-  return d;
-}
-// зона нажатия: кольцевой сектор от луча номера на размах его трека
-function sektorPut(rVn, rNar, razmah) {
-  var bolsh = razmah > 180 ? 1 : 0;
-  return 'M' + tochka(rNar, 0) + 'A' + rNar + ' ' + rNar + ' 0 ' + bolsh + ' 1 ' + tochka(rNar, razmah) +
-    'L' + tochka(rVn, razmah) + 'A' + rVn + ' ' + rVn + ' 0 ' + bolsh + ' 0 ' + tochka(rVn, 0) + 'Z';
-}
 
 function atr(el, o) { for (var k in o) el.setAttribute(k, o[k]); }
 
@@ -712,7 +666,7 @@ function geometriya() {
   G.rC = Math.max(1, G.R - rost(P.gNum) * kNum / 2);        // середина цифры на кольце
   G.dyNum = rost(P.gNum) * kNum / 2;                        // от середины цифры до её базовой линии
   var krayV = krayKoltsa(P.dVremya), bazaV = Math.max(1, krayV - rost(P.gVremya) * kV);
-  document.getElementById('os-vremya').setAttribute('d', os(bazaV));
+  G.kNum = kNum; G.kV = kV; G.bazaV = bazaV;
 
   var treki = [P.trTrek, P.trGruppa, P.trDlit, P.trAvtory];   // свой трекинг — добавка к общему
   var osi = [[P.dTrek, P.kTrek, P.gTrek], [P.dGruppa, P.kGruppa, P.gGruppa],
@@ -720,40 +674,16 @@ function geometriya() {
     var k = D * x[1] / 100, kray = krayKoltsa(x[0]);
     return { kray: kray, baza: Math.max(1, kray - rost(x[2]) * k), k: k, g: x[2], tr: P.treking + treki[i] };
   });
-
-  osi.forEach(function (x, i) {
-    KOLCA[i].os.setAttribute('d', os(x.baza));
-    atr(KOLCA[i].text, { 'font-family': semya(x.g), 'font-weight': P.tolshchina, 'font-size': x.k.toFixed(2),
-      visibility: x.k > 0 ? 'visible' : 'hidden' });
-    KOLCA[i].text.style.letterSpacing = (x.tr * x.k).toFixed(2) + 'px';
-    // оси вариативной гарнитуры — пока только у кольца группы
-    KOLCA[i].text.style.fontVariationSettings = i === 1 ? '"wdth" ' + P.wdthGruppa + ', "slnt" ' + P.slntGruppa : 'normal';
-    // ось в два оборота, строка привязана к её середине — лучу на втором обороте:
-    // при выключке по центру и вправо левой части строки есть куда лечь
-    KOLCA[i].text.setAttribute('text-anchor', { left: 'start', center: 'middle', right: 'end' }[P.vykl] || 'middle');
-    KOLCA[i].tp.setAttribute('startOffset', '50%');
-  });
+  G.osi = osi;
   // зона нажатия номера: полоса вокруг кольца номеров, чуть шире цифры в обе стороны
-  var rVn = Math.max(1, rNum - kNum * 0.6), rNar = G.R + kNum * 0.5;
-  NOMERA.forEach(function (n, i) {
-    n.sektor.setAttribute('d', sektorPut(rVn, rNar, G.doli[i]));
-    atr(n.text, { 'font-family': semya(P.gNum), 'font-weight': P.tolshchina, 'font-size': kNum.toFixed(2) });
-    n.text.style.letterSpacing = ((P.treking + P.trNum) * kNum).toFixed(2) + 'px';
-    atr(n.vremya, { 'font-family': semya(P.gVremya), 'font-weight': P.tolshchina, 'font-size': kV.toFixed(2),
-      visibility: kV > 0 ? 'visible' : 'hidden' });
-    n.vremya.style.letterSpacing = ((P.treking + P.trVremya) * kV).toFixed(2) + 'px';
-  });
+  G.rVn = Math.max(1, rNum - kNum * 0.6); G.rNar = G.R + kNum * 0.5;
   /* Альбом — в кольце группы: его верхний край лежит на окружности кольца,
      набор у него свой (гарнитура, трекинг, регистр, кегль). Развёрнутый «читается
      внизу» идёт против часовой, верхом к центру: базовая линия тогда ложится
      на внешний край кольца, и строка занимает ту же полосу. */
   var av = osi[1], kA = D * P.kAlbom / 100;   // кольцо группы
-  document.getElementById('os-albom').setAttribute('d',
-    P.albomChitaetsya ? os(av.kray, true) : os(Math.max(1, av.kray - rost(P.gAlbom) * kA)));
-  atr(albomEl, { 'font-family': semya(P.gAlbom), 'font-weight': P.tolshchina, 'font-size': kA.toFixed(2),
-    visibility: kA > 0 ? 'visible' : 'hidden' });
-  albomEl.style.letterSpacing = ((P.treking + P.trAlbom) * kA).toFixed(2) + 'px';
-  albomTp.textContent = registr(ALBOM.imya, P.regAlbom);
+  G.albom = { k: kA, r: P.albomChitaetsya ? av.kray : Math.max(1, av.kray - rost(P.gAlbom) * kA) };
+  podgotovitHolst();
   document.body.style.background = P.bg;
 
   // крестик в центре: две линии через центр круга, длина — доля диаметра
@@ -895,6 +825,7 @@ function perehod(i) {
   razmahHoda = Math.max(-potolok, Math.min(potolok, raznica));
   cel = ugol[0] + raznica; t0 = chasy; aktiv = i;
   vid.nomOt = vid.nom; vid.vrOt = vid.vr;   // пружина стартует с того места, где номер виден сейчас
+  nado = true;
   shchelchok();                              // трек сменился → щелчок
 }
 function vstat(i) {                    // без движения: старт и правка геометрии ручкой
@@ -940,21 +871,9 @@ function shag(dt) {
   }
 }
 
-function smes(a, b, t) {               // цвет между двумя #rrggbb
-  var x = parseInt(a.slice(1), 16), y = parseInt(b.slice(1), 16), r = [16, 8, 0].map(function (sd) {
-    var p = (x >> sd) & 255, q = (y >> sd) & 255;
-    return Math.round(p + (q - p) * t);
-  });
-  return 'rgb(' + r.join(',') + ')';
-}
-function smesHex(a, b, t) {            // то же, но ответ в виде #rrggbb — чтобы смешивать дальше
-  var x = parseInt(a.slice(1), 16), y = parseInt(b.slice(1), 16);
-  return '#' + [16, 8, 0].map(function (sd) {
-    var p = (x >> sd) & 255, q = (y >> sd) & 255;
-    return ('0' + Math.round(p + (q - p) * t).toString(16)).slice(-2);
-  }).join('');
-}
-function povorot(grad) { return 'rotate(' + grad.toFixed(3) + ' ' + G.cx.toFixed(2) + ' ' + G.cy.toFixed(2) + ')'; }
+// цвет: '#rrggbb' → три доли; смесь двух цветов
+function cv(h) { var x = parseInt(String(h).slice(1), 16); return [(x >> 16 & 255) / 255, (x >> 8 & 255) / 255, (x & 255) / 255]; }
+function sm(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; }
 
 /* ── ПЕРЕБОР ЗНАКОВ (перенос из галереи и каталога M7) ──
    Буква меняется на букву своего регистра, цифра на цифру, знаки препинания
@@ -990,46 +909,323 @@ function perebrat(staroe, novoe, seed, p, tick, win) {
   return out.replace(/[  ]+$/, '');                    // пустой хвост не держит ширину строки
 }
 
+/* ── ОТРИСОВКА: WebGL ──────────────────────────────────────────────────────
+   Раньше стенд был одним SVG во весь экран. Трассировка 02.10 показала: расчёты —
+   доли миллисекунды на кадр, а растр на порядок тяжелее всего остального; на
+   живой машине кадр во время смены трека растягивался до 50–115 мс. Повёрнутый
+   текст SVG браузер закрашивает контурами заново на каждом кадре.
+   Здесь каждый знак — прямоугольник с куском текстуры. В текстуре лежит не сам
+   знак, а поле расстояний до его края (SDF): по нему шейдер проводит край
+   чётко при любом повороте и кегле. Поворот и перенос знака — четыре умножения
+   на вершину, кадр — один-два вызова отрисовки.
+   Знаки берутся из тех же шрифтов, что стояли в SVG: атлас собирается на месте
+   обычным холстом, поэтому любая гарнитура из панели работает без подготовки.
+   Раскладка строки по дуге повторяет SVG: знак ставится серединой своей ширины
+   на окружность и поворачивается по касательной в этой точке. */
+var holst = document.getElementById('gl');
+var gl = holst.getContext('webgl2', { antialias: false, alpha: false, premultipliedAlpha: true });
+var GL2 = !!gl;
+if (!gl) { gl = holst.getContext('webgl', { antialias: false, alpha: false, premultipliedAlpha: true }); if (gl) gl.getExtension('OES_standard_derivatives'); }
+
+var BAZA = 96;        // кегль, которым знак снимается в атлас, px // без ручки: служебная геометрия атласа
+var POLYA = 14;       // поле вокруг знака в атласе, px // без ручки
+var RADIUS = 12;      // на сколько px от края знака пишется поле расстояний // без ручки
+var ATLAS = 2048;     // сторона текстуры атласа, px // без ручки
+var ATLASY = {};      // ключ шрифта → атлас
+
+var prog = null, uRazmer = null, uAtlas = null, buf = null;
+(function () {
+  if (!gl) return;
+  var VS = GL2
+    ? '#version 300 es\nin vec2 aPos; in vec2 aUv; in vec4 aCvet; uniform vec2 uRazmer; out vec2 vUv; out vec4 vCvet;\n' +
+      'void main(){ vUv=aUv; vCvet=aCvet; vec2 p=aPos/uRazmer*2.0-1.0; gl_Position=vec4(p.x,-p.y,0.0,1.0); }'
+    : 'attribute vec2 aPos; attribute vec2 aUv; attribute vec4 aCvet; uniform vec2 uRazmer; varying vec2 vUv; varying vec4 vCvet;\n' +
+      'void main(){ vUv=aUv; vCvet=aCvet; vec2 p=aPos/uRazmer*2.0-1.0; gl_Position=vec4(p.x,-p.y,0.0,1.0); }';
+  // край знака — там, где поле равно 0.5; ширина сглаживания берётся из того, как быстро поле меняется на экране
+  var FS = GL2
+    ? '#version 300 es\nprecision highp float; in vec2 vUv; in vec4 vCvet; uniform sampler2D uAtlas; out vec4 cvet;\n' +
+      'void main(){ float d=texture(uAtlas,vUv).r; float w=max(fwidth(d)*0.75,0.0001); float a=smoothstep(0.5-w,0.5+w,d)*vCvet.a; cvet=vec4(vCvet.rgb*a,a); }'
+    : '#extension GL_OES_standard_derivatives : enable\nprecision highp float; varying vec2 vUv; varying vec4 vCvet; uniform sampler2D uAtlas;\n' +
+      'void main(){ float d=texture2D(uAtlas,vUv).r; float w=max(fwidth(d)*0.75,0.0001); float a=smoothstep(0.5-w,0.5+w,d)*vCvet.a; gl_FragColor=vec4(vCvet.rgb*a,a); }';
+  function sh(tip, src) {
+    var o = gl.createShader(tip); gl.shaderSource(o, src); gl.compileShader(o);
+    if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error('шейдер: ' + gl.getShaderInfoLog(o));
+    return o;
+  }
+  prog = gl.createProgram();
+  gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS));
+  gl.bindAttribLocation(prog, 0, 'aPos'); gl.bindAttribLocation(prog, 1, 'aUv'); gl.bindAttribLocation(prog, 2, 'aCvet');
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error('программа: ' + gl.getProgramInfoLog(prog));
+  gl.useProgram(prog);
+  uRazmer = gl.getUniformLocation(prog, 'uRazmer'); uAtlas = gl.getUniformLocation(prog, 'uAtlas');
+  buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 32, 0);
+  gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 32, 8);
+  gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 4, gl.FLOAT, false, 32, 16);
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);   // цвет уже умножен на прозрачность
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+})();
+
+// размер холста — по окну и плотности экрана; однократно на смену размера, не в кадре
+function podgotovitHolst() {
+  if (!gl) return;
+  var dpr = window.devicePixelRatio || 1, w = Math.round(window.innerWidth * dpr), h = Math.round(window.innerHeight * dpr);
+  if (holst.width !== w || holst.height !== h) { holst.width = w; holst.height = h; }
+  gl.viewport(0, 0, w, h);
+  gl.uniform2f(uRazmer, window.innerWidth, window.innerHeight);
+  nado = true;
+}
+
+/* Поле расстояний: одномерное преобразование Фельценшвальба — Хуттенлохера по
+   столбцам и строкам (приём TinySDF, Mapbox). Полупрозрачные пиксели края дают
+   расстояние точнее целого пикселя. */
+var INF = 1e20;
+function edt1(f, st, shag_, n, v, z, g) {
+  var q, k = 0, s, r;
+  v[0] = 0; z[0] = -INF; z[1] = INF; g[0] = f[st];
+  for (q = 1; q < n; q++) {
+    g[q] = f[st + q * shag_];
+    var q2 = q * q;
+    do { r = v[k]; s = (g[q] - g[r] + q2 - r * r) / (q - r) / 2; } while (s <= z[k] && --k > -1);
+    k++; v[k] = q; z[k] = s; z[k + 1] = INF;
+  }
+  for (q = 0, k = 0; q < n; q++) {
+    while (z[k + 1] < q) k++;
+    r = v[k]; var d = q - r;
+    f[st + q * shag_] = g[r] + d * d;
+  }
+}
+function edt(f, w, h, v, z, g) {
+  for (var x = 0; x < w; x++) edt1(f, x, w, h, v, z, g);
+  for (var y = 0; y < h; y++) edt1(f, y * w, 1, w, v, z, g);
+}
+
+var chern = document.createElement('canvas');   // рабочий холст, на котором снимаются знаки
+chern.width = 512; chern.height = 256;
+var chx = chern.getContext('2d', { willReadFrequently: true });
+
+// ширина вариативной гарнитуры для холста: у него нет оси, есть только слова
+function rastyazhka(wdth) {
+  return wdth <= 56 ? 'ultra-condensed' : wdth <= 68 ? 'extra-condensed' : wdth <= 81 ? 'condensed' : wdth <= 93 ? 'semi-condensed'
+       : wdth <= 106 ? 'normal' : wdth <= 118 ? 'semi-expanded' : wdth <= 137 ? 'expanded' : 'extra-expanded';
+}
+/* Атлас одной гарнитуры. Ключ — семейство, насыщенность и ширина; сменилось что-то из
+   трёх — другой атлас. Знаки добавляются по мере надобности, упаковка построчная. */
+function atlas(g, shirina) {
+  var css = P.tolshchina + ' ' + BAZA + 'px ' + semya(g), str = shirina || 'normal', klyuch = css + '|' + str;
+  var a = ATLASY[klyuch];
+  if (a) return a;
+  a = ATLASY[klyuch] = { css: css, str: str, z: {}, kern: {}, x: 0, y: 0, vys: 0, tex: null };
+  chx.font = css; if ('fontStretch' in chx) chx.fontStretch = str;
+  var m = chx.measureText('Hg');
+  a.verh = Math.ceil(m.fontBoundingBoxAscent || BAZA); a.niz = Math.ceil(m.fontBoundingBoxDescent || BAZA * 0.3);
+  a.vys = a.verh + a.niz + POLYA * 2;
+  if (gl) {
+    a.tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, a.tex);
+    var fmt = GL2 ? gl.R8 : gl.LUMINANCE, vn = GL2 ? gl.RED : gl.LUMINANCE;
+    gl.texImage2D(gl.TEXTURE_2D, 0, fmt, ATLAS, ATLAS, 0, vn, gl.UNSIGNED_BYTE, new Uint8Array(ATLAS * ATLAS));
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  }
+  /* Шрифт из /fonts мог ещё не прийти: тогда знаки сняты запасным. document.fonts.check
+     тут не помощник — на недогруженную гарнитуру он отвечает «готова». Поэтому атлас
+     запоминает ширину пробной строки, а после загрузки шрифта проба снимается заново:
+     ширина другая — атлас собран не тем шрифтом, его надо выбросить. */
+  a.proba = chx.measureText(PROBA).width;
+  if (document.fonts && document.fonts.load) document.fonts.load(css).then(sveritAtlasy).catch(function () {});
+  return a;
+}
+var PROBA = '0Hg@Wi1';
+function sveritAtlasy() {
+  var smenilos = false;
+  for (var k in ATLASY) {
+    var a = ATLASY[k];
+    chx.font = a.css; if ('fontStretch' in chx) chx.fontStretch = a.str;
+    if (chx.measureText(PROBA).width !== a.proba) { if (gl && a.tex) gl.deleteTexture(a.tex); delete ATLASY[k]; smenilos = true; }
+  }
+  if (smenilos) { rostKesh = {}; peresobrat(); }
+}
+function znak(a, ch) {
+  var zn = a.z[ch];
+  if (zn) return zn;
+  chx.font = a.css; if ('fontStretch' in chx) chx.fontStretch = a.str;
+  var m = chx.measureText(ch), adv = m.width;
+  if (ch === ' ' || ch === '\u00a0') return (a.z[ch] = { adv: chx.measureText(' ').width, w: 0 });
+  var lev = Math.max(0, Math.ceil(m.actualBoundingBoxLeft)), prav = Math.max(1, Math.ceil(m.actualBoundingBoxRight));
+  var w = lev + prav + POLYA * 2, h = a.vys;
+  if (w > chern.width || h > chern.height) { chern.width = Math.max(chern.width, w); chern.height = Math.max(chern.height, h); chx = chern.getContext('2d', { willReadFrequently: true }); chx.font = a.css; if ('fontStretch' in chx) chx.fontStretch = a.str; }
+  chx.clearRect(0, 0, w, h);
+  chx.fillStyle = '#000'; chx.textBaseline = 'alphabetic';
+  chx.fillText(ch, POLYA + lev, POLYA + a.verh);
+  var px = chx.getImageData(0, 0, w, h).data, n = w * h;
+  var vne = new Float64Array(n), vnutri = new Float64Array(n);
+  for (var i = 0; i < n; i++) {
+    var al = px[i * 4 + 3] / 255;
+    if (al === 1) { vne[i] = 0; vnutri[i] = INF; }
+    else if (al === 0) { vne[i] = INF; vnutri[i] = 0; }
+    else { var d = 0.5 - al; vne[i] = d > 0 ? d * d : 0; vnutri[i] = d < 0 ? d * d : 0; }
+  }
+  var mx = Math.max(w, h), v = new Uint16Array(mx), z = new Float64Array(mx + 1), g = new Float64Array(mx);
+  edt(vne, w, h, v, z, g); edt(vnutri, w, h, v, z, g);
+  var pole = new Uint8Array(n);
+  for (i = 0; i < n; i++) {
+    var rasst = Math.sqrt(vne[i]) - Math.sqrt(vnutri[i]);
+    pole[i] = Math.max(0, Math.min(255, Math.round(255 - 255 * (rasst / RADIUS / 2 + 0.5))));   // край знака — на 0.5
+  }
+  if (a.x + w > ATLAS) { a.x = 0; a.y += a.vys; }
+  if (a.y + h > ATLAS) { a.x = 0; a.y = 0; }                 // атлас полон — пишем с начала; на девяносто знаков хватает с запасом
+  if (gl) { gl.bindTexture(gl.TEXTURE_2D, a.tex); gl.texSubImage2D(gl.TEXTURE_2D, 0, a.x, a.y, w, h, GL2 ? gl.RED : gl.LUMINANCE, gl.UNSIGNED_BYTE, pole); }
+  zn = a.z[ch] = { adv: adv, w: w, h: h, ox: POLYA + lev, oy: POLYA + a.verh,
+                  u0: a.x / ATLAS, v0: a.y / ATLAS, u1: (a.x + w) / ATLAS, v1: (a.y + h) / ATLAS };
+  a.x += w;
+  return zn;
+}
+function kern(a, l, r) {
+  var k = l + r, v = a.kern[k];
+  if (v === undefined) {
+    chx.font = a.css; if ('fontStretch' in chx) chx.fontStretch = a.str;
+    v = a.kern[k] = chx.measureText(k).width - chx.measureText(l).width - chx.measureText(r).width;
+  }
+  return v;
+}
+
+/* Кадр копится в один массив на атлас: на вершину — место, место в текстуре, цвет. */
+var PACHKI = {};
+function pachka(a) {
+  var k = a.css + '|' + a.str, pk = PACHKI[k];
+  if (!pk) pk = PACHKI[k] = { a: a, d: new Float32Array(600 * 48), n: 0 };
+  pk.a = a;   // атлас гарнитуры мог быть собран заново, когда шрифт догрузился
+  return pk;
+}
+// одна вершина: место, место в текстуре, цвет
+function vershina(d, n, x, y, u, v, c, al) {
+  d[n] = x; d[n + 1] = y; d[n + 2] = u; d[n + 3] = v; d[n + 4] = c[0]; d[n + 5] = c[1]; d[n + 6] = c[2]; d[n + 7] = al;
+}
+// знак — два треугольника; углы прямоугольника поворачиваются вокруг начала знака на базовой линии
+function kvadrat(pk, zn, ox, oy, co, si, m, c, al) {
+  if (!zn.w) return;
+  if (pk.n + 48 > pk.d.length) { var nd = new Float32Array(pk.d.length * 2); nd.set(pk.d); pk.d = nd; }
+  var x0 = -zn.ox * m, y0 = -zn.oy * m, x1 = (zn.w - zn.ox) * m, y1 = (zn.h - zn.oy) * m;
+  var ax = ox + x0 * co - y0 * si, ay = oy + x0 * si + y0 * co;   // верх слева
+  var bx = ox + x1 * co - y0 * si, by = oy + x1 * si + y0 * co;   // верх справа
+  var cx = ox + x0 * co - y1 * si, cy = oy + x0 * si + y1 * co;   // низ слева
+  var dx = ox + x1 * co - y1 * si, dy = oy + x1 * si + y1 * co;   // низ справа
+  var d = pk.d, n = pk.n;
+  vershina(d, n, ax, ay, zn.u0, zn.v0, c, al); vershina(d, n + 8, bx, by, zn.u1, zn.v0, c, al); vershina(d, n + 16, cx, cy, zn.u0, zn.v1, c, al);
+  vershina(d, n + 24, cx, cy, zn.u0, zn.v1, c, al); vershina(d, n + 32, bx, by, zn.u1, zn.v0, c, al); vershina(d, n + 40, dx, dy, zn.u1, zn.v1, c, al);
+  pk.n = n + 48;
+}
+var SOBIRAT = null;   // когда не null — кадр заодно складывает положение знаков (для выгрузки в Фигму)
+/* Строка по дуге. r — радиус базовой линии, grad — луч (0 — верх, по часовой),
+   vykl — как строка стоит относительно луча, protiv — против часовой, верхом к центру. */
+function strokaPoDuge(imya, tekst, g, shirina, k, tr, r, grad, vykl, protiv, c, al) {
+  if (!(k > 0) || !tekst) return;
+  var a = atlas(g, shirina), pk = pachka(a), m = k / BAZA, ls = tr * k, i, n = tekst.length;
+  var shir = [], vsego = 0, pred = '';
+  for (i = 0; i < n; i++) {
+    var ch = tekst[i], zn = znak(a, ch), kr = pred ? kern(a, pred, ch) * m : 0;
+    shir.push([zn, kr, zn.adv * m]); vsego += kr + zn.adv * m + ls; pred = ch;
+  }
+  var s = vykl === 'left' ? 0 : vykl === 'right' ? -vsego : -vsego / 2, ug = grad * Math.PI / 180;
+  var zap = SOBIRAT ? { imya: imya, tekst: tekst, kegl: k, semya: a.css, cvet: c, znaki: [] } : null;
+  for (i = 0; i < n; i++) {
+    var w = shir[i][2]; s += shir[i][1];
+    var fi = ug + (protiv ? -1 : 1) * (s + w / 2) / r;          // середина знака на окружности
+    var mx = G.cx + r * Math.sin(fi), my = G.cy - r * Math.cos(fi);
+    var pov = protiv ? fi + Math.PI : fi, co = Math.cos(pov), si = Math.sin(pov);
+    var ox = mx - co * w / 2, oy = my - si * w / 2;             // начало знака — на полширины назад по касательной
+    kvadrat(pk, shir[i][0], ox, oy, co, si, m, c, al);
+    if (zap && shir[i][0].w) zap.znaki.push([tekst[i], +ox.toFixed(2), +oy.toFixed(2), +(pov * 180 / Math.PI).toFixed(2)]);
+    s += w + ls;
+  }
+  if (zap) SOBIRAT.push(zap);
+}
+// строка прямо, серединой в точку: так стоят номера
+function strokaPryamo(imya, tekst, g, k, tr, x, y, c, al) {
+  if (!(k > 0) || !tekst) return;
+  var a = atlas(g), pk = pachka(a), m = k / BAZA, ls = tr * k, i, vsego = 0, pred = '', shir = [];
+  for (i = 0; i < tekst.length; i++) {
+    var zn = znak(a, tekst[i]), kr = pred ? kern(a, pred, tekst[i]) * m : 0;
+    shir.push([zn, kr, zn.adv * m]); vsego += kr + zn.adv * m + ls; pred = tekst[i];
+  }
+  var s = x - vsego / 2, zap = SOBIRAT ? { imya: imya, tekst: tekst, kegl: k, semya: a.css, cvet: c, znaki: [] } : null;
+  for (i = 0; i < tekst.length; i++) {
+    s += shir[i][1];
+    kvadrat(pk, shir[i][0], s, y, 1, 0, m, c, al);
+    if (zap) zap.znaki.push([tekst[i], +s.toFixed(2), +y.toFixed(2), 0]);
+    s += shir[i][2] + ls;
+  }
+  if (zap) SOBIRAT.push(zap);
+}
+
 function risuy() {
-  var disk = P.hod === 'disk';
-  var sdvigi = [P.uTrek, P.uGruppa, P.uDlit, P.uAvtory];
+  var disk = P.hod === 'disk', vykl = P.vykl, k;
+  for (k in PACHKI) PACHKI[k].n = 0;
+  var fon = cv(P.bg), chern_ = cv(P.ink), pass = cv(P.dim), sdvigi = [P.uTrek, P.uGruppa, P.uDlit, P.uAvtory];
+  var vremyaTon = sm(fon, chern_, P.plVremya / 100), podacha = putPodacha();
+
   NOMERA.forEach(function (n, i) {
-    var grad = P.nachalo + G.ugly[i] - (disk ? vid.nom + putPodacha() : 0);
-    n.g.setAttribute('transform', povorot(grad));
-    var a = grad * Math.PI / 180, cvet = smes(P.dim, P.ink, teplo[i]);
-    atr(n.text, { x: (G.cx + G.rC * Math.sin(a)).toFixed(2), y: (G.cy - G.rC * Math.cos(a) + G.dyNum).toFixed(2), fill: cvet });
-    // отметка времени сидит в группе номера, но едет своей долей: в веере она после всех, кто снаружи
-    // отметка выбранного трека — полным цветом, остальные — своей плотностью, как длительность и авторы
-    var cvetVr = smes(smesHex(P.bg, P.ink, P.plVremya / 100), P.ink, teplo[i]);
-    atr(n.vremya, { transform: povorot(P.uVremya + (disk ? vid.nom - vid.vr : 0)), fill: cvetVr });
+    var grad = P.nachalo + G.ugly[i] - (disk ? vid.nom + podacha : 0), a = grad * Math.PI / 180;
+    strokaPryamo('Номер', n.nomer, P.gNum, G.kNum, P.treking + P.trNum,
+      G.cx + G.rC * Math.sin(a), G.cy - G.rC * Math.cos(a) + G.dyNum, sm(pass, chern_, teplo[i]), 1);
+    // отметка времени едет своей долей: отметка выбранного трека — полным цветом, остальные — своей плотностью
+    var gradV = P.nachalo + G.ugly[i] + P.uVremya - (disk ? vid.vr + podacha : 0);
+    strokaPoDuge('Время начала', n.vremya, P.gVremya, null, G.kV, P.treking + P.trVremya, G.bazaV, gradV, 'center', false,
+      sm(vremyaTon, chern_, teplo[i]), 1);
   });
-  KOLCA.forEach(function (kc, j) {
-    var k = j + 1;
+
+  for (var j = 0; j < KOLCA.length; j++) {
+    k = j + 1;
+    var os = G.osi[j];
     // название группы может стоять: тогда его угол — начало стороны, от хода не зависит
     var hod = k === 2 && P.gruppaStoit ? 0 : disk ? otkl[k] : ugol[k];
-    kc.g.setAttribute('transform', povorot(P.nachalo + sdvigi[j] + hod));
     var t = P.perebor
       ? perebrat(byl[k], tekstKoltsa(k, aktiv), k, dolyaP[k], Math.floor(chasy / Math.max(20, P.pereborTick)), P.pereborFront / 100)
       : tekstKoltsa(k, pokazan[k]);
     vidno[k] = t;
-    if (kc.tp.textContent !== t) kc.tp.textContent = t;
     var plotn = k === 3 ? P.plDlit : k === 4 ? P.plAvtory : 100;   // своя плотность цвета у длительности и авторов
-    kc.text.setAttribute('fill', plotn < 100 ? smes(P.bg, P.ink, plotn / 100) : P.ink);
-    kc.text.setAttribute('opacity', P.perebor ? 1 : (1 - (1 - alfa[k]) * P.gashenie / 100).toFixed(3));
-  });
+    // оси вариативной гарнитуры — пока только у кольца группы; холст знает ширину словом, наклона не знает
+    var shirina = k === 2 && imyaGarn(os.g) === 'ABC Gravity' ? rastyazhka(P.wdthGruppa) : null;
+    strokaPoDuge(['Трек', 'Группа', 'Длительность', 'Авторы и сингл'][j], t, os.g, shirina, os.k, os.tr, os.baza,
+      P.nachalo + sdvigi[j] + hod, vykl, false, plotn < 100 ? sm(fon, chern_, plotn / 100) : chern_,
+      P.perebor ? 1 : 1 - (1 - alfa[k]) * P.gashenie / 100);
+  }
   // альбом живёт в кольце группы: стоит вместе с ней или едет вместе с ней, плюс свой сдвиг
   var hodGr = P.gruppaStoit ? 0 : disk ? otkl[2] : ugol[2];
-  albomG.setAttribute('transform', povorot(P.nachalo + P.uGruppa + hodGr + P.uAlbom));
-  albomEl.setAttribute('fill', P.ink);
+  strokaPoDuge('Альбом', registr(ALBOM.imya, P.regAlbom), P.gAlbom, null, G.albom.k, P.treking + P.trAlbom, G.albom.r,
+    P.nachalo + P.uGruppa + hodGr + P.uAlbom, 'center', P.albomChitaetsya, chern_, 1);
+
+  if (!gl) return;
+  gl.clearColor(fon[0], fon[1], fon[2], 1); gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  for (k in PACHKI) {
+    var pk = PACHKI[k];
+    if (!pk.n) continue;
+    gl.bindTexture(gl.TEXTURE_2D, pk.a.tex);
+    gl.bufferData(gl.ARRAY_BUFFER, pk.d.subarray(0, pk.n), gl.DYNAMIC_DRAW);
+    gl.drawArrays(gl.TRIANGLES, 0, pk.n / 8);
+  }
 }
+// положение каждого знака последнего кадра — для выгрузки слайдов в Фигму кривыми
+window.raskladkaZnakov = function () { SOBIRAT = []; risuy(); var r = SOBIRAT; SOBIRAT = null; return r; };
+
+// сколько длится всё, что запускает смена трека: ход с веером, перебор, пружина
+function konecHoda() {
+  var veer = (M + 1) * P.volna;
+  /* Пружина успокаивается не за «шесть периодов», а за время, зависящее от затухания:
+     размах падает как exp(−затухание · 2π · t / период); до тысячной — за 6,9 постоянных. */
+  var pruzh = P.nomPruzhVkl ? 6.9 * (P.nomPruzh[0] || 0) / (TAU * Math.max(0.05, P.nomPruzh[1] || 1)) : P.vremya;
+  return Math.max(P.vremya + veer, P.pereborPauza + KOLCA.length * P.pereborVolna + P.pereborMs, veer + pruzh) + 120;
+}
+var nado = true;   // кадр надо нарисовать: что-то изменилось помимо хода
 
 function peresobrat() {
   geometriya();
   // правка пропорции двигает лучи: строки встают на новый луч сразу, если перехода нет
-  var konec = Math.max(P.vremya + (M + 1) * P.volna, P.pereborPauza + KOLCA.length * P.pereborVolna + P.pereborMs,
-    (M + 1) * P.volna + 6 * (P.nomPruzh[0] || 0));   // и пока пружина не успокоилась
-  if (chasy - t0 > konec) vstat(aktiv);
-  risuy();
+  if (chasy - t0 > konecHoda()) vstat(aktiv);
+  nado = true;
+  if (STOP !== null) risuy();
 }
 
 /* ── рука ── */
@@ -1150,6 +1346,24 @@ window.addEventListener('keydown', function (e) {
 });
 window.addEventListener('resize', peresobrat);
 
+/* Нажатие по кольцу номеров: трек выбирается по углу. Раньше это делали секторы SVG;
+   теперь попадание считается: радиус — в полосе номеров, угол — в секторе трека. Сектор
+   начинается чуть раньше луча, на полширины цифры: цифра стоит на луче серединой. */
+function trekPod(x, y) {
+  var dx = x - G.cx, dy = y - G.cy, r = Math.sqrt(dx * dx + dy * dy);
+  if (r < G.rVn || r > G.rNar) return -1;
+  var ug = (Math.atan2(dx, -dy) * 180 / Math.PI + 360) % 360;
+  var zapas = Math.atan2(G.kNum * 0.45, G.rC) * 180 / Math.PI;
+  var sdvig = P.nachalo - (P.hod === 'disk' ? vid.nom + putPodacha() : 0);
+  for (var i = 0; i < N; i++) {
+    var otn = ((ug - sdvig - G.ugly[i] + zapas) % 360 + 360) % 360;
+    if (otn < G.doli[i]) return i;
+  }
+  return -1;
+}
+holst.addEventListener('click', function (e) { var i = trekPod(e.clientX, e.clientY); if (i >= 0) perehod(i); });
+holst.addEventListener('mousemove', function (e) { holst.style.cursor = trekPod(e.clientX, e.clientY) >= 0 ? 'pointer' : ''; });
+
 /* ── пуск ── */
 geometriya();
 var trekAdr = ADRES.has('trek') ? Math.max(1, Math.min(N, +ADRES.get('trek') || 1)) - 1 : null;
@@ -1162,16 +1376,20 @@ if (STOP !== null) {
   vstat(trekAdr === null ? 0 : trekAdr);
   risuy();
   var proshl = performance.now();
+  /* В покое кадр не рисуется вовсе: раньше стенд переписывал атрибуты 120 раз в
+     секунду, даже когда на экране ничего не менялось. Рисуем, пока идёт ход, пока
+     диск подан под рукой и когда что-то поменяли ручкой. */
   (function kadr(teper) {
     requestAnimationFrame(kadr);
     shag(Math.min(50, Math.max(0, (teper || proshl) - proshl)));
     proshl = teper || proshl;
-    risuy();
+    if (nado || put.acc !== 0 || chasy - t0 < konecHoda()) { nado = false; risuy(); }
   })();
 }
 // гарнитура могла догрузиться после первого кадра — рост цифры снимается заново
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { rostKesh = {}; peresobrat(); });
-if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', function () { rostKesh = {}; peresobrat(); });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { rostKesh = {}; sveritAtlasy(); peresobrat(); });
+// панель подгружает шрифты своего списка позже — после каждой догрузки атласы сверяются
+if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', sveritAtlasy);
 </script>
 </body>
 </html>
